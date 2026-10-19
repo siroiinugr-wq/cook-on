@@ -1,23 +1,18 @@
 // 材料名を「店舗の材料」か「共有マスター」に結びつける（設計書 ④ の3段構え）
-// 1. 無料の一致：店舗の材料名 → 店舗が覚えた別名 → 共有マスターの標準名・別名
-// 2. 無料の候補：似ている順に8件。1位が AUTO_ACCEPT_SCORE 以上ならそのまま採用
-// 3. AI：残ったものだけを20件ずつ Gemini に選ばせる（呼ぶ側がクレジットを払う）
+// 1・2段目（無料の一致と候補）は shared/resolveLocal.ts。デモモードと同じ決まりで動く
+// 3段目：残ったものだけを20件ずつ Gemini に選ばせる（呼ぶ側がクレジットを払う）
 
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import { AI_MATCH_BATCH } from "../shared/credits";
 import type { ItemMatch } from "../shared/importTypes";
-import { AUTO_ACCEPT_SCORE, buildIndex, exactMatch, rankCandidates, toMatchKey, type IndexedEntry } from "../shared/matchKey";
+import { buildIndex, toMatchKey } from "../shared/matchKey";
+import { NO_MATCH, preferTenant, resolveLocal, type LocalMatchInput } from "../shared/resolveLocal";
 import type { Ingredient } from "../shared/types";
 import { addUsage, callGeminiJson, type Usage } from "./gemini";
 import { globalIndex } from "./globalIndex";
 import { MATCH_SCHEMA, MATCH_SYSTEM, matchPrompt, type MatchAnswer } from "./prompts";
 
-export interface OrgMatchData {
-  ingredients: Ingredient[];
-  tenantIndex: IndexedEntry[];
-  /** 照合キー → 共有マスターの id（店舗が覚えた別名） */
-  aliases: Map<string, string>;
-}
+export type OrgMatchData = Omit<LocalMatchInput, "globalIndex" | "globalById">;
 
 export async function loadOrgMatchData(orgId: string): Promise<OrgMatchData> {
   const db = getFirestore();
@@ -33,46 +28,9 @@ export async function loadOrgMatchData(orgId: string): Promise<OrgMatchData> {
   };
 }
 
-/** 共有マスターの id に結びついた店舗の材料があれば、そちらを優先する */
-function preferTenant(m: ItemMatch, org: OrgMatchData): ItemMatch {
-  if (m.kind !== "global" || !m.id) return m;
-  const own = org.ingredients.find((i) => i.globalRef === m.id);
-  return own ? { ...m, kind: "tenant", id: own.id, name: own.name } : m;
-}
-
 export async function resolveNames(org: OrgMatchData, names: string[], useAi: boolean): Promise<{ matches: ItemMatch[]; usage: Usage; aiCalls: number }> {
   const g = await globalIndex();
-  const results = new Map<string, ItemMatch>();
-  const pending: { key: string; name: string; candidates: { id: string; name: string }[] }[] = [];
-
-  for (const name of names) {
-    const key = toMatchKey(name);
-    if (!key || results.has(key) || pending.some((p) => p.key === key)) continue;
-    const own = exactMatch(name, org.tenantIndex);
-    if (own) {
-      results.set(key, { kind: "tenant", id: own.id, name: own.name, confidence: 1, via: "exact" });
-      continue;
-    }
-    const aliasId = org.aliases.get(key);
-    const aliasHit = aliasId ? g.byId.get(aliasId) : undefined;
-    const hit = aliasHit ?? exactMatch(name, g.index);
-    if (hit) {
-      results.set(key, preferTenant({ kind: "global", id: hit.id, name: hit.name, confidence: 1, via: "exact" }, org));
-      continue;
-    }
-    const cands = rankCandidates(name, g.index, 8);
-    const list = cands.map((c) => ({ id: c.id, name: c.name }));
-    if (cands[0] && cands[0].score >= AUTO_ACCEPT_SCORE) {
-      results.set(key, preferTenant({ kind: "global", id: cands[0].id, name: cands[0].name, confidence: cands[0].score, via: "similar", candidates: list }, org));
-    } else if (useAi && list.length) {
-      pending.push({ key, name, candidates: list });
-    } else {
-      const top = cands[0];
-      results.set(key, top && top.score >= 0.5
-        ? preferTenant({ kind: "global", id: top.id, name: top.name, confidence: top.score * 0.8, via: "similar", candidates: list }, org)
-        : { kind: "none", id: null, name: null, confidence: 0, via: "none", candidates: list });
-    }
-  }
+  const { results, pending } = resolveLocal({ ...org, globalIndex: g.index, globalById: g.byId }, names, useAi);
 
   let usage: Usage = { in: 0, out: 0 };
   let aiCalls = 0;
@@ -88,13 +46,11 @@ export async function resolveNames(org: OrgMatchData, names: string[], useAi: bo
       // 候補に無い id は捨てる（AIが作った id を信用しない）
       const picked = a?.id ? p.candidates.find((c) => c.id === a.id) : undefined;
       results.set(p.key, picked
-        ? preferTenant({ kind: "global", id: picked.id, name: picked.name, confidence: clamp(a!.c), via: "ai", candidates: p.candidates }, org)
-        : { kind: "none", id: null, name: null, confidence: 0, via: "none", candidates: p.candidates });
+        ? preferTenant({ kind: "global", id: picked.id, name: picked.name, confidence: clamp(a!.c), via: "ai", candidates: p.candidates }, org.ingredients)
+        : { ...NO_MATCH, candidates: p.candidates });
     });
   }
-
-  const none: ItemMatch = { kind: "none", id: null, name: null, confidence: 0, via: "none" };
-  return { matches: names.map((n) => results.get(toMatchKey(n)) ?? none), usage, aiCalls };
+  return { matches: names.map((n) => results.get(toMatchKey(n)) ?? NO_MATCH), usage, aiCalls };
 }
 
 const clamp = (n: unknown) => Math.max(0, Math.min(1, Number(n) || 0));

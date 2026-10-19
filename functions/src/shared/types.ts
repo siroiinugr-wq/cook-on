@@ -98,7 +98,8 @@ export interface GlobalIngredient {
   allergens: AllergenId[];
   /** 100g あたりの成分（kcal, protein, fat, carbohydrate, salt）。無ければ空 */
   nutrition?: Record<string, number>;
-  source: "mext" | "ugc";
+  /** mext＝食品成分表、ugc＝昇格した既製品、base＝運営が用意した基本の材料（shared/globalSeed.ts） */
+  source: "mext" | "ugc" | "base";
   /** 文科省の食品番号（mext のとき） */
   mextCode?: string;
   /** ugc のとき：元の既製品 */
