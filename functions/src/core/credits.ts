@@ -94,13 +94,13 @@ export async function runWithCredits<T>(c: Charge, work: () => Promise<WorkResul
       status: "spent",
       amount: -(cost - back),
       ...(back > 0 ? { refunded: back } : {}),
-      usage: out.usage ?? null,
-      costYen: out.usage ? costYen(out.usage) : null,
-      model: GEMINI_MODEL,
-      promptVersion: PROMPT_VERSION,
       settledAt: FieldValue.serverTimestamp(),
     });
-    tx.update(reqRef, { status: "done", result: stored ?? null, settledAt: FieldValue.serverTimestamp() });
+    // 原価（トークン数・円）は店舗が読める通帳には書かず、Functions だけが読む受付票に残す
+    tx.update(reqRef, {
+      status: "done", result: stored ?? null, settledAt: FieldValue.serverTimestamp(),
+      usage: out.usage ?? null, costYen: out.usage ? costYen(out.usage) : null, model: GEMINI_MODEL, promptVersion: PROMPT_VERSION,
+    });
   });
   return out.result;
 }
@@ -113,8 +113,7 @@ async function refund(c: Charge, cost: number, ledgerPath: string, reqPath: stri
     await db.runTransaction(async (tx) => {
       tx.update(db.doc(`organizations/${c.orgId}`), { credits: FieldValue.increment(cost) });
       tx.update(db.doc(ledgerPath), {
-        status: "refunded", amount: 0, refunded: cost,
-        error: String((e as Error)?.message ?? e).slice(0, 300), settledAt: FieldValue.serverTimestamp(),
+        status: "refunded", amount: 0, refunded: cost, settledAt: FieldValue.serverTimestamp(),
       });
       tx.delete(db.doc(reqPath));
     });

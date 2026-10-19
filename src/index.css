@@ -1,0 +1,71 @@
+@import "tailwindcss";
+
+/*
+ * MASAアプリ共通の配色（AI経理と同じ。Claudeのコンソール風）
+ * 面は白・ベージュ・あたたかいグレー、アクセント（アイコン・主役ボタン）はテーマ色。
+ * 色はここで名前を付けて1か所に置き、画面では bg-cream / text-muted / bg-clay のように名前で使う。
+ */
+@theme {
+  /* 面 */
+  --color-cream: #faf9f5;      /* ページの背景（生成りの白） */
+  --color-paper: #ffffff;      /* カード・シート */
+  --color-sand: #f0eee6;       /* ベージュの面（帯・入力欄の下地・選択中） */
+  --color-line: #e5e1d6;       /* 区切り線・枠 */
+  --color-line-strong: #cfc9ba;/* 入力欄・ボタンの枠 */
+
+  /* 文字 */
+  --color-ink: #29261b;
+  --color-ink-soft: #4d4a3f;
+  --color-muted: #77736a;
+  --color-faint: #a8a396;
+
+  /* アクセント（テーマ色）。店舗ごとのホワイトラベルでは --color-clay だけを差し替える（hooks/useBranding.ts） */
+  --color-clay: #d97757;
+  --color-clay-strong: #b85c3c;
+  --color-clay-light: #f2b49b;
+  --color-clay-soft: #f8e9e1;
+
+  /* 信号色。原色を避け、落ち着いたトーンにする */
+  --color-ok: #6a9a6e;
+  --color-ok-soft: #edf4ec;
+  --color-ok-strong: #44704a;
+  --color-warn: #d6a24a;
+  --color-warn-soft: #fbf3e2;
+  --color-warn-strong: #8f6517;
+  --color-ng: #c0564b;
+  --color-ng-soft: #f9e9e6;
+  --color-ng-strong: #9a3b31;
+  --color-blank: #7b8ba0;
+  --color-blank-soft: #eef2f6;
+
+  --font-sans: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", system-ui, sans-serif;
+  --font-serif: "Hiragino Mincho ProN", "Yu Mincho", "Noto Serif JP", serif;
+}
+
+/* テーマ色を差し替えたとき、濃い色・薄い色も自動でそろえる（@theme の値より後に書いて上書きする） */
+:root[data-brand] {
+  --color-clay-strong: color-mix(in srgb, var(--color-clay) 78%, #000);
+  --color-clay-light: color-mix(in srgb, var(--color-clay) 45%, #fff);
+  --color-clay-soft: color-mix(in srgb, var(--color-clay) 13%, #fff);
+}
+
+body {
+  background: var(--color-cream);
+  color: var(--color-ink);
+}
+
+input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-visible, a:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--color-clay) 55%, transparent);
+  outline-offset: 2px;
+}
+
+/* 作業モード：厨房のタブレットで、濡れた手でも押しやすく、離れても読める大きさ */
+.work-mode { font-size: 1.35rem; line-height: 1.6; }
+
+/* ラベル印刷：画面の部品は隠し、ラベルだけを用紙の大きさで出す（@page の大きさは LabelPage が書き込む） */
+@media print {
+  body { background: #fff; }
+  .no-print { display: none !important; }
+  .print-only { display: block !important; }
+}
+.print-only { display: none; }

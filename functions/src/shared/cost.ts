@@ -32,7 +32,7 @@ export interface CostResult {
   missing: number;
 }
 
-/** レシートの材料ごとの g と原価。factor は倍率（2.5ロットなら 2.5） */
+/** レシピの材料ごとの g と原価。factor は倍率（2.5ロットなら 2.5） */
 export function calcCost(items: RecipeItem[], ingById: Map<string, Ingredient>, factor = 1): CostResult {
   let total = 0;
   let totalGrams = 0;
