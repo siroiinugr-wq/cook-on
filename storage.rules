@@ -1,0 +1,22 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function member(orgId) { return request.auth != null && request.auth.token.orgs is map && orgId in request.auth.token.orgs; }
+    function editor(orgId) { return member(orgId) && request.auth.token.orgs[orgId] in ['owner', 'admin', 'editor']; }
+    function admin(orgId)  { return member(orgId) && request.auth.token.orgs[orgId] in ['owner', 'admin']; }
+
+    // 工程の写真
+    match /orgs/{orgId}/recipes/{recipeId}/{file} {
+      allow read: if member(orgId);
+      allow create: if editor(orgId) && request.resource.size < 10 * 1024 * 1024 && request.resource.contentType.matches('image/.*');
+      allow delete: if editor(orgId);
+      allow update: if false;
+    }
+    // ロゴ（ログイン画面で出すので誰でも読める）
+    match /orgs/{orgId}/branding/{file} {
+      allow read: if true;
+      allow create, update: if admin(orgId) && request.resource.size < 2 * 1024 * 1024 && request.resource.contentType.matches('image/.*');
+      allow delete: if admin(orgId);
+    }
+  }
+}

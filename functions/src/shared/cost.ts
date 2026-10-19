@@ -10,9 +10,12 @@ export const DEFAULT_TARGET_RATE = 0.3;
 
 /** 1g あたりの単価（円）。仕入れ値が無い・換算できないときは null */
 export function unitCostPerGram(ing: Pick<Ingredient, "purchasePrice" | "purchaseQty" | "purchaseUnit" | "gramsPerPiece" | "gramsPerMl">): number | null {
+  const price = ing.purchasePrice;
+  // null >= 0 は true になるので、数かどうかを先に確かめる
+  if (typeof price !== "number" || !Number.isFinite(price) || price < 0) return null;
   const g = toGrams(ing.purchaseQty, ing.purchaseUnit, ing);
-  if (!g || g <= 0 || !(ing.purchasePrice >= 0)) return null;
-  return ing.purchasePrice / g;
+  if (!g || g <= 0) return null;
+  return price / g;
 }
 
 export type MissingReason = "noIngredient" | "noPrice" | "noGrams";

@@ -1,0 +1,94 @@
+rules_version = '2';
+// 設計書 ①。テナント分離はカスタムクレーム orgs: {orgId: role} との照合だけで行う（get() で members を読まない）
+// 書かれていないパスはすべて拒否（aiRequests・secrets はあえて書かない＝ Functions だけが使う）
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn()      { return request.auth != null; }
+    function orgs()          { return request.auth.token.get('orgs', {}); }
+    function isMember(orgId) { return signedIn() && orgs() is map && orgId in orgs(); }
+    function role(orgId)     { return orgs()[orgId]; }
+    function canEdit(orgId)  { return isMember(orgId) && role(orgId) in ['owner', 'admin', 'editor']; }
+    function isAdmin(orgId)  { return isMember(orgId) && role(orgId) in ['owner', 'admin']; }
+    function unchanged(keys) { return !request.resource.data.diff(resource.data).affectedKeys().hasAny(keys); }
+    function str(v, max)     { return v is string && v.size() <= max; }
+    function numOrNull(v)    { return v == null || (v is number && v >= 0); }
+
+    // 材料マスター：画面から直接書ける。形と長さだけここで守る（原価の計算し直しは Functions のトリガ）
+    function validIngredient() {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['name', 'purchasePrice', 'purchaseQty', 'purchaseUnit', 'gramsPerPiece', 'gramsPerMl',
+                               'allergens', 'labelName', 'isAdditive', 'globalRef', 'supplier', 'memo',
+                               'updatedAt', 'createdAt', 'createdBy'])
+        && str(d.name, 60) && d.name.size() > 0
+        && numOrNull(d.purchasePrice)
+        && d.purchaseQty is number && d.purchaseQty > 0
+        && d.purchaseUnit in ['g', 'kg', 'ml', 'l', '個', '枚', '本', '大さじ', '小さじ', 'カップ']
+        && numOrNull(d.get('gramsPerPiece', null)) && numOrNull(d.get('gramsPerMl', null))
+        && d.allergens is list && d.allergens.size() <= 28
+        && str(d.get('labelName', ''), 300) && str(d.get('supplier', ''), 60) && str(d.get('memo', ''), 300);
+    }
+
+    match /organizations/{orgId} {
+      allow read: if isMember(orgId);
+      // お金と所有者の項目は画面から変えられない（クレジットを書き換える不正を防ぐ）
+      allow update: if isAdmin(orgId)
+        && unchanged(['plan', 'credits', 'ownerUid', 'createdAt', 'stripeCustomerId'])
+        && str(request.resource.data.name, 40);
+
+      // ロゴ・テーマ色・表示名。ログイン画面で使うので誰でも読める（秘密は置かない）
+      match /public/{docId} {
+        allow read: if true;
+        allow write: if isAdmin(orgId) && docId == 'branding'
+          && request.resource.data.keys().hasOnly(['appName', 'logoUrl', 'primaryColor'])
+          && str(request.resource.data.appName, 30)
+          && (request.resource.data.logoUrl == null || str(request.resource.data.logoUrl, 500))
+          && request.resource.data.primaryColor.matches('^#[0-9a-fA-F]{6}$');
+      }
+
+      match /members/{uid}    { allow read: if isMember(orgId); allow write: if false; }
+      match /invites/{token}  { allow read: if isAdmin(orgId);  allow write: if false; }
+
+      match /ingredients/{id} {
+        allow read: if isMember(orgId);
+        allow create, update: if canEdit(orgId) && validIngredient();
+        // 消してもレシピには材料名が残る（原価は「単価なし」になる）
+        allow delete: if canEdit(orgId);
+        match /priceHistory/{h} { allow read: if isMember(orgId); allow write: if false; }
+      }
+
+      // レシピは saveRecipe（Functions）だけが書く。版の記録・検索用の列を必ず作り直すため
+      match /recipes/{id} {
+        allow read: if isMember(orgId);
+        allow write: if false;
+        match /versions/{v} { allow read: if isMember(orgId); allow write: if false; }
+      }
+
+      // 原価高騰アラート：既読にするだけ画面からできる
+      match /alerts/{id} {
+        allow read: if isMember(orgId);
+        allow update: if canEdit(orgId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
+        allow create, delete: if false;
+      }
+
+      match /imports/{id}      { allow read: if isMember(orgId); allow write: if false; }
+      match /creditLedger/{id} { allow read: if isMember(orgId); allow write: if false; }
+      match /aliases/{key}     { allow read: if isMember(orgId); allow write: if false; }
+
+      // 既製品への票（1店舗1票。ドキュメントID＝商品ID）。数えるのは Functions のトリガ
+      match /ugcVotes/{productId} {
+        allow read: if isMember(orgId);
+        allow create, update: if canEdit(orgId)
+          && request.resource.data.keys().hasOnly(['value', 'uid', 'at'])
+          && request.resource.data.value in [1, -1]
+          && request.resource.data.uid == request.auth.uid;
+        allow delete: if canEdit(orgId);
+      }
+    }
+
+    match /globalIngredients/{id} { allow read: if signedIn(); allow write: if false; }
+    match /ugcProducts/{id}       { allow read: if signedIn(); allow write: if false; }
+    // 独自ドメイン → 店舗ID。ログイン前に読む。書くのは運営（コンソール）だけ
+    match /tenantDomains/{host}   { allow read: if true; allow write: if false; }
+  }
+}

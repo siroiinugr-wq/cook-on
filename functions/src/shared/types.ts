@@ -11,8 +11,8 @@ export type Role = "owner" | "admin" | "editor" | "viewer";
 export interface Ingredient {
   id: string;
   name: string;
-  /** 仕入れ値：purchasePrice 円で purchaseQty purchaseUnit を買う（例：1,200円で 1 kg） */
-  purchasePrice: number;
+  /** 仕入れ値：purchasePrice 円で purchaseQty purchaseUnit を買う（例：1,200円で 1 kg）。未入力は null */
+  purchasePrice: number | null;
   purchaseQty: number;
   purchaseUnit: Unit;
   /** 1個・1枚・1本あたりの g（個数で使う材料だけ） */
