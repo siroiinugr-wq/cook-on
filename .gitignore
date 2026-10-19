@@ -1,0 +1,11 @@
+node_modules
+dist
+functions/lib
+*.local
+functions/.secret.local
+.firebase/
+*.bak*
+*.log
+.DS_Store
+coverage
+*.tsbuildinfo
