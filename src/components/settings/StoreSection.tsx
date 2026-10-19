@@ -31,7 +31,7 @@ export function StoreSection({ orgId, org, canManage }: { orgId: string; org: Or
 
   return (
     <section className={`${ui.card} space-y-3`}>
-      <h2 className="font-bold">お店</h2>
+      <h2 className="font-bold">お店<span className="ml-2 select-all font-mono text-[11px] font-normal text-faint">店舗ID {orgId}</span></h2>
       <fieldset disabled={!canManage} className="space-y-3">
         <label className="block space-y-1"><span className={ui.label}>店舗名</span><input className={ui.input} value={name} maxLength={40} onChange={(e) => setName(e.target.value)} /></label>
         <label className="block space-y-1"><span className={ui.label}>目標の原価率（レシピで決めていないときに使う）</span>
