@@ -80,6 +80,23 @@ describe("材料マスター", () => {
   });
 });
 
+describe("包装資材とセット", () => {
+  const bag = { name: "10cm袋", purchasePrice: 1500, purchaseQty: 100, unit: "枚", priceTax: 0.1 };
+  const set = { name: "10cm袋セット", items: [{ packagingId: "p1", name: "10cm袋", qty: 1 }] };
+  it("スタッフは資材とセットを作れる。見るだけの人・ほかの店舗はできない", async () => {
+    await assertSucceeds(setDoc(doc(as("u3", { orgA: "editor" }), "organizations/orgA/packaging/p1"), bag));
+    await assertSucceeds(setDoc(doc(as("u3", { orgA: "editor" }), "organizations/orgA/packagingSets/s1"), set));
+    await assertFails(setDoc(doc(as("u4", { orgA: "viewer" }), "organizations/orgA/packaging/p2"), bag));
+    await assertFails(setDoc(doc(as("u2", { orgB: "owner" }), "organizations/orgA/packagingSets/s2"), set));
+  });
+  it("形のおかしい資材は書けない（知らない単位・税の形・知らない項目）", async () => {
+    const db = as("u3", { orgA: "editor" });
+    await assertFails(setDoc(doc(db, "organizations/orgA/packaging/p3"), { ...bag, unit: "kg" }));
+    await assertFails(setDoc(doc(db, "organizations/orgA/packaging/p3"), { ...bag, priceTax: 0.2 }));
+    await assertFails(setDoc(doc(db, "organizations/orgA/packagingSets/s3"), { ...set, cost: 1 }));
+  });
+});
+
 describe("アラート・ブランド・票", () => {
   it("アラートは既読にだけできる", async () => {
     const db = as("u3", { orgA: "editor" });

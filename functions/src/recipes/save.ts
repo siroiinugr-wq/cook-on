@@ -2,8 +2,9 @@
 // 検索用の列（材料の逆引き・アレルゲン・原価）は必ずここで作り直すので、画面からはレシピを直接書かせない。
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
+import type { PackCtx } from "../shared/packaging";
 import { deriveRecipe, sanitizeRecipe, type RecipeInput } from "../shared/recipe";
-import type { Ingredient } from "../shared/types";
+import type { Ingredient, PackagingMaterial, PackagingSet } from "../shared/types";
 import { REGION } from "../ai/config";
 import { idOf, requireRole, ROLES } from "../core/auth";
 
@@ -12,12 +13,26 @@ export async function loadIngredientMap(orgId: string): Promise<Map<string, Ingr
   return new Map(snap.docs.map((d) => [d.id, { ...(d.data() as Ingredient), id: d.id }]));
 }
 
+/** 店舗の包装資材とセット（レシピの包装の原価に使う） */
+export async function loadPackaging(orgId: string): Promise<PackCtx> {
+  const db = getFirestore();
+  const [mats, sets] = await Promise.all([
+    db.collection(`organizations/${orgId}/packaging`).get(),
+    db.collection(`organizations/${orgId}/packagingSets`).get(),
+  ]);
+  return {
+    matById: new Map(mats.docs.map((d) => [d.id, { ...(d.data() as PackagingMaterial), id: d.id }])),
+    setById: new Map(sets.docs.map((d) => [d.id, { ...(d.data() as PackagingSet), id: d.id }])),
+  };
+}
+
 /** 保存の本体。既存なら今の中身を versions に写してから、版を1つ上げて上書きする */
 export async function writeRecipe(orgId: string, recipeId: string | null, input: RecipeInput, uid: string, note = "") {
   const db = getFirestore();
   const col = db.collection(`organizations/${orgId}/recipes`);
   const ref = recipeId ? col.doc(recipeId) : col.doc();
-  const derived = deriveRecipe(input, await loadIngredientMap(orgId));
+  const [ingById, pack] = await Promise.all([loadIngredientMap(orgId), loadPackaging(orgId)]);
+  const derived = deriveRecipe(input, ingById, pack);
   const version = await db.runTransaction(async (tx) => {
     const cur = await tx.get(ref);
     if (recipeId && !cur.exists) throw new HttpsError("not-found", "レシピが見つかりません。");

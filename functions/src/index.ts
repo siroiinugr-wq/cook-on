@@ -11,5 +11,6 @@ export { guessProduct, aiSuggest } from "./ai/assist";
 export { readProductPhoto } from "./ai/productPhoto";
 export { saveRecipe, restoreRecipeVersion, archiveRecipe } from "./recipes/save";
 export { onIngredientWritten } from "./recipes/costAlert";
+export { onPackagingWritten, onPackagingSetWritten } from "./recipes/packagingAlert";
 export { submitUgcProduct, onUgcVoteWritten } from "./ugc/products";
 export { createCheckout, grantCredits } from "./billing/credits";

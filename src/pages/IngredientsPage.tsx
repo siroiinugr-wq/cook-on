@@ -69,6 +69,11 @@ export function IngredientsPage() {
           })}
         </ul>
       )}
+      <Link to="/packaging" className={`${ui.card} flex items-center gap-3 text-sm`}>
+        <span className="text-clay"><Icon name="tag" /></span>
+        <span className="flex-1"><b className="block">包装資材とセット</b><span className="text-muted">袋・脱酸素剤・シールの値段と、「10cm袋＋脱酸素剤30」のような組み合わせ</span></span>
+        <Icon name="chevron" className="h-4 w-4 text-faint" />
+      </Link>
       <Link to="/products" className={`${ui.card} flex items-center gap-3 text-sm`}>
         <span className="text-clay"><Icon name="box" /></span>
         <span className="flex-1"><b className="block">既製品の原材料を探す・登録する</b><span className="text-muted">チョコやジャムなど、メーカーの商品の原材料とアレルゲン</span></span>

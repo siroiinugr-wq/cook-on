@@ -1,7 +1,7 @@
 // デモモードの最初のデータ（架空の菓子店）。パスは本番の Firestore と同じ
 import { GLOBAL_SEED } from "@shared/globalSeed";
 import { deriveRecipe, type RecipeInput } from "@shared/recipe";
-import type { Ingredient } from "@shared/types";
+import type { Ingredient, PackagingMaterial, PackagingSet } from "@shared/types";
 import { DEFAULT_BRANDING } from "@shared/types";
 import { WELCOME_CREDITS } from "@shared/credits";
 
@@ -24,6 +24,18 @@ const ING: Ingredient[] = [
   { id: "vanilla", name: "バニラビーンズ", purchasePrice: null, purchaseQty: 1, purchaseUnit: "本", allergens: [], globalRef: "base_vanillabean" },
 ];
 
+const PACK: PackagingMaterial[] = [
+  { id: "bag10", name: "10cm袋（透明・脱気）", purchasePrice: 1500, purchaseQty: 100, unit: "枚", priceTax: 0.1, supplier: "包材のデモ商店" },
+  { id: "oxy30", name: "脱酸素剤30", purchasePrice: 2000, purchaseQty: 200, unit: "個", priceTax: 0 },
+  { id: "seal", name: "店名シール", purchasePrice: 3300, purchaseQty: 500, unit: "枚", priceTax: 0.1 },
+];
+const PACK_SETS: PackagingSet[] = [
+  { id: "set10", name: "焼き菓子の個包装（10cm袋）", items: [
+    { packagingId: "bag10", name: "10cm袋（透明・脱気）", qty: 1 }, { packagingId: "oxy30", name: "脱酸素剤30", qty: 1 }, { packagingId: "seal", name: "店名シール", qty: 1 },
+  ] },
+];
+const packCtx = { matById: new Map(PACK.map((p) => [p.id, p])), setById: new Map(PACK_SETS.map((p) => [p.id, p])) };
+
 const RECIPES: (RecipeInput & { id: string })[] = [
   {
     id: "financier", name: "フィナンシェ", category: "焼き菓子", tags: ["定番", "ギフト"], sellingPrice: 280, targetCostRate: 0.3,
@@ -36,6 +48,7 @@ const RECIPES: (RecipeInput & { id: string })[] = [
       { ingredientId: "egg", name: "全卵", qty: 2, unit: "個", note: "卵白だけでも可" },
       { ingredientId: "salt", name: "食塩", qty: null, unit: "適量" },
     ],
+    packaging: [{ kind: "set", refId: "set10", name: "焼き菓子の個包装（10cm袋）", qty: 1 }],
     steps: [
       { text: "バターを中火にかけ、薄い茶色になるまで焦がして濾す" },
       { text: "粉類と砂糖を合わせてふるう" },
@@ -81,7 +94,9 @@ export function seedDemo(): [string, Record<string, unknown>][] {
     [`${O}/creditLedger/welcome`, { kind: "welcome", amount: WELCOME_CREDITS, status: "done", createdAt: at }],
     [`${O}/alerts/a1`, { kind: "costOverTarget", recipeId: "gateau", recipeName: "ガトーショコラ", ingredientId: "choco", ingredientName: "チョコレート（ビター）", oldRate: 0.29, newRate: 0.34, target: 0.32, read: false, createdAt: at }],
     ...ING.map(({ id, ...d }) => [`${O}/ingredients/${id}`, { ...d, updatedAt: at }] as [string, Record<string, unknown>]),
-    ...RECIPES.map(({ id, ...r }) => [`${O}/recipes/${id}`, { ...r, ...deriveRecipe(r, ingById), version: 1, archived: false, updatedAt: at }] as [string, Record<string, unknown>]),
+    ...PACK.map(({ id, ...d }) => [`${O}/packaging/${id}`, { ...d, updatedAt: at }] as [string, Record<string, unknown>]),
+    ...PACK_SETS.map(({ id, ...d }) => [`${O}/packagingSets/${id}`, { ...d, updatedAt: at }] as [string, Record<string, unknown>]),
+    ...RECIPES.map(({ id, ...r }) => [`${O}/recipes/${id}`, { ...r, ...deriveRecipe(r, ingById, packCtx), version: 1, archived: false, updatedAt: at }] as [string, Record<string, unknown>]),
     ...GLOBAL_SEED.map(({ id, ...g }) => [`globalIngredients/${id}`, { ...g, source: "base", ...DEMO_GLOBAL_EXTRA[id] }] as [string, Record<string, unknown>]),
     // 食品成分表から取り込んだ材料の見本（本番は scripts/import-mext.mjs で約2,500件）
     ["globalIngredients/mext_05001", { name: "アーモンド 乾", aliases: ["アーモンド 乾"], category: "種実類", allergens: ["almond"], nutrition: { kcal: 609, protein: 19.6, fat: 51.8, carbohydrate: 20.9, salt: 0 }, source: "mext", mextCode: "05001" }],

@@ -106,17 +106,19 @@ export function withTax(price: number, rate: number): number {
   return Math.floor(price * (1 + rate));
 }
 
-/** レシピに保存する原価のまとめ（一覧・アラート用） */
+/** レシピに保存する原価のまとめ（一覧・アラート用）。pack は包装（1個あたり。shared/packaging.ts の calcPackaging） */
 export function costCacheOf(
-  items: RecipeItem[], ingById: Map<string, Ingredient>, pieces: number, sellingPrice: number | null, now = new Date(),
+  items: RecipeItem[], ingById: Map<string, Ingredient>, pieces: number, sellingPrice: number | null,
+  pack: { perPiece: number; missing: number } = { perPiece: 0, missing: 0 }, now = new Date(),
 ): CostCache {
   const r = calcCost(items, ingById);
-  const perPiece = pieces > 0 ? r.total / pieces : r.total;
+  const perPiece = (pieces > 0 ? r.total / pieces : r.total) + pack.perPiece;
   return {
     total: round2(r.total),
     perPiece: round2(perPiece),
+    ...(pack.perPiece > 0 ? { packagingPerPiece: round2(pack.perPiece) } : {}),
     rate: costRate(perPiece, sellingPrice),
-    missing: r.missing,
+    missing: r.missing + pack.missing,
     computedAt: now.toISOString(),
   };
 }

@@ -3,6 +3,7 @@
 
 import { sortAllergens } from "./allergens";
 import { costCacheOf } from "./cost";
+import { calcPackaging, EMPTY_PACK, packagingRefs, sanitizePackLines, type PackCtx } from "./packaging";
 import type { Ingredient, Recipe, RecipeItem, RecipeStep } from "./types";
 import { isUnit } from "./units";
 
@@ -11,6 +12,7 @@ export const RECIPE_LIMITS = { name: 60, items: 80, steps: 40, stepText: 400, ta
 export type RecipeInput = Pick<Recipe, "name" | "category" | "tags" | "items" | "steps" | "yield" | "sellingPrice" | "targetCostRate"> & {
   memo?: string;
   labelInfo?: Recipe["labelInfo"];
+  packaging?: Recipe["packaging"];
 };
 
 const str = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice(0, max) : "");
@@ -50,16 +52,17 @@ export function sanitizeRecipe(raw: unknown): RecipeInput | string {
     sellingPrice: price !== null && price > 0 ? price : null,
     targetCostRate: target !== null && target > 0 && target < 1 ? target : null,
     memo: str(r.memo, RECIPE_LIMITS.memo),
+    packaging: sanitizePackLines(r.packaging),
     ...(r.labelInfo && typeof r.labelInfo === "object" ? { labelInfo: r.labelInfo as Recipe["labelInfo"] } : {}),
   };
 }
 
-/** 検索用の列を作る（材料の逆引き・アレルギー除外・一覧の原価） */
-export function deriveRecipe(input: RecipeInput, ingById: Map<string, Ingredient>) {
+/** 検索用の列を作る（材料・包装の逆引き・アレルギー除外・一覧の原価）。pack は店舗の包装資材とセット */
+export function deriveRecipe(input: RecipeInput, ingById: Map<string, Ingredient>, pack: PackCtx = EMPTY_PACK) {
   const ingredientIds = [...new Set(input.items.map((i) => i.ingredientId).filter((x): x is string => !!x))];
   const allergens = sortAllergens(ingredientIds.flatMap((id) => ingById.get(id)?.allergens ?? []));
-  const costCache = costCacheOf(input.items, ingById, input.yield.pieces, input.sellingPrice);
-  return { ingredientIds, allergens, costCache };
+  const costCache = costCacheOf(input.items, ingById, input.yield.pieces, input.sellingPrice, calcPackaging(input.packaging, pack));
+  return { ingredientIds, allergens, costCache, ...packagingRefs(input.packaging, pack) };
 }
 
 /** 新しく作るときの雛形（白紙のフォームを最初に見せない） */

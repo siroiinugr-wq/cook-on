@@ -61,10 +61,13 @@ export interface RecipeYield {
 
 export interface CostCache {
   total: number;
+  /** 1個あたり（材料＋包装） */
   perPiece: number;
+  /** うち包装（1個あたり）。包装が無いレシピ・前からあるレシピは無い */
+  packagingPerPiece?: number;
   /** 売価があれば原価率（0〜1） */
   rate: number | null;
-  /** 単価が無くて計算に入っていない材料の数 */
+  /** 単価が無くて計算に入っていない材料・包装の数 */
   missing: number;
   computedAt: string;
 }
@@ -85,13 +88,60 @@ export interface Recipe {
   memo?: string;
   /** ラベルの名称・保存方法・期限など（無ければラベル画面の既定） */
   labelInfo?: Partial<LabelInfo>;
+  /** 包装（1個あたり。袋・脱酸素剤・包装セット）。前からあるレシピには無い */
+  packaging?: RecipePackLine[];
   // ── 保存時にサーバーが作る列（検索用。画面からは直接書かない）──
   ingredientIds: string[];
+  /** 使っている包装資材（セットの中身も含む）とセット。値段やセットを直したとき、計算し直すレシピを探す */
+  packagingIds?: string[];
+  packagingSetIds?: string[];
   allergens: AllergenId[];
   costCache: CostCache | null;
   version: number;
   updatedAt?: unknown;
   updatedBy?: string;
+}
+
+/** 包装資材 organizations/{orgId}/packaging/{id}：purchasePrice 円で purchaseQty 枚（個・本）を買う */
+export interface PackagingMaterial {
+  id: string;
+  name: string;
+  /** 税抜の円。未入力は null */
+  purchasePrice: number | null;
+  purchaseQty: number;
+  unit: PackUnit;
+  /** 仕入れ値を入れたときの形（0＝税抜、0.08/0.1＝税込）。次に開いたとき同じ形で出すためだけ。材料の priceTax と同じ */
+  priceTax?: number;
+  supplier?: string;
+  memo?: string;
+  updatedAt?: unknown;
+}
+
+export const PACK_UNITS = ["枚", "個", "本", "m"] as const;
+export type PackUnit = (typeof PACK_UNITS)[number];
+
+/** 包装セット organizations/{orgId}/packagingSets/{id}（例：10cm袋1枚＋脱酸素剤30 1個） */
+export interface PackagingSet {
+  id: string;
+  name: string;
+  items: PackSetItem[];
+  memo?: string;
+  updatedAt?: unknown;
+}
+export interface PackSetItem {
+  packagingId: string;
+  /** 保存したときの資材名（資材を消しても読めるように） */
+  name: string;
+  qty: number;
+}
+
+/** レシピの包装1行（1個あたり）。セットか資材を1つ選び、いくつ使うか */
+export interface RecipePackLine {
+  kind: "set" | "item";
+  /** セットなら packagingSets の id、資材なら packaging の id */
+  refId: string | null;
+  name: string;
+  qty: number;
 }
 
 /** 共有マスター globalIngredients/{id} */
