@@ -160,7 +160,19 @@ export function parseMextSheet(rows: unknown[][]): MextFood[] {
   return out;
 }
 
-/** はじめの材料（base_*）と成分表の食品を結ぶ。tokens をすべて名前に含む最初の食品（食品番号の順） */
+/** 食品名を区切りごとに分ける（かっこは外す）。「（砂糖類） 車糖 上白糖」→ ["砂糖類","車糖","上白糖"] */
+export function mextSegments(name: string): string[] {
+  return name.normalize("NFKC").split(" ").map((s) => s.replace(/^[<(\[](.*)[>)\]]$/, "$1")).filter(Boolean);
+}
+
+/**
+ * はじめの材料（base_*）と成分表の食品を結ぶ。tokens がすべて「区切りとして」名前にある最初の食品（表の順）。
+ * 文字が含まれるだけでは結ばない（「米粉」で玄米粉、「食塩」で食塩無添加、「もも」ですももに当たってしまうため）
+ */
 export function findMextFor(tokens: string[], foods: MextFood[]): MextFood | null {
-  return foods.find((f) => tokens.every((t) => f.name.normalize("NFKC").includes(t.normalize("NFKC")))) ?? null;
+  const want = tokens.map((t) => t.normalize("NFKC"));
+  return foods.find((f) => {
+    const segs = mextSegments(f.name);
+    return want.every((t) => segs.includes(t));
+  }) ?? null;
 }

@@ -192,9 +192,21 @@ describe("食品成分表の取り込み", () => {
     expect(foods[2].allergens).toEqual(["milk"]);
     expect(guessMextAllergens("11220", "＜鳥肉類＞ にわとり ［若どり・主品目］ もも 皮つき 生")).toEqual(["chicken"]);
   });
-  it("はじめの材料と結ぶ", () => {
+  it("はじめの材料と結ぶ（区切りとして一致するものだけ）", () => {
     expect(findMextFor(["鶏卵", "全卵", "生"], foods)?.code).toBe("12004");
+    expect(findMextFor(["クリーム", "乳脂肪"], foods)?.code).toBe("13014");
     expect(findMextFor(["存在しない"], foods)).toBeNull();
+    const more = parseMextSheet([...rows.slice(0, 3),
+      [1, 1157, "", "こめ　［うるち米製品］　玄米粉", 0, 0, 370],
+      [1, 1158, "", "こめ　［うるち米製品］　米粉", 0, 0, 356],
+      [6, 6184, "", "（トマト類）　加工品　ホール　食塩無添加", 0, 0, 21],
+      [7, 7080, "", "（すもも類）　にほんすもも　生", 0, 0, 46],
+      [7, 7136, "", "（もも類）　もも　白肉種　生", 0, 0, 38],
+      [17, 17012, "", "＜調味料類＞　（食塩類）　食塩", 0, 0, 0],
+    ]);
+    expect(findMextFor(["米粉"], more)?.code).toBe("01158");
+    expect(findMextFor(["食塩"], more)?.code).toBe("17012");
+    expect(findMextFor(["もも", "生"], more)?.code).toBe("07136");
   });
   it("形が違えば理由を返す", () => {
     expect(() => parseMextSheet([["a", "b"]])).toThrow(/ENERC_KCAL/);

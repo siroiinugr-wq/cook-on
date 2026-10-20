@@ -86,17 +86,17 @@ export const GLOBAL_SEED: SeedIngredient[] = [
 ];
 
 // はじめの材料を食品成分表の食品に結ぶ手がかり（scripts/import-mext.mjs が使う）。
-// 成分表の食品名にすべて含まれる言葉。食品番号の小さいほうから最初に当たったものの成分を写す。
+// 成分表の食品名の区切り（空白で分けた言葉。かっこは外す）とそれぞれ一致する言葉。表の順で最初に当たったものの成分を写す。
 // 結び先は --dry-run で一覧に出るので、違っていたらここを直す。無いものは成分を付けない。
 export const SEED_MEXT_HINTS: Record<string, string[]> = {
   base_hakurikiko: ["薄力粉", "1等"], base_kyorikiko: ["強力粉", "1等"], base_churikiko: ["中力粉", "1等"],
-  base_zenryufun: ["全粒粉"], base_cornstarch: ["コーンスターチ"], base_katakuriko: ["じゃがいもでん粉"],
+  base_zenryufun: ["全粒粉"], base_cornstarch: ["とうもろこしでん粉"], base_katakuriko: ["じゃがいもでん粉"],
   base_komeko: ["米粉"], base_shiratamako: ["白玉粉"], base_kokoa: ["ピュアココア"], base_matcha: ["抹茶"],
   base_granulated: ["グラニュー糖"], base_joohakuto: ["上白糖"], base_funto: ["粉糖"], base_kurozato: ["黒砂糖"],
   base_hachimitsu: ["はちみつ"], base_mizuame: ["水あめ"], base_maple: ["メープルシロップ"],
   base_butter_unsalted: ["食塩不使用バター"], base_butter_salted: ["有塩バター"], base_milk: ["普通牛乳"],
   base_cream: ["クリーム", "乳脂肪"], base_whip_plant: ["ホイップクリーム", "植物性脂肪"],
-  base_creamcheese: ["クリームチーズ"], base_mascarpone: ["マスカルポーネ"], base_yogurt: ["ヨーグルト", "全脂無糖"],
+  base_creamcheese: ["ナチュラルチーズ", "クリーム"], base_mascarpone: ["マスカルポーネ"], base_yogurt: ["ヨーグルト", "全脂無糖"],
   base_skimmilk: ["脱脂粉乳"], base_egg: ["鶏卵", "全卵", "生"], base_eggyolk: ["鶏卵", "卵黄", "生"], base_eggwhite: ["鶏卵", "卵白", "生"],
   base_salad_oil: ["調合油"], base_shortening: ["ショートニング"],
   base_chocolate_milk: ["ミルクチョコレート"], base_chocolate_white: ["ホワイトチョコレート"],
@@ -105,5 +105,5 @@ export const SEED_MEXT_HINTS: Record<string, string[]> = {
   base_strawberry: ["いちご", "生"], base_banana: ["バナナ", "生"], base_apple: ["りんご", "皮なし", "生"],
   base_lemon: ["レモン", "全果"], base_peach: ["もも", "生"], base_raisin: ["干しぶどう"],
   base_salt: ["食塩"], base_gelatin: ["ゼラチン"], base_bakingpowder: ["ベーキングパウダー"],
-  base_yeast: ["ドライイースト"], base_soy_milk: ["豆乳"],
+  base_yeast: ["パン酵母", "乾燥"], base_soy_milk: ["豆乳"],
 };
