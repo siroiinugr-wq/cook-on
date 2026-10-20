@@ -10,7 +10,7 @@
 - リージョン：asia-northeast1 ／ Functions：Node 24
 - 技術：React 19 + Vite + TypeScript + Tailwind v4 + react-router-dom v7 ／ Firebase（Auth・Firestore・Functions・Storage・Hosting）／ Gemini `gemini-3.5-flash-lite`（`functions/src/ai/config.ts` の `GEMINI_MODEL`）
 - 記録：GitHub `siroiinugr-wq/cook-on`（非公開）／ブランチ `main`
-- 土台は AI経理（ai-accounting）と同じ作り：クレーム `orgs: {orgId: role}`、`@shared` で画面とサーバーが同じ計算を読む、`.env.local` が無ければデモモード、見た目は `src/index.css` の `@theme`
+- 土台は AI経理（ai-accounting）と同じ作り：クレーム `orgs: {orgId: role}`、`@shared` で画面とサーバーが同じ計算を読む、`.env.local` が無ければデモモード、見た目は `src/index.css` の `@theme`。文字は COOK ON だけ丸ゴシック（Zen Maru Gothic、`index.html` で読み込み）
 
 ## 構成
 画面（`src/`）
