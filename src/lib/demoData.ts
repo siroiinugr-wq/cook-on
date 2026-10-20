@@ -64,6 +64,14 @@ const RECIPES: (RecipeInput & { id: string })[] = [
   },
 ];
 
+// デモの共有の材料に付ける成分と参考価格（値はデモ用。本番は成分表と総務省の小売物価統計から取り込む）
+const DEMO_REF = { area: "デモ", asOf: "2026-09", source: "デモの値（本番は総務省「小売物価統計調査」）" };
+const DEMO_GLOBAL_EXTRA: Record<string, Record<string, unknown>> = {
+  base_hakurikiko: { mextCode: "01015", nutrition: { kcal: 349, protein: 8.3, fat: 1.5, carbohydrate: 75.8, salt: 0 }, refPrice: { price: 300, qty: 1, unit: "kg", item: "小麦粉（デモ）", ...DEMO_REF } },
+  base_egg: { mextCode: "12004", nutrition: { kcal: 142, protein: 12.2, fat: 10.2, carbohydrate: 0.4, salt: 0.4 }, refPrice: { price: 300, qty: 10, unit: "個", item: "鶏卵 10個入り（デモ）", ...DEMO_REF } },
+  base_butter_unsalted: { refPrice: { price: 540, qty: 200, unit: "g", item: "バター 200g（デモ）", ...DEMO_REF } },
+};
+
 export function seedDemo(): [string, Record<string, unknown>][] {
   const ingById = new Map(ING.map((i) => [i.id, i]));
   const out: [string, Record<string, unknown>][] = [
@@ -74,7 +82,10 @@ export function seedDemo(): [string, Record<string, unknown>][] {
     [`${O}/alerts/a1`, { kind: "costOverTarget", recipeId: "gateau", recipeName: "ガトーショコラ", ingredientId: "choco", ingredientName: "チョコレート（ビター）", oldRate: 0.29, newRate: 0.34, target: 0.32, read: false, createdAt: at }],
     ...ING.map(({ id, ...d }) => [`${O}/ingredients/${id}`, { ...d, updatedAt: at }] as [string, Record<string, unknown>]),
     ...RECIPES.map(({ id, ...r }) => [`${O}/recipes/${id}`, { ...r, ...deriveRecipe(r, ingById), version: 1, archived: false, updatedAt: at }] as [string, Record<string, unknown>]),
-    ...GLOBAL_SEED.map(({ id, ...g }) => [`globalIngredients/${id}`, { ...g, source: "base" }] as [string, Record<string, unknown>]),
+    ...GLOBAL_SEED.map(({ id, ...g }) => [`globalIngredients/${id}`, { ...g, source: "base", ...DEMO_GLOBAL_EXTRA[id] }] as [string, Record<string, unknown>]),
+    // 食品成分表から取り込んだ材料の見本（本番は scripts/import-mext.mjs で約2,500件）
+    ["globalIngredients/mext_05001", { name: "アーモンド 乾", aliases: ["アーモンド 乾"], category: "種実類", allergens: ["almond"], nutrition: { kcal: 609, protein: 19.6, fat: 51.8, carbohydrate: 20.9, salt: 0 }, source: "mext", mextCode: "05001" }],
+    ["globalIngredients/mext_07012", { name: "いちご 生", aliases: ["いちご"], category: "果実類", allergens: [], nutrition: { kcal: 31, protein: 0.9, fat: 0.1, carbohydrate: 8.5, salt: 0 }, source: "mext", mextCode: "07012" }],
     ["ugcProducts/u1", { key: "明治ブラックチョコレート", maker: "明治", productName: "ブラックチョコレート", ingredientsText: "カカオマス、砂糖、ココアバター／乳化剤、香料、（一部に乳成分・大豆を含む）", allergens: ["milk", "soy"], createdByOrg: "other", goodCount: 7, badCount: 1, status: "pending", createdAt: at }],
     ["ugcProducts/u2", { key: "よつ葉乳業よつ葉バター食塩不使用", maker: "よつ葉乳業", productName: "よつ葉バター 食塩不使用", ingredientsText: "生乳（北海道産）", allergens: ["milk"], createdByOrg: "other", goodCount: 12, badCount: 0, status: "promoted", createdAt: at }],
   ];

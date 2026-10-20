@@ -8,7 +8,7 @@ export async function createIngredient(orgId: string, uid: string, d: Partial<In
   const path = `organizations/${orgId}/ingredients`;
   const id = newId(path);
   // ルール（validIngredient）で許した項目だけを書く
-  const extra = Object.fromEntries((["gramsPerPiece", "gramsPerMl", "labelName", "isAdditive", "supplier"] as const)
+  const extra = Object.fromEntries((["gramsPerPiece", "gramsPerMl", "labelName", "isAdditive", "supplier", "photoPath", "priceTax"] as const)
     .flatMap((k) => (d[k] !== undefined ? [[k, d[k]]] : [])));
   await saveDoc(`${path}/${id}`, {
     name: d.name.slice(0, 60), purchasePrice: d.purchasePrice ?? null, purchaseQty: d.purchaseQty ?? 1, purchaseUnit: d.purchaseUnit ?? "kg",
