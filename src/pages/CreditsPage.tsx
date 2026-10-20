@@ -6,6 +6,7 @@ import { useCol } from "../hooks/useData";
 import { call, toDate } from "../lib/store";
 import { PageHead } from "../components/common/Layout";
 import { Icon } from "../components/common/Icon";
+import { creditText } from "../components/common/CreditBadge";
 import { ui } from "../components/common/ui";
 
 interface Entry { kind: string; action?: CreditAction; amount: number; status: string; refunded?: number; createdAt: unknown }
@@ -37,7 +38,7 @@ export function CreditsPage() {
       <PageHead title="クレジット" back="/settings" />
       <section className={`${ui.card} text-center`}>
         <p className="text-sm text-muted">残り</p>
-        <p className="font-serif text-4xl"><span className="text-clay"><Icon name="coin" className="mr-1 inline h-8 w-8" /></span>{org.credits}</p>
+        <p className="font-serif text-4xl"><span className="text-clay"><Icon name="coin" className="mr-1 inline h-8 w-8" /></span>{creditText(org.credits)}</p>
         <p className="mt-1 text-xs text-muted">レシピ・材料・ラベルなどの基本の機能は、クレジットを使わずにずっと無料です。</p>
       </section>
 

@@ -8,6 +8,8 @@ export function useCreditAction(balance: number) {
   const confirm = useConfirm();
   const nav = useNavigate();
   return async function run<T>(o: { title: string; credits: number; detail?: string; exec: () => Promise<T> }): Promise<T | null> {
+    // 無制限の店舗（残高が Infinity）はクレジットを使わないので、確認を出さずに実行する
+    if (balance === Infinity) return o.exec();
     if (balance < o.credits) {
       const go = await confirm({
         title: "クレジットが足りません",

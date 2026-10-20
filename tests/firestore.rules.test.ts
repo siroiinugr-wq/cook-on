@@ -46,6 +46,7 @@ describe("お金とレシピは Functions だけが書く", () => {
   it("オーナーでもクレジット残高とプランは変えられない。店舗名は変えられる", async () => {
     const db = as("u1", { orgA: "owner" });
     await assertFails(updateDoc(doc(db, "organizations/orgA"), { credits: 9999 }));
+    await assertFails(updateDoc(doc(db, "organizations/orgA"), { unlimited: true }));
     await assertFails(updateDoc(doc(db, "organizations/orgA"), { plan: "pro" }));
     await assertSucceeds(updateDoc(doc(db, "organizations/orgA"), { name: "A店 本店" }));
   });

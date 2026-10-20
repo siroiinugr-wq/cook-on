@@ -29,6 +29,15 @@ export const AI_MATCH_BATCH = 20;
 export const IMPORT_CHUNK_CHARS = 6000;
 /** 1回の取り込みの上限（これを超えるファイルは分けてもらう） */
 export const IMPORT_MAX_CHARS = 120_000;
+/**
+ * 無制限の店舗（organizations.unlimited = true、運営がコンソールで付ける）の1回の上限。
+ * これより長いと関数の時間切れ（30分）や取り込み結果の保存の上限に当たるので、無制限でもここで止める。
+ */
+export const IMPORT_MAX_CHARS_UNLIMITED = 300_000;
+
+export function importMaxChars(unlimited: boolean): number {
+  return unlimited ? IMPORT_MAX_CHARS_UNLIMITED : IMPORT_MAX_CHARS;
+}
 /** 相談の文の上限 */
 export const SUGGEST_MAX_CHARS = 400;
 /** はじめて店舗を作ったときに付けるお試し分 */

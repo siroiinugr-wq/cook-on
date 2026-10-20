@@ -2,7 +2,7 @@
 // ファイルを選ぶ／貼る → 使うクレジットを先に見せる → AIが読み取る → プレビュー（ImportPreviewPage）で確かめて保存
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { IMPORT_CHUNK_CHARS, IMPORT_MAX_CHARS, importCredits } from "@shared/credits";
+import { IMPORT_CHUNK_CHARS, importCredits, importMaxChars } from "@shared/credits";
 import type { ImportDoc } from "@shared/importTypes";
 import { useOrgCtx } from "../contexts/OrgContext";
 import { useCol } from "../hooks/useData";
@@ -26,7 +26,8 @@ export function ImportPage() {
   const nav = useNavigate();
   const past = useCol<ImportDoc>(`organizations/${orgId}/imports`, { orderBy: ["createdAt", "desc"], limit: 10 });
   const credits = importCredits(text);
-  const tooLong = text.length > IMPORT_MAX_CHARS;
+  const maxChars = importMaxChars(org.unlimited);
+  const tooLong = text.length > maxChars;
 
   async function pick(f: File | undefined) {
     if (!f) return;
@@ -45,7 +46,7 @@ export function ImportPage() {
     try {
       const r = await run({
         title: "データを読み取る", credits, detail: `${text.length.toLocaleString()}文字を${credits}回に分けて読み取ります。`,
-        exec: () => call<{ importId: string }>("parseImport", { orgId, text, fileName, requestId: newRequestId() }),
+        exec: () => call<{ importId: string }>("parseImport", { orgId, text, fileName, requestId: newRequestId() }, 1_800_000),
       });
       if (r) nav(`/import/${r.importId}`);
     } catch (e) {
@@ -76,7 +77,7 @@ export function ImportPage() {
       </label>
       {text && (
         <p className={`text-sm ${tooLong ? "text-ng" : "text-muted"}`}>
-          {text.length.toLocaleString()}文字{tooLong ? `：1回に読めるのは${IMPORT_MAX_CHARS.toLocaleString()}文字までです。ファイルを分けてください。` : `（${IMPORT_CHUNK_CHARS.toLocaleString()}文字ごとに1クレジット）`}
+          {text.length.toLocaleString()}文字{tooLong ? `：1回に読めるのは${maxChars.toLocaleString()}文字までです。ファイルを分けてください。` : org.unlimited ? "（無制限の設定のため、クレジットは使いません）" : `（${IMPORT_CHUNK_CHARS.toLocaleString()}文字ごとに1クレジット）`}
         </p>
       )}
       {err && <p className="rounded-xl bg-ng-soft p-3 text-sm text-ng-strong">{err}</p>}

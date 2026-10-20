@@ -84,10 +84,10 @@ export function newId(path: string): string {
 }
 
 /** Cloud Functions を呼ぶ。失敗したら日本語の一文の Error にする */
-export async function call<T>(name: string, data: object): Promise<T> {
+export async function call<T>(name: string, data: object, timeout = 540_000): Promise<T> {
   if (isDemo || !functions) return demoCall<T>(name, data);
   try {
-    return (await httpsCallable(functions, name, { timeout: 540_000 })(data)).data as T;
+    return (await httpsCallable(functions, name, { timeout })(data)).data as T;
   } catch (e) {
     throw new Error(errorText(e));
   }
