@@ -97,7 +97,8 @@ function toUnit(u: unknown): Unit {
   return isUnit(s) ? s : parseUnit(s) ?? "g";
 }
 
-export const commitImport = onCall({ region: REGION, memory: "512MiB", timeoutSeconds: 120 }, async (req) => {
+// 無制限の店舗は数百件をまとめて保存することがあるので、時間とメモリに余裕を持たせる
+export const commitImport = onCall({ region: REGION, memory: "1GiB", timeoutSeconds: 540 }, async (req) => {
   const orgId = idOf(req.data?.orgId, "店舗ID");
   const uid = requireRole(req.auth, orgId, ROLES.EDIT);
   const importId = idOf(req.data?.importId, "取り込みID");
@@ -121,7 +122,9 @@ export const commitImport = onCall({ region: REGION, memory: "512MiB", timeoutSe
     await ref.update({ status: "saved", savedRecipeIds: ids, recipes: edited });
     return { saved: ids.length };
   } catch (e) {
-    await ref.update({ status: "preview" });
+    // 原因をログに残す（画面には決まった文しか出さないため）
+    console.error("取り込みを保存できませんでした", orgId, importId, e);
+    await ref.update({ status: "preview" }).catch(() => undefined);
     throw e instanceof HttpsError ? e : new HttpsError("internal", "保存できませんでした。もう一度お試しください。");
   }
 });
