@@ -41,6 +41,8 @@ export interface ImportDoc {
   fileName: string;
   chars: number;
   chunks: number;
+  /** 写真から取り込んだときの枚数（このときの chunks・failedChunks は写真の枚数・番号） */
+  photos?: number;
   /** 読めなかった部分の番号（0始まり）。その分のクレジットは返している */
   failedChunks: number[];
   creditsUsed: number;

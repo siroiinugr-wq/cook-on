@@ -20,6 +20,7 @@ import { IngredientsPage } from "./pages/IngredientsPage";
 import { ProductsPage } from "./pages/ProductsPage";
 import { ImportPage } from "./pages/ImportPage";
 import { ImportPreviewPage } from "./pages/ImportPreviewPage";
+import { ImportPhotosPage } from "./pages/ImportPhotosPage";
 import { CreditsPage } from "./pages/CreditsPage";
 import { SettingsPage } from "./pages/SettingsPage";
 
@@ -70,6 +71,7 @@ function Main({ orgId, onCreated }: { orgId: string; onCreated: (id: string) => 
             <Route path="/ingredients" element={<IngredientsPage />} />
             <Route path="/products" element={<ProductsPage />} />
             <Route path="/import" element={<ImportPage />} />
+            <Route path="/import/photos" element={<ImportPhotosPage />} />
             <Route path="/import/:importId" element={<ImportPreviewPage />} />
             <Route path="/credits" element={<CreditsPage />} />
             <Route path="/settings" element={<SettingsPage brand={brand} />} />

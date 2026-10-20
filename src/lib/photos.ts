@@ -6,7 +6,7 @@ import { isDemo, storage } from "./firebase";
 
 const MAX = 1280;
 
-async function shrink(file: File, max = MAX): Promise<Blob> {
+export async function shrink(file: File, max = MAX): Promise<Blob> {
   const img = await createImageBitmap(file);
   const scale = Math.min(1, max / Math.max(img.width, img.height));
   const canvas = document.createElement("canvas");
@@ -51,4 +51,13 @@ export async function uploadLogo(orgId: string, file: File): Promise<string> {
   const path = await uploadPhoto(`orgs/${orgId}/branding`, file, 256);
   if (path.startsWith("data:") || !storage) return path;
   return getDownloadURL(ref(storage, path));
+}
+
+/** 写真から取り込み：読み取るまでの一時置き場に上げる（手書きの字が読めるよう長い辺 2000px）。デモでは上げない */
+export async function uploadImportPhoto(orgId: string, batchId: string, name: string, file: File): Promise<string> {
+  const blob = await shrink(file, 2000);
+  const path = `orgs/${orgId}/imports/${batchId}/${name}.jpg`;
+  if (isDemo || !storage) return path;
+  await uploadBytes(ref(storage, path), blob, { contentType: "image/jpeg" });
+  return path;
 }
