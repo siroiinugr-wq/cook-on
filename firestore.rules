@@ -33,7 +33,7 @@ service cloud.firestore {
       allow read: if isMember(orgId);
       // お金と所有者の項目は画面から変えられない（クレジットを書き換える不正を防ぐ）
       allow update: if isAdmin(orgId)
-        && unchanged(['plan', 'credits', 'ownerUid', 'createdAt', 'stripeCustomerId'])
+        && unchanged(['plan', 'credits', 'unlimited', 'ownerUid', 'createdAt', 'stripeCustomerId'])
         && str(request.resource.data.name, 40);
 
       // ロゴ・テーマ色・表示名。ログイン画面で使うので誰でも読める（秘密は置かない）

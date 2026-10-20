@@ -44,6 +44,7 @@ aiRequests/{orgId}_{requestId}             受付票（Functions だけ。AIの�
 
 ## このアプリだけの決まり
 - **クレジットの単価・上限は `functions/src/shared/credits.ts` の1か所だけ。** 画面の「押す前の表示」とサーバーの「実際に引く量」が同じファイルを読む（ig-saas で2か所に分かれて食い違った反省）
+- **無制限の店舗**：`organizations/{orgId}.unlimited = true`（運営が Firebase コンソールで付け外しする。ルールで画面からは変えられない）。`runWithCredits` は残高を見ず0クレジットで記録、取り込みの上限は `IMPORT_MAX_CHARS_UNLIMITED`（30万字。時間切れと保存の上限のため）。画面は残高を `Infinity`＝「無制限」と出し、確認を出さずに実行する
 - クレジットを使う操作は必ず `runWithCredits`（予約→確定、失敗なら全額返す、`requestId` で二重に引かない）。画面は `useCreditAction` で使う数を先に見せ、`newRequestId()` を毎回付ける
 - **AIの原価（トークン・円・モデル）は店舗が読める `creditLedger` に書かない。** `aiRequests` だけ。お客さまに見せる文にもAIの料金・トークンを書かない
 - 名寄せは「無料の照合（完全一致・覚えた別名・似た名前）→ 決まらないものだけAIが候補から選ぶ」。AIは候補に無い id を返しても捨てる

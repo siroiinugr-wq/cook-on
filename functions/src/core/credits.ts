@@ -7,6 +7,7 @@
 // 4. 成功：通帳を spent にする（一部だけ成功なら、使わなかった分を返す）／失敗：全額返して refunded にする
 //
 // 画面から送られた金額は使わない。消費量は shared/credits.ts の CREDIT_COST からここで計算する。
+// 無制限の店舗（organizations.unlimited = true、運営がコンソールで付ける）は残高を見ず、0クレジットとして記録する。
 
 import { HttpsError } from "firebase-functions/v2/https";
 import { getFirestore, FieldValue, type Transaction } from "firebase-admin/firestore";
@@ -48,6 +49,8 @@ export async function runWithCredits<T>(c: Charge, work: () => Promise<WorkResul
   const ledgerRef = orgRef.collection("creditLedger").doc();
   const unit = CREDIT_COST[c.action];
   const cost = unit * c.units;
+  /** 実際に引いた量（無制限の店舗なら0） */
+  let charged = cost;
 
   // ── 仮押さえ ──
   const replay = await db.runTransaction(async (tx) => {
@@ -58,13 +61,15 @@ export async function runWithCredits<T>(c: Charge, work: () => Promise<WorkResul
       throw new HttpsError("already-exists", "同じ操作を処理しています。少し待ってから画面を確かめてください。");
     }
     if (!org.exists) throw new HttpsError("not-found", "店舗が見つかりません。");
+    const free = org.data()?.unlimited === true;
+    charged = free ? 0 : cost;
     const balance = Number(org.data()?.credits ?? 0);
-    if (balance < cost) {
+    if (!free && balance < cost) {
       throw new HttpsError("resource-exhausted", `クレジットが足りません（残り${balance} / 必要${cost}）。クレジットの画面から追加できます。`);
     }
-    tx.update(orgRef, { credits: FieldValue.increment(-cost) });
+    if (charged > 0) tx.update(orgRef, { credits: FieldValue.increment(-charged) });
     tx.set(ledgerRef, {
-      kind: "spend", action: c.action, amount: -cost, status: "held", uid: c.uid, requestId: c.requestId,
+      kind: "spend", action: c.action, amount: charged ? -charged : 0, status: "held", uid: c.uid, requestId: c.requestId, ...(free ? { free: true } : {}),
       createdAt: FieldValue.serverTimestamp(),
     });
     tx.set(reqRef, {
@@ -80,19 +85,19 @@ export async function runWithCredits<T>(c: Charge, work: () => Promise<WorkResul
   try {
     out = await work();
   } catch (e) {
-    await refund(c, cost, ledgerRef.path, reqRef.path, e);
+    await refund(c, charged, ledgerRef.path, reqRef.path, e);
     throw toHttpsError(e);
   }
 
   // ── 確定（使わなかった分は返す）──
   const used = Math.max(0, Math.min(c.units, out.usedUnits ?? c.units));
-  const back = (c.units - used) * unit;
+  const back = charged > 0 ? (c.units - used) * unit : 0;
   const stored = JSON.stringify(out.result ?? null).length <= MAX_STORED_RESULT ? out.result : null;
   await db.runTransaction(async (tx: Transaction) => {
     if (back > 0) tx.update(orgRef, { credits: FieldValue.increment(back) });
     tx.update(ledgerRef, {
       status: "spent",
-      amount: -(cost - back),
+      amount: charged ? -(charged - back) : 0,
       ...(back > 0 ? { refunded: back } : {}),
       settledAt: FieldValue.serverTimestamp(),
     });
@@ -111,7 +116,7 @@ async function refund(c: Charge, cost: number, ledgerPath: string, reqPath: stri
   console.warn("AIの処理に失敗したのでクレジットを返します", c.action, c.orgId, String((e as Error)?.message ?? e));
   try {
     await db.runTransaction(async (tx) => {
-      tx.update(db.doc(`organizations/${c.orgId}`), { credits: FieldValue.increment(cost) });
+      if (cost > 0) tx.update(db.doc(`organizations/${c.orgId}`), { credits: FieldValue.increment(cost) });
       tx.update(db.doc(ledgerPath), {
         status: "refunded", amount: 0, refunded: cost, settledAt: FieldValue.serverTimestamp(),
       });

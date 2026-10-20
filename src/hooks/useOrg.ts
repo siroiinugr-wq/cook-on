@@ -13,17 +13,21 @@ export interface OrgSettings {
 export interface Org {
   name: string;
   plan: string;
+  /** 無制限の店舗は Infinity（クレジットを使わない。運営がコンソールで organizations.unlimited を付ける） */
   credits: number;
+  unlimited: boolean;
   settings: OrgSettings;
 }
 
 export function useOrg(orgId: string) {
   const { data, loading } = useDoc<Partial<Org>>(`organizations/${orgId}`);
+  const unlimited = data?.unlimited === true;
   const s = (data?.settings ?? {}) as Partial<OrgSettings>;
   const org: Org = {
     name: data?.name ?? "",
     plan: data?.plan ?? "free",
-    credits: Number(data?.credits ?? 0),
+    credits: unlimited ? Infinity : Number(data?.credits ?? 0),
+    unlimited,
     settings: {
       targetCostRate: s.targetCostRate || DEFAULT_TARGET_RATE,
       manufacturer: s.manufacturer ?? data?.name ?? "",

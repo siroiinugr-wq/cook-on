@@ -12,12 +12,13 @@ import { BrandSection } from "../components/settings/BrandSection";
 import { MembersSection } from "../components/settings/MembersSection";
 import { StoreSection } from "../components/settings/StoreSection";
 import { StoresSection } from "../components/settings/StoresSection";
+import { creditText } from "../components/common/CreditBadge";
 
 export function SettingsPage({ brand }: { brand: Branding }) {
   const { orgId, org, orgs, email, select, isAdmin } = useOrgCtx();
   const confirm = useConfirm();
   const links: { to: string; icon: IconName; title: string; sub: string }[] = [
-    { to: "/credits", icon: "coin", title: `クレジット（残り ${org.credits}）`, sub: "使った記録・まとめ買い" },
+    { to: "/credits", icon: "coin", title: `クレジット（残り ${creditText(org.credits)}）`, sub: "使った記録・まとめ買い" },
     { to: "/products", icon: "box", title: "既製品", sub: "メーカーの商品の原材料をお店どうしで共有" },
     { to: "/import", icon: "upload", title: "データの取り込み", sub: "ほかのアプリや Excel から引っ越す" },
   ];

@@ -4,7 +4,7 @@
 // commitImport：プレビューで直した内容を、材料マスターとレシピに一括で保存する（recipes/save.ts の決まりで）
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
-import { IMPORT_MAX_CHARS, splitForImport } from "../shared/credits";
+import { importMaxChars, splitForImport } from "../shared/credits";
 import type { ImportDoc, ParsedRecipe } from "../shared/importTypes";
 import { isUnit, parseUnit, type Unit } from "../shared/units";
 import { GEMINI_API_KEY, REGION } from "./config";
@@ -19,7 +19,7 @@ import { saveImportedRecipes } from "../recipes/importSave";
 const PARALLEL = 3;
 
 export const parseImport = onCall(
-  { region: REGION, memory: "1GiB", timeoutSeconds: 540, secrets: [GEMINI_API_KEY] },
+  { region: REGION, memory: "1GiB", timeoutSeconds: 1800, secrets: [GEMINI_API_KEY] },
   async (req) => {
     const orgId = idOf(req.data?.orgId, "店舗ID");
     const uid = requireRole(req.auth, orgId, ROLES.EDIT);
@@ -27,13 +27,15 @@ export const parseImport = onCall(
     const requestId = requestIdOf(req.data?.requestId);
     const text = String(req.data?.text ?? "");
     const fileName = String(req.data?.fileName ?? "").slice(0, 120);
-    if (text.length > IMPORT_MAX_CHARS) {
-      throw new HttpsError("invalid-argument", `1回に取り込めるのは${IMPORT_MAX_CHARS.toLocaleString()}字までです。ファイルを分けてください。`);
+    const db = getFirestore();
+    const unlimited = (await db.doc(`organizations/${orgId}`).get()).data()?.unlimited === true;
+    const max = importMaxChars(unlimited);
+    if (text.length > max) {
+      throw new HttpsError("invalid-argument", `1回に取り込めるのは${max.toLocaleString()}字までです。ファイルを分けてください。`);
     }
     const chunks = splitForImport(text);
     if (!chunks.length) throw new HttpsError("invalid-argument", "ファイルに文字が見つかりませんでした。");
 
-    const db = getFirestore();
     const ref = db.collection(`organizations/${orgId}/imports`).doc();
     return runWithCredits({ orgId, uid, action: "importChunk", units: chunks.length, requestId }, async () => {
       const base: ImportDoc = {
