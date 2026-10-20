@@ -124,6 +124,16 @@ export async function demoAiCall<T>(name: string, d: Data): Promise<T> {
       demoWrite(path, { ...imp, status: "saved", savedRecipeIds: ids, recipes: d.recipes });
       return { saved: ids.length } as T;
     }
+    case "readProductPhoto": {
+      const paths = (d.paths as string[]) ?? [];
+      return demoWithCredits("productPhoto", paths.length, async () => ({
+        result: {
+          maker: "デモ製菓", productName: "製菓用スイートチョコ", ingredientsText: "砂糖、カカオマス、ココアバター、全粉乳／乳化剤（大豆由来）、香料",
+          allergens: ["milk", "soy"], nutrition: { kcal: 548, protein: 5.2, fat: 33.1, carbohydrate: 56.4, salt: 0.05 }, basisLabel: "100gあたり",
+          confidence: 0.5, note: "デモの読み取りです（写真の中身は見ていません）。",
+        } as T,
+      }));
+    }
     case "guessProduct":
       return demoWithCredits("productGuess", 1, async () => ({
         result: { ingredientsText: "砂糖、カカオマス、全粉乳、ココアバター／乳化剤（大豆由来）、香料", allergens: ["milk", "soy"], nutrition: { kcal: 560 }, confidence: 0.4, note: "デモの下書きです。パッケージの表示で必ず確かめてください。" } as T,

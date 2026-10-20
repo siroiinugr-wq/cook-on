@@ -7,12 +7,10 @@ import { onDocumentWritten } from "firebase-functions/v2/firestore";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import { allergenFromName, isAllergenId, sortAllergens } from "../shared/allergens";
 import { toMatchKey } from "../shared/matchKey";
-import { judgeUgc, voteDelta, type Vote } from "../shared/ugc";
+import { judgeUgc, NUTRITION_KEYS, voteDelta, type Vote } from "../shared/ugc";
 import type { UgcProduct } from "../shared/types";
 import { REGION } from "../ai/config";
 import { idOf, requireRole, requireVerified, ROLES } from "../core/auth";
-
-const NUTRITION_KEYS = ["kcal", "protein", "fat", "carbohydrate", "salt"];
 
 export const submitUgcProduct = onCall({ region: REGION }, async (req) => {
   const orgId = idOf(req.data?.orgId, "店舗ID");
@@ -28,7 +26,10 @@ export const submitUgcProduct = onCall({ region: REGION }, async (req) => {
   const allergens = sortAllergens((Array.isArray(d.allergens) ? d.allergens : [])
     .map((a) => (isAllergenId(a) ? a : allergenFromName(String(a)))).filter((a): a is NonNullable<typeof a> => !!a));
   const n = (d.nutrition ?? {}) as Record<string, unknown>;
-  const nutrition = Object.fromEntries(NUTRITION_KEYS.flatMap((k) => (typeof n[k] === "number" && Number.isFinite(n[k]) ? [[k, n[k] as number]] : [])));
+  const nutrition = Object.fromEntries(NUTRITION_KEYS.flatMap((k) => (typeof n[k] === "number" && Number.isFinite(n[k]) && n[k] >= 0 ? [[k, n[k] as number]] : [])));
+  // パッケージの写真（readProductPhoto で上げたもの）。自分の店舗の置き場のものだけ受け取る
+  const photo = String(d.photoPath ?? "");
+  const photoPath = new RegExp(`^ugc/${orgId}/[A-Za-z0-9_-]+/[A-Za-z0-9_-]+\\.jpg$`).test(photo) ? photo : null;
 
   const db = getFirestore();
   const key = toMatchKey(`${maker}${productName}`);
@@ -37,7 +38,7 @@ export const submitUgcProduct = onCall({ region: REGION }, async (req) => {
 
   const ref = db.collection("ugcProducts").doc();
   await ref.set({
-    key, maker, productName, ingredientsText, allergens, nutrition,
+    key, maker, productName, ingredientsText, allergens, nutrition, photoPath,
     createdByOrg: orgId, createdBy: uid, goodCount: 0, badCount: 0, status: "pending",
     createdAt: FieldValue.serverTimestamp(),
   });
@@ -75,6 +76,7 @@ export const onUgcVoteWritten = onDocumentWritten(
           allergens: p.allergens,
           nutrition: p.nutrition ?? {},
           ingredientsText: p.ingredientsText,
+          photoPath: p.photoPath ?? null,
           source: "ugc",
           maker: p.maker,
           ugcId: productId,

@@ -61,3 +61,12 @@ export async function uploadImportPhoto(orgId: string, batchId: string, name: st
   await uploadBytes(ref(storage, path), blob, { contentType: "image/jpeg" });
   return path;
 }
+
+/** 既製品のパッケージの写真を上げる（AIが読む裏は小さな字が読めるよう長い辺 2000px、画像にする表は 800px）。デモでは data URL を返す */
+export async function uploadUgcPhoto(orgId: string, draftId: string, name: string, file: File, max = 2000): Promise<string> {
+  const blob = await shrink(file, max);
+  if (isDemo || !storage) return toDataUrl(blob);
+  const path = `ugc/${orgId}/${draftId}/${name}.jpg`;
+  await uploadBytes(ref(storage, path), blob, { contentType: "image/jpeg" });
+  return path;
+}

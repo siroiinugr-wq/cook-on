@@ -19,6 +19,20 @@ service firebase.storage {
       allow delete: if editor(orgId);
       allow update: if false;
     }
+    // 材料の写真（お店が撮ったもの）
+    match /orgs/{orgId}/ingredients/{file} {
+      allow read: if member(orgId);
+      allow create: if editor(orgId) && request.resource.size < 2 * 1024 * 1024 && request.resource.contentType.matches('image/.*');
+      allow delete: if editor(orgId);
+      allow update: if false;
+    }
+    // 既製品のパッケージの写真（readProductPhoto が読む。1枚目は商品の画像として、どのお店からも見える）
+    match /ugc/{orgId}/{draftId}/{file} {
+      allow read: if request.auth != null;
+      allow create: if editor(orgId) && request.resource.size < 8 * 1024 * 1024 && request.resource.contentType == 'image/jpeg';
+      allow delete: if editor(orgId);
+      allow update: if false;
+    }
     // ロゴ（ログイン画面で出すので誰でも読める）
     match /orgs/{orgId}/branding/{file} {
       allow read: if true;

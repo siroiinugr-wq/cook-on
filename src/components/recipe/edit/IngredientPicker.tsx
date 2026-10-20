@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import type { ItemMatch } from "@shared/importTypes";
 import { buildIndex, rankCandidates } from "@shared/matchKey";
 import type { Ingredient } from "@shared/types";
+import { MEXT_CREDIT } from "@shared/mext";
 import { createIngredient, linkIngredient } from "../../../lib/ingredientLink";
 import { call } from "../../../lib/store";
 import { Sheet } from "../../common/Sheet";
@@ -79,6 +80,7 @@ export function IngredientPicker({ orgId, uid, name, own, onPick, onClose }: Pro
         )}
         {err && <p className="text-sm text-ng">{err}</p>}
         <p className="text-xs text-muted">仕入れ値は「材料」の画面で入れると、原価に入ります。</p>
+        <p className="text-[11px] text-faint">共有の材料には食品成分表の食品も入っています。{MEXT_CREDIT}</p>
       </div>
     </Sheet>
   );

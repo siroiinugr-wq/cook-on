@@ -12,6 +12,8 @@ export const CREDIT_COST = {
   importPhoto: 1,
   /** 既製品の原材料・成分の下書き */
   productGuess: 1,
+  /** 既製品のパッケージの裏（原材料・栄養成分）の写真を読む：1枚ごと。表の写真は画像にするだけで使わない */
+  productPhoto: 1,
   /** 原価ダウン・新作の提案（1回の質問） */
   aiSuggest: 2,
 } as const;
@@ -22,6 +24,7 @@ export const ACTION_LABEL: Record<CreditAction | "purchase" | "grant" | "welcome
   importChunk: "データの取り込み",
   importPhoto: "写真から取り込み",
   productGuess: "既製品の情報をAIで下書き",
+  productPhoto: "既製品のパッケージを読み取り",
   aiSuggest: "AIに相談",
   purchase: "購入",
   grant: "付与",
@@ -49,6 +52,9 @@ export const IMPORT_MAX_PHOTOS_UNLIMITED = 60;
 export function importMaxPhotos(unlimited: boolean): number {
   return unlimited ? IMPORT_MAX_PHOTOS_UNLIMITED : IMPORT_MAX_PHOTOS;
 }
+/** 既製品のパッケージの裏：1回に読める枚数（原材料と栄養成分が別の面に分かれていることがあるため2枚） */
+export const PRODUCT_PHOTO_MAX = 2;
+
 /** 相談の文の上限 */
 export const SUGGEST_MAX_CHARS = 400;
 /** はじめて店舗を作ったときに付けるお試し分 */
