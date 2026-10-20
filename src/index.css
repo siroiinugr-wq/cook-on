@@ -38,8 +38,10 @@
   --color-blank: #7b8ba0;
   --color-blank-soft: #eef2f6;
 
-  --font-sans: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", system-ui, sans-serif;
-  --font-serif: "Hiragino Mincho ProN", "Yu Mincho", "Noto Serif JP", serif;
+  /* 丸ゴシック（index.html で Zen Maru Gothic を読む。読めないときは Mac の丸ゴシック → 普通のゴシック） */
+  --font-sans: "Zen Maru Gothic", "Hiragino Maru Gothic ProN", "Hiragino Sans", "Noto Sans JP", system-ui, sans-serif;
+  /* 見出し用。名前は serif のままだが、中身は同じ丸ゴシック */
+  --font-serif: "Zen Maru Gothic", "Hiragino Maru Gothic ProN", "Hiragino Sans", "Noto Sans JP", sans-serif;
 }
 
 /* テーマ色を差し替えたとき、濃い色・薄い色も自動でそろえる（@theme の値より後に書いて上書きする） */
