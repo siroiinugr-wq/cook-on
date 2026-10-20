@@ -71,6 +71,12 @@ describe("材料マスター", () => {
     const db = as("u3", { orgA: "editor" });
     await assertFails(setDoc(doc(db, "organizations/orgA/ingredients/i3"), { ...ingredient, purchasePrice: -1 }));
     await assertFails(setDoc(doc(db, "organizations/orgA/ingredients/i3"), { ...ingredient, costCache: 1 }));
+    await assertFails(setDoc(doc(db, "organizations/orgA/ingredients/i3"), { ...ingredient, priceTax: 0.05 }));
+  });
+  it("写真と、税込で入れた印は書ける", async () => {
+    const db = as("u3", { orgA: "editor" });
+    await assertSucceeds(setDoc(doc(db, "organizations/orgA/ingredients/i4"), { ...ingredient, photoPath: "orgs/orgA/ingredients/1.jpg", priceTax: 0.08 }));
+    await assertSucceeds(setDoc(doc(db, "organizations/orgA/ingredients/i5"), { ...ingredient, photoPath: null, priceTax: 0 }));
   });
 });
 

@@ -27,3 +27,20 @@ export function voteDelta(before: Vote | null, after: Vote | null): { good: numb
   const b = (v: Vote | null) => (v === -1 ? 1 : 0);
   return { good: g(after) - g(before), bad: b(after) - b(before) };
 }
+
+/** 栄養成分の項目（食品表示の栄養成分表示と同じ5つ。100gあたりで持つ） */
+export const NUTRITION_KEYS = ["kcal", "protein", "fat", "carbohydrate", "salt"] as const;
+
+/**
+ * パッケージの「1枚（12g）あたり」の値を100gあたりに直す。
+ * 何gあたりか分からない（「1個あたり」だけ）ときは直せないので null。小数は2桁まで。
+ */
+export function toPer100g(values: Record<string, unknown>, grams: number | null | undefined): Record<string, number> | null {
+  if (!grams || !(grams > 0)) return null;
+  const out: Record<string, number> = {};
+  for (const k of NUTRITION_KEYS) {
+    const v = values[k];
+    if (typeof v === "number" && Number.isFinite(v) && v >= 0) out[k] = Math.round((v * 100 / grams) * 100) / 100;
+  }
+  return out;
+}

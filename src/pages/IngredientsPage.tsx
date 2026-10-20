@@ -11,6 +11,7 @@ import { PageHead } from "../components/common/Layout";
 import { Icon } from "../components/common/Icon";
 import { ui } from "../components/common/ui";
 import { IngredientSheet } from "../components/ingredient/IngredientSheet";
+import { PhotoThumb } from "../components/ingredient/PhotoThumb";
 
 export function IngredientsPage() {
   const { orgId, uid, canEdit } = useOrgCtx();
@@ -48,6 +49,7 @@ export function IngredientsPage() {
             return (
               <li key={i.id}>
                 <button disabled={!canEdit} onClick={() => setEdit(i)} className="flex w-full items-center gap-3 px-4 py-3 text-left">
+                  <PhotoThumb path={i.photoPath} />
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-medium">{i.name}</p>
                     <p className="truncate text-xs text-muted">

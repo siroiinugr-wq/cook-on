@@ -16,6 +16,7 @@ const PER: Record<CreditAction, string> = {
   importChunk: `${IMPORT_CHUNK_CHARS.toLocaleString()}文字ごと`,
   importPhoto: "写真1枚",
   productGuess: "1商品",
+  productPhoto: "写真1枚",
   aiSuggest: "1回",
 };
 

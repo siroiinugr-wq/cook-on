@@ -4,7 +4,9 @@ import { calcCost, scaleFactor, suggestPrice, unitCostPerGram, costCacheOf } fro
 import { buildLabel, expiryDate } from "./label";
 import { buildIndex, exactMatch, rankCandidates, toMatchKey } from "./matchKey";
 import { importCredits, splitForImport, aiMatchCredits } from "./credits";
-import { judgeUgc, voteDelta } from "./ugc";
+import { judgeUgc, toPer100g, voteDelta } from "./ugc";
+import { findMextFor, guessMextAllergens, parseMextSheet, parseMextValue } from "./mext";
+import { parseQtyUnit, refPriceExTax } from "./refPrice";
 import { toGrams, parseUnit } from "./units";
 import { deriveRecipe, sanitizeRecipe } from "./recipe";
 import { calcPackaging, packUnitCost, sanitizePackLines, type PackCtx } from "./packaging";
@@ -191,5 +193,78 @@ describe("レシピの入力", () => {
     expect(r.items[0]).toMatchObject({ qty: null, unit: "g" });
     expect(r.yield.pieces).toBe(1);
     expect(r.targetCostRate).toBeNull();
+  });
+});
+
+describe("食品成分表の取り込み", () => {
+  // 本物の Excel と同じ並び：上に見出し、成分識別子の行、その下がデータ
+  const rows: unknown[][] = [
+    ["食品群", "食品番号", "索引番号", "食品名", "廃棄率", "エネルギー", null, "水分", "たんぱく質", null, "脂質", "炭水化物", "食物繊維総量", "食塩相当量"],
+    [null, null, null, null, "%", "kJ", "kcal", "g", "g", "g", "g", "g", "g", "g"],
+    [null, null, null, null, "REFUSE", "ENERC", "ENERC_KCAL", "WATER", "PROTCAA", "PROT-", "FAT-", "CHOCDF-", "FIB-", "NACL_EQ"],
+    [1, 1015, "123", "こむぎ　［小麦粉］　薄力粉　１等", 0, 1475, 349, 14.0, "(7.7)", 8.3, 1.5, 75.8, 2.5, 0],
+    [12, 12004, "456", "鶏卵　全卵　生", 14, 594, 142, 75.0, 11.3, 12.2, 10.2, 0.4, 0, "0.4"],
+    ["13", "13014", "789", "（クリーム類）　クリーム　乳脂肪", 0, 1662, 404, 48.2, 1.6, 1.9, 43.0, 6.5, "-", "Tr"],
+    ["", "", "", "注：", null],
+  ];
+  const foods = parseMextSheet(rows);
+  it("見出しで列を探して読む", () => {
+    expect(foods.map((f) => f.code)).toEqual(["01015", "12004", "13014"]);
+    expect(foods[0].name).toBe("こむぎ ［小麦粉］ 薄力粉 1等");
+    expect(foods[0].category).toBe("穀類");
+    expect(foods[0].nutrition).toMatchObject({ kcal: 349, protein: 8.3, fat: 1.5, carbohydrate: 75.8, salt: 0 });
+  });
+  it("Tr は0、- は入れない、かっこは外す", () => {
+    expect(foods[2].nutrition.salt).toBe(0);
+    expect(foods[2].nutrition.fiber).toBeUndefined();
+    expect(parseMextValue("(7.7)")).toBe(7.7);
+    expect(parseMextValue("-")).toBeNull();
+  });
+  it("別名で「薄力粉」「全卵」でも探せる", () => {
+    expect(foods[0].aliases).toContain("薄力粉");
+    expect(foods[1].aliases).toContain("全卵");
+    const idx = buildIndex(foods.map((f) => ({ id: f.code, name: f.name, aliases: f.aliases })));
+    expect(exactMatch("薄力粉", idx)?.id).toBe("01015");
+  });
+  it("アレルゲンを食品群と名前から推定する", () => {
+    expect(foods[0].allergens).toEqual(["wheat"]);
+    expect(foods[1].allergens).toEqual(["egg"]);
+    expect(foods[2].allergens).toEqual(["milk"]);
+    expect(guessMextAllergens("11220", "＜鳥肉類＞ にわとり ［若どり・主品目］ もも 皮つき 生")).toEqual(["chicken"]);
+  });
+  it("はじめの材料と結ぶ（区切りとして一致するものだけ）", () => {
+    expect(findMextFor(["鶏卵", "全卵", "生"], foods)?.code).toBe("12004");
+    expect(findMextFor(["クリーム", "乳脂肪"], foods)?.code).toBe("13014");
+    expect(findMextFor(["存在しない"], foods)).toBeNull();
+    const more = parseMextSheet([...rows.slice(0, 3),
+      [1, 1157, "", "こめ　［うるち米製品］　玄米粉", 0, 0, 370],
+      [1, 1158, "", "こめ　［うるち米製品］　米粉", 0, 0, 356],
+      [6, 6184, "", "（トマト類）　加工品　ホール　食塩無添加", 0, 0, 21],
+      [7, 7080, "", "（すもも類）　にほんすもも　生", 0, 0, 46],
+      [7, 7136, "", "（もも類）　もも　白肉種　生", 0, 0, 38],
+      [17, 17012, "", "＜調味料類＞　（食塩類）　食塩", 0, 0, 0],
+    ]);
+    expect(findMextFor(["米粉"], more)?.code).toBe("01158");
+    expect(findMextFor(["食塩"], more)?.code).toBe("17012");
+    expect(findMextFor(["もも", "生"], more)?.code).toBe("07136");
+  });
+  it("形が違えば理由を返す", () => {
+    expect(() => parseMextSheet([["a", "b"]])).toThrow(/ENERC_KCAL/);
+  });
+});
+
+describe("参考価格と既製品の栄養成分", () => {
+  it("量と単位を読む", () => {
+    expect(parseQtyUnit("小麦粉 薄力粉 1kg")).toEqual({ qty: 1, unit: "kg" });
+    expect(parseQtyUnit("牛乳 1000mL")).toEqual({ qty: 1000, unit: "ml" });
+    expect(parseQtyUnit("鶏卵 Lサイズ 10個入り")).toEqual({ qty: 10, unit: "個" });
+    expect(parseQtyUnit("バター")).toBeNull();
+  });
+  it("税込を税抜に直す（食品は8%）", () => {
+    expect(refPriceExTax({ price: 324 })).toBe(300);
+  });
+  it("1枚12gあたりを100gあたりに直す", () => {
+    expect(toPer100g({ kcal: 60, salt: 0.06 }, 12)).toEqual({ kcal: 500, salt: 0.5 });
+    expect(toPer100g({ kcal: 60 }, null)).toBeNull();
   });
 });

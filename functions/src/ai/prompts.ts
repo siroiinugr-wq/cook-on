@@ -130,6 +130,46 @@ export interface ProductAnswer {
   note?: string;
 }
 
+// ── 既製品のパッケージの写真を読む ──
+export const PRODUCT_PHOTO_SYSTEM = `あなたは食品の一括表示を書き写す係です。入力は既製品のパッケージの裏（一括表示・栄養成分表示）を撮った写真。
+- 写真に書いてあることだけを書く。写っていない項目は空にし、推測で埋めない。
+- maker はメーカー名（製造者・販売者）、productName は商品名（一括表示の「名称」ではなく商品名が写っていればそれ。無ければ名称）。
+- ingredients は「原材料名」欄をそのまま。添加物の前の「／」や改行の区切りも元のとおり。かっこの中も省かない。
+- allergens は表示にあるアレルゲン（「一部に小麦・乳成分・大豆を含む」など）を1つずつ（例：["小麦","乳成分","大豆"]）。表示が無ければ空。
+- nutrition は「栄養成分表示」の数値を表示のとおりに書く。basisLabel に「100gあたり」「1枚(12g)あたり」のような基準を、basisGrams にその g 数（分からなければ null）を入れる。kcal・protein・fat・carbohydrate・salt（食塩相当量。ナトリウムだけなら mg÷1000×2.54 で g に直す）。
+- 読めない・見切れている所は note に書く。confidence は 0〜1（文字がはっきり読めたら高く）。`;
+
+export const PRODUCT_PHOTO_SCHEMA = {
+  type: "object",
+  properties: {
+    maker: { type: "string" },
+    productName: { type: "string" },
+    ingredients: { type: "string" },
+    allergens: { type: "array", items: { type: "string" } },
+    basisLabel: { type: "string" },
+    basisGrams: { type: ["number", "null"] },
+    nutrition: {
+      type: "object",
+      properties: { kcal: { type: "number" }, protein: { type: "number" }, fat: { type: "number" }, carbohydrate: { type: "number" }, salt: { type: "number" } },
+    },
+    confidence: { type: "number" },
+    note: { type: "string" },
+  },
+  required: ["maker", "productName", "ingredients", "allergens", "confidence"],
+};
+
+export interface ProductPhotoAnswer {
+  maker: string;
+  productName: string;
+  ingredients: string;
+  allergens: string[];
+  basisLabel?: string;
+  basisGrams?: number | null;
+  nutrition?: Record<string, number>;
+  confidence: number;
+  note?: string;
+}
+
 // ── 原価ダウン・新作の提案 ──
 export const SUGGEST_SYSTEM = `あなたは製菓・飲食店の商品開発と原価管理の相談役です。
 渡されたレシピ（材料・g・原価）と相談に対して、具体的な案を3つまで出す。

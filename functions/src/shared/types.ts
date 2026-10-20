@@ -3,6 +3,7 @@
 
 import type { AllergenId } from "./allergens";
 import type { LabelInfo } from "./label";
+import type { RefPrice } from "./refPrice";
 import type { Unit } from "./units";
 
 export type Role = "owner" | "admin" | "editor" | "viewer";
@@ -13,6 +14,8 @@ export interface Ingredient {
   name: string;
   /** 仕入れ値：purchasePrice 円で purchaseQty purchaseUnit を買う（例：1,200円で 1 kg）。未入力は null */
   purchasePrice: number | null;
+  /** 仕入れ値をどの形で入れたか（0＝税抜・0.08・0.1＝税込。shared/cost.ts の PRICE_TAX_OPTIONS）。計算は purchasePrice（税抜）だけ使う */
+  priceTax?: number;
   purchaseQty: number;
   purchaseUnit: Unit;
   /** 1個・1枚・1本あたりの g（個数で使う材料だけ） */
@@ -27,6 +30,8 @@ export interface Ingredient {
   /** 共有マスターとの紐付け（globalIngredients / ugcProducts の id） */
   globalRef?: string | null;
   supplier?: string;
+  /** 写真（Storage のパス orgs/{orgId}/ingredients/… か、既製品から写した ugc/…） */
+  photoPath?: string | null;
   updatedAt?: unknown;
 }
 
@@ -150,11 +155,15 @@ export interface GlobalIngredient {
   nutrition?: Record<string, number>;
   /** mext＝食品成分表、ugc＝昇格した既製品、base＝運営が用意した基本の材料（shared/globalSeed.ts） */
   source: "mext" | "ugc" | "base";
-  /** 文科省の食品番号（mext のとき） */
+  /** 文科省の食品番号（mext のとき。base も成分表の食品に結んだら入る） */
   mextCode?: string;
   /** ugc のとき：元の既製品 */
   maker?: string;
   ugcId?: string;
+  ingredientsText?: string;
+  photoPath?: string | null;
+  /** 参考価格（税込。shared/refPrice.ts）。お店の仕入れ値ではない */
+  refPrice?: RefPrice | null;
 }
 
 export type UgcStatus = "pending" | "promoted" | "rejected";
@@ -169,6 +178,8 @@ export interface UgcProduct {
   allergens: AllergenId[];
   nutrition?: Record<string, number>;
   createdByOrg: string;
+  /** パッケージの写真（Storage のパス ugc/{orgId}/…） */
+  photoPath?: string | null;
   goodCount: number;
   badCount: number;
   status: UgcStatus;

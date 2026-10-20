@@ -5,6 +5,27 @@ import type { CostCache, Ingredient, RecipeItem } from "./types";
 import { toGrams } from "./units";
 
 export const TAX_RATES = { takeout: 0.08, eatIn: 0.1 } as const;
+/**
+ * 仕入れ値を入れるときの税の扱い（0＝税抜で入れる、0.08・0.1＝税込で入れる）。
+ * 原価の計算はいつも税抜（purchasePrice は税抜で持つ）。入れた形は priceTax に覚えて、次に開いたとき同じ形で出す。
+ */
+export const PRICE_TAX_OPTIONS = [
+  { rate: 0, label: "税抜" },
+  { rate: 0.08, label: "税込8%" },
+  { rate: 0.1, label: "税込10%" },
+] as const;
+export type PriceTax = (typeof PRICE_TAX_OPTIONS)[number]["rate"];
+
+/** 入れた値段 → 税抜（小数2桁まで） */
+export function toExTax(amount: number, rate: number): number {
+  return Math.round((amount / (1 + rate)) * 100) / 100;
+}
+
+/** 税抜 → 入れた形（税込なら1円未満を四捨五入） */
+export function fromExTax(exTax: number, rate: number): number {
+  return rate ? Math.round(exTax * (1 + rate)) : exTax;
+}
+
 /** 店舗が目標原価率を決めていないときの値 */
 export const DEFAULT_TARGET_RATE = 0.3;
 

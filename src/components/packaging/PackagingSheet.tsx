@@ -1,18 +1,13 @@
 // 包装資材（袋・脱酸素剤・シールなど）の登録・編集。値段は「100枚で1,500円」のように入れ、1枚の値段を出す
 // 値段は税抜でも税込でも入れられる（保存はいつも税抜。priceTax は次に開いたとき同じ形で出すため）
 import { useState } from "react";
-import { yen } from "@shared/cost";
+import { fromExTax, PRICE_TAX_OPTIONS, toExTax, yen } from "@shared/cost";
 import { packUnitCost } from "@shared/packaging";
 import { PACK_UNITS, type PackagingMaterial, type PackUnit } from "@shared/types";
 import { newId, removeDoc, saveDoc } from "../../lib/store";
 import { useConfirm } from "../common/ConfirmDialog";
 import { Sheet } from "../common/Sheet";
 import { ui } from "../common/ui";
-
-// 材料の仕入れ値と同じ形（0＝税抜、0.08・0.1＝税込で入れた）
-const TAX_OPTIONS = [{ rate: 0, label: "税抜" }, { rate: 0.08, label: "税込8%" }, { rate: 0.1, label: "税込10%" }] as const;
-const toExTax = (v: number, rate: number) => Math.round((v / (1 + rate)) * 100) / 100;
-const fromExTax = (v: number, rate: number) => (rate ? Math.round(v * (1 + rate)) : v);
 
 export function PackagingSheet({ orgId, uid, mat, usedIn, onClose }: { orgId: string; uid: string; mat: PackagingMaterial | null; usedIn: number; onClose: () => void }) {
   const [name, setName] = useState(mat?.name ?? "");
@@ -59,7 +54,7 @@ export function PackagingSheet({ orgId, uid, mat, usedIn, onClose }: { orgId: st
         <div className="space-y-1">
           <span className={ui.label}>仕入れ値</span>
           <div className="flex gap-1">
-            {TAX_OPTIONS.map((o) => (
+            {PRICE_TAX_OPTIONS.map((o) => (
               <button key={o.rate} type="button" onClick={() => setTax(o.rate)}
                 className={`flex-1 rounded-lg border px-2 py-1.5 text-xs ${tax === o.rate ? "border-clay bg-clay-soft font-bold text-clay-strong" : "border-line text-muted"}`}>{o.label}</button>
             ))}
