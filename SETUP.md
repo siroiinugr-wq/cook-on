@@ -10,6 +10,7 @@
 | C | アプリと Firebase をつなぐ | 15分 |
 | D | 本番に出す | 20分 |
 | E | はじめの材料を入れて、最初の店舗を作る | 10分 |
+| E2 | COOK ON 本体のドメイン（cook.iwakuni-design.com） | 15分（反映待ちは別） |
 | F | 独自ドメイン（ホワイトラベル） | 20分（反映待ちは別） |
 | G | あとでやること（決済・食品成分表） | — |
 
@@ -149,7 +150,7 @@ cd ~/cook-on && npm run build && firebase deploy --only hosting --project cook-o
 - 「関数を削除しますか？」と聞かれたら **No**
 - 3行目は `.env.local` が無い・古いと「公開を止めました」で止まります（デモのまま公開しないための確認）
 
-✅ 確認：https://cook-on-plaz.web.app を開くとログイン画面が出る
+✅ 確認：https://cook-on-plaz.web.app を開くと、COOK ON のロゴのログイン画面が出る
 
 ---
 
@@ -172,12 +173,25 @@ cd ~/cook-on && npm --prefix functions run build && node scripts/seed-global.mjs
 
 ### E-2. 店舗を作る
 
-1. https://cook-on-plaz.web.app で Google ログイン
+1. https://cook-on-plaz.web.app（E2 が済んでいれば https://cook.iwakuni-design.com）で Google ログイン
 2. 店舗名と目標の原価率を入れて「はじめる」
 3. 右上のクレジットが **10** になっている（はじめてのプレゼント）
 4. 「新しく作る」→「焼き菓子（クッキー）」→ 材料の「まとめて探す（無料）」→ 保存
 
 ✅ 確認：材料の画面に「仕入れ値なし」の材料が並ぶ。値段を入れると、レシピの原価が出る
+
+---
+
+## E2. COOK ON 本体のドメイン（cook.iwakuni-design.com）
+
+1. Firebase コンソール →「Hosting」→「カスタムドメインを追加」→ `cook.iwakuni-design.com`
+2. 出てくる DNS のレコード（A レコードか CNAME と、確認用の TXT）を、`iwakuni-design.com` の DNS の管理画面に入れる。AI経理の `keiri.iwakuni-design.com` と同じやり方です
+3. Authentication →「設定」→「承認済みドメイン」に `cook.iwakuni-design.com` を足す（足さないと Google ログインが失敗する）
+4. 反映を待つ（数分〜数時間。Hosting の画面が「接続済み」になれば完了。SSL の証明書は自動で付く）
+
+✅ 確認：https://cook.iwakuni-design.com を開くとログイン画面に COOK ON のロゴが出る
+
+DNS を入れる前（Firebase プロジェクトを作る前）にドメインだけ用意しておいても問題ありません。
 
 ---
 

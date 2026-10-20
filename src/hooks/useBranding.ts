@@ -7,6 +7,13 @@ import { DEFAULT_BRANDING, type Branding } from "@shared/types";
 import { listenDoc } from "../lib/store";
 
 const KEY = "cookon-brand";
+/** COOK ON 本体のドメイン。ここで開かれたときは店舗のドメインを探さない */
+const APP_HOSTS = ["localhost", "cook.iwakuni-design.com"];
+
+/** 表示するロゴ。店舗のロゴが無く、名前も COOK ON のままなら COOK ON のマーク（public/logo-mark.png） */
+export function brandLogo(b: Branding): string | null {
+  return b.logoUrl ?? (b.appName === DEFAULT_BRANDING.appName ? "/logo-mark.png" : null);
+}
 
 export function applyBrand(b: Branding) {
   const root = document.documentElement;
@@ -42,7 +49,7 @@ export function useBranding(orgId: string | null): Branding {
   useEffect(() => {
     if (orgId) return;
     const host = window.location.hostname;
-    if (!host || host === "localhost" || host.endsWith(".web.app") || host.endsWith(".firebaseapp.com")) return;
+    if (!host || APP_HOSTS.includes(host) || host.endsWith(".web.app") || host.endsWith(".firebaseapp.com")) return;
     return listenDoc<{ orgId: string }>(`tenantDomains/${host}`, (d) => setDomainOrg(d?.orgId ?? null));
   }, [orgId]);
 

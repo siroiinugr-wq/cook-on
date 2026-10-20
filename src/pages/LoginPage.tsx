@@ -8,7 +8,7 @@ import { auth } from "../lib/firebase";
 import { authMessage, verifyLinkSettings } from "../lib/authMessages";
 import { readInvite } from "../lib/invite";
 import { Icon } from "../components/common/Icon";
-import { useBranding } from "../hooks/useBranding";
+import { brandLogo, useBranding } from "../hooks/useBranding";
 
 type Mode = "in" | "up" | "reset";
 
@@ -86,8 +86,8 @@ export function LoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-cream p-6">
       <div className="w-full max-w-sm">
         <div className="mb-6 flex flex-col items-center gap-3 text-center">
-          {brand.logoUrl
-            ? <img src={brand.logoUrl} alt="" className="h-14 w-14 rounded-2xl object-contain" />
+          {brandLogo(brand)
+            ? <img src={brandLogo(brand)!} alt="" className="h-16 w-16 rounded-2xl object-contain" />
             : <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-clay text-white"><Icon name="bowl" className="h-8 w-8" /></span>}
           <h1 className="font-serif text-3xl">{brand.appName}</h1>
           <p className="text-sm text-ink-soft">

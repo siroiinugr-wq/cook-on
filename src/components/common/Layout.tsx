@@ -4,6 +4,7 @@ import { NavLink } from "react-router-dom";
 import type { Branding } from "@shared/types";
 import { useOrgCtx } from "../../contexts/OrgContext";
 import { isDemo } from "../../lib/firebase";
+import { brandLogo } from "../../hooks/useBranding";
 import { CreditBadge } from "./CreditBadge";
 import { Icon, type IconName } from "./Icon";
 
@@ -25,8 +26,8 @@ export function Layout({ brand, children }: { brand: Branding; children: ReactNo
       )}
       <header className="no-print sticky top-0 z-30 border-b border-line bg-cream/95 backdrop-blur">
         <div className="mx-auto flex max-w-3xl items-center gap-3 px-4 py-3">
-          {brand.logoUrl
-            ? <img src={brand.logoUrl} alt={brand.appName} className="h-8 w-8 rounded-lg object-contain" />
+          {brandLogo(brand)
+            ? <img src={brandLogo(brand)!} alt={brand.appName} className="h-8 w-8 rounded-lg object-contain" />
             : <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-clay text-white"><Icon name="bowl" className="h-5 w-5" /></span>}
           <div className="min-w-0 flex-1">
             <p className="truncate text-[11px] text-faint">{brand.appName}</p>

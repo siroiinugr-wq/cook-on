@@ -5,7 +5,8 @@
 
 ## 基本情報
 - Firebase プロジェクト ID：`cook-on-plaz`（コマンドには必ず `--project cook-on-plaz` を付ける）
-- 本番URL：https://cook-on-plaz.web.app（独自ドメインは店舗ごと。`tenantDomains`）
+- 本番URL：https://cook.iwakuni-design.com（予備 https://cook-on-plaz.web.app）。店舗ごとの独自ドメインは `tenantDomains`。本体のドメインは `src/hooks/useBranding.ts` の `APP_HOSTS` にも書く
+- ロゴ：`public/logo-mark.png`（丸のマーク）・`logo-wordmark.png`（横長）・`logo-stacked.png`（縦）。アイコンは `icon-*.png`・`apple-touch-icon.png`・`favicon.png`。店舗のロゴが無く名前も COOK ON のままのときはこのマークを出す（`brandLogo`）
 - リージョン：asia-northeast1 ／ Functions：Node 24
 - 技術：React 19 + Vite + TypeScript + Tailwind v4 + react-router-dom v7 ／ Firebase（Auth・Firestore・Functions・Storage・Hosting）／ Gemini `gemini-3.5-flash-lite`（`functions/src/ai/config.ts` の `GEMINI_MODEL`）
 - 記録：GitHub `siroiinugr-wq/cook-on`（非公開）／ブランチ `main`
