@@ -8,6 +8,8 @@ export const CREDIT_COST = {
   aiMatch: 1,
   /** 取り込み：IMPORT_CHUNK_CHARS 文字ごと */
   importChunk: 1,
+  /** 写真から取り込み：1枚ごと */
+  importPhoto: 1,
   /** 既製品の原材料・成分の下書き */
   productGuess: 1,
   /** 原価ダウン・新作の提案（1回の質問） */
@@ -18,6 +20,7 @@ export type CreditAction = keyof typeof CREDIT_COST;
 export const ACTION_LABEL: Record<CreditAction | "purchase" | "grant" | "welcome", string> = {
   aiMatch: "材料名をAIで探す",
   importChunk: "データの取り込み",
+  importPhoto: "写真から取り込み",
   productGuess: "既製品の情報をAIで下書き",
   aiSuggest: "AIに相談",
   purchase: "購入",
@@ -37,6 +40,14 @@ export const IMPORT_MAX_CHARS_UNLIMITED = 300_000;
 
 export function importMaxChars(unlimited: boolean): number {
   return unlimited ? IMPORT_MAX_CHARS_UNLIMITED : IMPORT_MAX_CHARS;
+}
+
+/** 写真から取り込み：1回に読める枚数（無制限の店舗は多め。それでも時間切れを避けるため上限は置く） */
+export const IMPORT_MAX_PHOTOS = 30;
+export const IMPORT_MAX_PHOTOS_UNLIMITED = 60;
+
+export function importMaxPhotos(unlimited: boolean): number {
+  return unlimited ? IMPORT_MAX_PHOTOS_UNLIMITED : IMPORT_MAX_PHOTOS;
 }
 /** 相談の文の上限 */
 export const SUGGEST_MAX_CHARS = 400;

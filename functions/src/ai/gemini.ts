@@ -16,6 +16,8 @@ export class EmptyResponseError extends Error {
 export async function callGeminiJson<T>(o: {
   system: string;
   prompt: string;
+  /** 一緒に見せる画像（base64）。並べた順に渡す */
+  images?: { mimeType: string; data: string }[];
   schema: object;
   temperature?: number;
   maxOutputTokens?: number;
@@ -23,7 +25,7 @@ export async function callGeminiJson<T>(o: {
   const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY.value() });
   const res = await ai.models.generateContent({
     model: GEMINI_MODEL,
-    contents: [{ role: "user", parts: [{ text: o.prompt }] }],
+    contents: [{ role: "user", parts: [...(o.images ?? []).map((inlineData) => ({ inlineData })), { text: o.prompt }] }],
     config: {
       systemInstruction: o.system,
       responseMimeType: "application/json",

@@ -63,34 +63,40 @@ export const parseImport = onCall(
         throw new HttpsError("internal", "ファイルを読み取れませんでした。クレジットは使われていません。");
       }
 
-      // ── 名寄せ（取り込みの料金に含める）──
-      const raw = answers.flatMap((a) => a?.recipes ?? []).filter((r) => r.name || r.items?.length);
-      const names = raw.flatMap((r) => (r.items ?? []).map((it) => it.std || it.raw));
-      const org = await loadOrgMatchData(orgId);
-      const resolved = await resolveNames(org, names, true);
-      usage = addUsage(usage, resolved.usage);
-
-      let k = 0;
-      const recipes: ParsedRecipe[] = raw.map((r) => ({
-        name: String(r.name ?? "").slice(0, 60) || "名前のないレシピ",
-        category: String(r.category ?? "").slice(0, 30),
-        pieces: typeof r.yield === "number" && r.yield > 0 ? r.yield : null,
-        items: (r.items ?? []).map((it) => ({
-          raw: String(it.raw ?? "").slice(0, 60),
-          std: String(it.std ?? it.raw ?? "").slice(0, 60),
-          qty: typeof it.qty === "number" && it.qty >= 0 ? it.qty : null,
-          unit: toUnit(it.unit),
-          match: resolved.matches[k++],
-        })),
-        steps: (r.steps ?? []).map((s) => String(s).slice(0, 400)).filter(Boolean).slice(0, 40),
-        notes: String(r.notes ?? "").slice(0, 300),
-      }));
+      const preview = await buildPreview(orgId, answers);
+      usage = addUsage(usage, preview.usage);
+      const recipes = preview.recipes;
       const used = chunks.length - failed.length;
       await ref.update({ status: "preview", recipes, failedChunks: failed, creditsUsed: used });
       return { result: { importId: ref.id, recipes: recipes.length, failedChunks: failed }, usage, usedUnits: used };
     });
   },
 );
+
+/** AIの読み取り結果を名寄せしてプレビューの形にする（名寄せは取り込みの料金に含める）。写真からの取り込みも使う */
+export async function buildPreview(orgId: string, answers: (ImportAnswer | null)[]): Promise<{ recipes: ParsedRecipe[]; usage: Usage }> {
+  const raw = answers.flatMap((a) => a?.recipes ?? []).filter((r) => r.name || r.items?.length);
+  const names = raw.flatMap((r) => (r.items ?? []).map((it) => it.std || it.raw));
+  const org = await loadOrgMatchData(orgId);
+  const resolved = await resolveNames(org, names, true);
+
+  let k = 0;
+  const recipes: ParsedRecipe[] = raw.map((r) => ({
+    name: String(r.name ?? "").slice(0, 60) || "名前のないレシピ",
+    category: String(r.category ?? "").slice(0, 30),
+    pieces: typeof r.yield === "number" && r.yield > 0 ? r.yield : null,
+    items: (r.items ?? []).map((it) => ({
+      raw: String(it.raw ?? "").slice(0, 60),
+      std: String(it.std ?? it.raw ?? "").slice(0, 60),
+      qty: typeof it.qty === "number" && it.qty >= 0 ? it.qty : null,
+      unit: toUnit(it.unit),
+      match: resolved.matches[k++],
+    })),
+    steps: (r.steps ?? []).map((s) => String(s).slice(0, 400)).filter(Boolean).slice(0, 40),
+    notes: String(r.notes ?? "").slice(0, 300),
+  }));
+  return { recipes, usage: resolved.usage };
+}
 
 function toUnit(u: unknown): Unit {
   const s = String(u ?? "");

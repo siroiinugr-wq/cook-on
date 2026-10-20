@@ -98,6 +98,20 @@ export async function demoAiCall<T>(name: string, d: Data): Promise<T> {
         return { result: { importId: id, recipes: recipes.length, failedChunks: [] } as T };
       });
     }
+    case "parseImportPhotos": {
+      // デモでは写真を読めないので、写真の枚数ぶんのクレジットで見本のレシピを1件返す
+      const n = (d.paths as string[]).length;
+      return demoWithCredits("importPhoto", n, async () => {
+        const recipes = demoParse("写真のレシピ（デモの見本）\n薄力粉 100g\n無塩バター 80g\nグラニュー糖 60g\n卵 1個");
+        const matches = resolve(recipes.flatMap((r) => r.items.map((i) => i.std || i.raw)), true);
+        let k = 0;
+        recipes.forEach((r) => r.items.forEach((i) => { i.match = matches[k++]; }));
+        const id = rid();
+        const doc: ImportDoc = { status: "preview", fileName: `写真 ${n}枚`, chars: 0, chunks: n, photos: n, failedChunks: [], creditsUsed: n, recipes, createdBy: "demo-user" };
+        demoWrite(`${O}/imports/${id}`, { ...doc, createdAt: new Date().toISOString() });
+        return { result: { importId: id, recipes: recipes.length, failedChunks: [] } as T };
+      });
+    }
     case "commitImport": {
       const path = `${O}/imports/${d.importId}`;
       const imp = demoGet(path);

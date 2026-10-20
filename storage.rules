@@ -12,6 +12,13 @@ service firebase.storage {
       allow delete: if editor(orgId);
       allow update: if false;
     }
+    // 写真から取り込み（読み取るまでの置き場。読むのは関数。画面は確かめのために読める）
+    match /orgs/{orgId}/imports/{batchId}/{file} {
+      allow read: if editor(orgId);
+      allow create: if editor(orgId) && request.resource.size < 8 * 1024 * 1024 && request.resource.contentType == 'image/jpeg';
+      allow delete: if editor(orgId);
+      allow update: if false;
+    }
     // ロゴ（ログイン画面で出すので誰でも読める）
     match /orgs/{orgId}/branding/{file} {
       allow read: if true;

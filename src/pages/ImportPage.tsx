@@ -64,6 +64,11 @@ export function ImportPage() {
         今まで使っていたアプリの書き出し（CSV）、Excel のレシピ表、メモ帳の文章など、形式はそろっていなくて大丈夫です。
         AIが材料と分量を読み取り、保存の前に一覧で確かめられます。
       </p>
+      <Link to="/import/photos" className={`${ui.card} flex items-center gap-3`}>
+        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-clay text-white"><Icon name="camera" className="h-6 w-6" /></span>
+        <span className="min-w-0 flex-1"><b className="block">写真から取り込む</b><span className="text-xs text-muted">レシピのノートや本を何枚も撮って、まとめて読み取る（手書きも可）</span></span>
+        <Icon name="chevron" className="h-5 w-5 text-faint" />
+      </Link>
       <label className={`${ui.card} flex cursor-pointer flex-col items-center gap-2 border-dashed py-6 text-center`}>
         <span className="text-clay"><Icon name="file" className="h-8 w-8" /></span>
         <span className="font-bold">{fileName || "ファイルを選ぶ"}</span>

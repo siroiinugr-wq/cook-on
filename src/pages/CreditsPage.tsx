@@ -14,6 +14,7 @@ interface Entry { kind: string; action?: CreditAction; amount: number; status: s
 const PER: Record<CreditAction, string> = {
   aiMatch: `${AI_MATCH_BATCH}件ごと`,
   importChunk: `${IMPORT_CHUNK_CHARS.toLocaleString()}文字ごと`,
+  importPhoto: "写真1枚",
   productGuess: "1商品",
   aiSuggest: "1回",
 };

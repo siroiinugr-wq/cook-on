@@ -50,7 +50,9 @@ export function ImportPreviewPage() {
       <p className="text-sm text-muted">{data.fileName || "貼り付け"}・{recipes.length}件のレシピを読み取りました</p>
       {data.failedChunks?.length > 0 && (
         <p className="rounded-xl bg-warn-soft p-3 text-sm text-warn-strong">
-          一部（{data.failedChunks.length}か所）が読み取れませんでした。その分のクレジットは使われていません。足りないレシピは、その部分だけ貼り付けてもう一度読み取ってください。
+          {data.photos
+            ? `${data.failedChunks.map((n) => n + 1).join("・")}枚目の写真が読み取れませんでした。その分のクレジットは使われていません。足りないレシピは、その写真だけ撮り直して読み取ってください。`
+            : `一部（${data.failedChunks.length}か所）が読み取れませんでした。その分のクレジットは使われていません。足りないレシピは、その部分だけ貼り付けてもう一度読み取ってください。`}
         </p>
       )}
       {saved ? (
