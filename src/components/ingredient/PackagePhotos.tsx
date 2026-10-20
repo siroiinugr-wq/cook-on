@@ -1,4 +1,4 @@
-// 既製品のパッケージを撮る2つの枠：表（商品の顔。商品の画像になる）と裏（原材料名・栄養成分表示。AIが読む）
+// 既製品のパッケージを撮る2つの枠：表（商品の顔。商品の画像になるだけでAIは読まない）と裏（原材料名・栄養成分表示。AIが読む）
 import { useEffect, useState } from "react";
 import { Icon } from "../common/Icon";
 
@@ -29,7 +29,7 @@ export function PackagePhotos({ shots, onChange }: { shots: PackageShots; onChan
   return (
     <div className="grid grid-cols-2 gap-2">
       <Slot label="表を撮る" hint="商品名が見える面。商品の画像になります" file={shots.front} onPick={(front) => onChange({ ...shots, front })} />
-      <Slot label="裏を撮る" hint="原材料名と栄養成分表示の面" file={shots.back} onPick={(back) => onChange({ ...shots, back })} />
+      <Slot label="裏を撮る" hint="原材料名と栄養成分表示の面。AIが読みます" file={shots.back} onPick={(back) => onChange({ ...shots, back })} />
     </div>
   );
 }

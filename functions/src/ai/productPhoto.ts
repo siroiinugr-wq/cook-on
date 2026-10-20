@@ -1,7 +1,7 @@
-// 既製品のパッケージの写真を読む（1枚1クレジット、PRODUCT_PHOTO_MAX 枚まで）。
+// 既製品のパッケージの裏（一括表示・栄養成分表示）の写真を読む（1枚1クレジット、PRODUCT_PHOTO_MAX 枚まで）。
 // 画面が Storage（ugc/{orgId}/{draftId}/）に上げた写真から、メーカー・商品名・原材料名・アレルゲン・栄養成分を読み、
 // 既製品の登録フォームに下書きとして返す。保存はしない（人が見比べて直してから submitUgcProduct で登録する）。
-// 1枚目は商品の画像として残し、2枚目以降は読み終わったら消す。
+// 表の写真は商品の画像にするだけなのでAIに渡さない（クレジットを使わない）。裏の写真は読み終わったら消す。
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { getStorage } from "firebase-admin/storage";
 import { allergenFromName, sortAllergens } from "../shared/allergens";
@@ -37,10 +37,10 @@ export const readProductPhoto = onCall({ region: REGION, memory: "512MiB", timeo
       return { mimeType: "image/jpeg", data: buf.toString("base64") };
     }));
     const { output, usage } = await callGeminiJson<ProductPhotoAnswer>({
-      system: PRODUCT_PHOTO_SYSTEM, prompt: `既製品のパッケージの写真${paths.length}枚です。一括表示を書き写してください。`,
+      system: PRODUCT_PHOTO_SYSTEM, prompt: `既製品のパッケージの裏（一括表示・栄養成分表示）の写真${paths.length}枚です。書き写してください。`,
       images, schema: PRODUCT_PHOTO_SCHEMA, maxOutputTokens: 2048,
     });
-    await Promise.all(paths.slice(1).map((p: string) => bucket.file(p).delete().catch(() => undefined)));
+    await Promise.all(paths.map((p: string) => bucket.file(p).delete().catch(() => undefined)));
 
     const raw = (output.nutrition ?? {}) as Record<string, unknown>;
     const grams = typeof output.basisGrams === "number" ? output.basisGrams : null;
@@ -58,7 +58,6 @@ export const readProductPhoto = onCall({ region: REGION, memory: "512MiB", timeo
         allergens: sortAllergens((output.allergens ?? []).map(allergenFromName).filter((a): a is NonNullable<typeof a> => !!a)),
         nutrition: per100 ?? {},
         basisLabel: label.slice(0, 40),
-        photoPath: paths[0],
         confidence: Math.max(0, Math.min(1, Number(output.confidence) || 0)),
         note: notes.filter(Boolean).join(" "),
       },

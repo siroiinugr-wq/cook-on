@@ -130,7 +130,7 @@ export async function demoAiCall<T>(name: string, d: Data): Promise<T> {
         result: {
           maker: "デモ製菓", productName: "製菓用スイートチョコ", ingredientsText: "砂糖、カカオマス、ココアバター、全粉乳／乳化剤（大豆由来）、香料",
           allergens: ["milk", "soy"], nutrition: { kcal: 548, protein: 5.2, fat: 33.1, carbohydrate: 56.4, salt: 0.05 }, basisLabel: "100gあたり",
-          photoPath: paths[0], confidence: 0.5, note: "デモの読み取りです（写真の中身は見ていません）。",
+          confidence: 0.5, note: "デモの読み取りです（写真の中身は見ていません）。",
         } as T,
       }));
     }

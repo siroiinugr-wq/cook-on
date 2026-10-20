@@ -12,7 +12,7 @@ export const CREDIT_COST = {
   importPhoto: 1,
   /** 既製品の原材料・成分の下書き */
   productGuess: 1,
-  /** 既製品のパッケージの写真を読む：1枚ごと */
+  /** 既製品のパッケージの裏（原材料・栄養成分）の写真を読む：1枚ごと。表の写真は画像にするだけで使わない */
   productPhoto: 1,
   /** 原価ダウン・新作の提案（1回の質問） */
   aiSuggest: 2,
@@ -52,7 +52,7 @@ export const IMPORT_MAX_PHOTOS_UNLIMITED = 60;
 export function importMaxPhotos(unlimited: boolean): number {
   return unlimited ? IMPORT_MAX_PHOTOS_UNLIMITED : IMPORT_MAX_PHOTOS;
 }
-/** 既製品のパッケージ：1回に読める枚数（表と裏） */
+/** 既製品のパッケージの裏：1回に読める枚数（原材料と栄養成分が別の面に分かれていることがあるため2枚） */
 export const PRODUCT_PHOTO_MAX = 2;
 
 /** 相談の文の上限 */

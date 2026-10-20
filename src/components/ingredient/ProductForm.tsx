@@ -1,4 +1,5 @@
-// 既製品の登録。パッケージの表と裏を撮ると、AIが原材料名・アレルゲン・栄養成分を下書きする（1枚1クレジット）。
+// 既製品の登録。パッケージの裏を撮ると、AIが原材料名・アレルゲン・栄養成分を下書きする（1クレジット）。
+// 表の写真は商品の画像として保存するだけ（AIに渡さないのでクレジットを使わない）。
 // AIの下書きは「たたき台」で、パッケージと見比べて直してから登録する。
 // 登録するとお店の材料に入る。お店の設定（shareProducts）がオンなら、みんなの既製品データベースにも入る（初めてのときに1回だけ聞く）
 import { useState } from "react";
@@ -17,7 +18,7 @@ import { useCreditAction } from "../common/useCreditAction";
 import { ui } from "../common/ui";
 import { PackagePhotos, type PackageShots } from "./PackagePhotos";
 
-interface Guess { maker?: string; productName?: string; ingredientsText: string; allergens: AllergenId[]; nutrition?: Record<string, number>; photoPath?: string; confidence: number; note: string }
+interface Guess { maker?: string; productName?: string; ingredientsText: string; allergens: AllergenId[]; nutrition?: Record<string, number>; confidence: number; note: string }
 
 export function ProductForm({ onClose, onDone }: { onClose: () => void; onDone: (msg: string) => void }) {
   const { orgId, uid, org, isAdmin } = useOrgCtx();
@@ -27,14 +28,12 @@ export function ProductForm({ onClose, onDone }: { onClose: () => void; onDone: 
   const [allergens, setAllergens] = useState<AllergenId[]>([]);
   const [nutrition, setNutrition] = useState<Record<string, string>>({});
   const [shots, setShots] = useState<PackageShots>({ front: null, back: null });
-  const [photoPath, setPhotoPath] = useState<string | null>(null);
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const run = useCreditAction(org.credits);
   const confirm = useConfirm();
   const toggle = (a: AllergenId) => setAllergens(allergens.includes(a) ? allergens.filter((x) => x !== a) : [...allergens, a]);
-  const files = [shots.front, shots.back].filter((f): f is File => !!f);
 
   function apply(r: Guess) {
     if (r.maker) setMaker(r.maker);
@@ -42,7 +41,6 @@ export function ProductForm({ onClose, onDone }: { onClose: () => void; onDone: 
     setText(r.ingredientsText);
     setAllergens(r.allergens);
     setNutrition(Object.fromEntries(Object.entries(r.nutrition ?? {}).map(([k, v]) => [k, String(v)])));
-    if (r.photoPath) setPhotoPath(r.photoPath);
     setNote(`${r.confidence < 0.6 ? "自信が低い下書きです。" : ""}${r.note}`);
   }
 
@@ -59,10 +57,10 @@ export function ProductForm({ onClose, onDone }: { onClose: () => void; onDone: 
     }
   }
 
-  const readPhotos = () => go("パッケージの写真をAIで読み取る", CREDIT_COST.productPhoto * files.length, async () => {
+  const readBack = () => go("パッケージの裏をAIで読み取る", CREDIT_COST.productPhoto, async () => {
     const draftId = newRequestId();
-    const paths = await Promise.all(files.map((f, i) => uploadUgcPhoto(orgId, draftId, i === 0 ? "a" : "b", f)));
-    return call<Guess>("readProductPhoto", { orgId, draftId, paths, requestId: newRequestId() });
+    const path = await uploadUgcPhoto(orgId, draftId, "back", shots.back!);
+    return call<Guess>("readProductPhoto", { orgId, draftId, paths: [path], requestId: newRequestId() });
   });
   const guessByName = () => go("既製品の情報をAIで下書き", CREDIT_COST.productGuess,
     () => call<Guess>("guessProduct", { orgId, maker, productName, requestId: newRequestId() }));
@@ -84,6 +82,8 @@ export function ProductForm({ onClose, onDone }: { onClose: () => void; onDone: 
     const share = await shouldShare();
     setBusy(true);
     try {
+      // 表の写真は登録するときに上げて、商品の画像にする
+      const photoPath = shots.front ? await uploadUgcPhoto(orgId, newRequestId(), "front", shots.front, 800) : null;
       const n = Object.fromEntries(NUTRITION_KEYS.flatMap((k) => (nutrition[k]?.trim() && Number.isFinite(Number(nutrition[k])) ? [[k, Number(nutrition[k])]] : [])));
       let existed = false;
       if (share) existed = (await call<{ existed: boolean }>("submitUgcProduct", { orgId, maker, productName, ingredientsText: text, allergens, nutrition: n, photoPath })).existed;
@@ -100,14 +100,14 @@ export function ProductForm({ onClose, onDone }: { onClose: () => void; onDone: 
     <Sheet title="既製品を登録" onClose={onClose}>
       <div className="space-y-3">
         <PackagePhotos shots={shots} onChange={setShots} />
-        <button disabled={busy || !files.length} onClick={readPhotos} className={`w-full ${ui.primary} text-sm`}>
-          {busy ? "読み取っています…" : "写真からAIで読み取る"}{files.length > 0 && <CostTag credits={CREDIT_COST.productPhoto * files.length} />}
+        <button disabled={busy || !shots.back} onClick={readBack} className={`w-full ${ui.primary} text-sm`}>
+          {busy ? "読み取っています…" : "裏の写真からAIで読み取る"}<CostTag credits={CREDIT_COST.productPhoto} />
         </button>
         <div className="grid grid-cols-2 gap-2">
           <label className="space-y-1"><span className={ui.label}>メーカー</span><input className={ui.input} value={maker} maxLength={40} onChange={(e) => setMaker(e.target.value)} /></label>
           <label className="space-y-1"><span className={ui.label}>商品名</span><input className={ui.input} value={productName} maxLength={60} onChange={(e) => setProductName(e.target.value)} /></label>
         </div>
-        {!files.length && (
+        {!shots.back && (
           <button disabled={busy || !maker.trim() || !productName.trim()} onClick={guessByName} className={`w-full ${ui.secondary} text-sm`}>
             写真が無いとき：名前からAIで下書き<CostTag credits={CREDIT_COST.productGuess} />
           </button>

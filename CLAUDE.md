@@ -55,7 +55,7 @@ aiRequests/{orgId}_{requestId}             受付票（Functions だけ。AIの�
 - 写真から取り込み（`/import/photos`、`pages/ImportPhotosPage.tsx`）：撮影と一覧は AI経理の撮影を流用（`components/import/CameraShooter`・`CaptureTray`、`hooks/useCaptureTray`、IndexedDB `cook-on-capture`）。画面が長い辺2000pxに縮めて `orgs/{orgId}/imports/{batchId}/` に上げ、`parseImportPhotos`（`ai/importPhotos.ts`）が撮った順に4枚ずつ Gemini で読む（続きのページをまとめるため）。1枚1クレジット、上限は `importMaxPhotos`（30枚・無制限の店舗は60枚）。1枚でも読めたら写真は消す。後半は文字の取り込みと同じ `buildPreview`
 - **共有の材料を公開データで埋める**：食品成分表（文科省・八訂増補2023年、約2,500品）は `scripts/import-mext.mjs`（形を直すのは `shared/mext.ts`、id は `mext_{食品番号}`、はじめの材料には `SEED_MEXT_HINTS` で成分を写す）。参考価格は `scripts/import-prices.mjs`（総務省の小売物価統計を e-Stat API で。`shared/refPrice.ts`、税込で持ち、画面の「この値段を入れる」で税抜に直してお店の仕入れ値へ）。どちらも MASA の Mac で `--dry-run` してから書く。**出典を画面に出すのが利用の条件**（`MEXT_CREDIT`・`ESTAT_CREDIT`）。メーカーのサイトや通販の画像・値段は規約と著作権があるので自動では拾わない
 - 仕入れ値は税抜で持つ（`purchasePrice`）。税込で入れたら `priceTax`（0・0.08・0.1）に印を残し、`toExTax`/`fromExTax`（`shared/cost.ts`）で直す
-- 既製品はパッケージの表と裏を撮ると `readProductPhoto`（`ai/productPhoto.ts`、1枚1クレジット）が下書き。写真は `ugc/{orgId}/{draftId}/`、1枚目（表）が商品の画像。登録するとお店の材料に入り、`settings.shareProducts` がオンならみんなの一覧（ugcProducts）にも入る（null＝初回に1回だけ聞く）
+- 既製品はパッケージの裏を撮ると `readProductPhoto`（`ai/productPhoto.ts`、1クレジット）が下書きし、裏の写真は読んだら消す。表の写真はAIに渡さず、登録のときに上げて商品の画像にする（`ugc/{orgId}/{draftId}/front.jpg`）。登録するとお店の材料に入り、`settings.shareProducts` がオンならみんなの一覧（ugcProducts）にも入る（null＝初回に1回だけ聞く）
 - 材料の写真は `orgs/{orgId}/ingredients/`（`photoPath`）
 - 食品表示は「重い順・添加物は／のあと・アレルゲンは最後に一括」まで自動。複合原材料の細かい決まりは対象外で、画面に「お店で確かめて」と出す
 
