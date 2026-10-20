@@ -3,17 +3,20 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { calcCost, costRate, yen } from "@shared/cost";
+import { calcPackaging } from "@shared/packaging";
 import { RECIPE_TEMPLATES, type RecipeInput } from "@shared/recipe";
 import { toMatchKey } from "@shared/matchKey";
 import type { Ingredient } from "@shared/types";
 import { useOrgCtx } from "../contexts/OrgContext";
 import { useIngredients } from "../hooks/useIngredients";
+import { usePackaging } from "../hooks/usePackaging";
 import { useRecipe } from "../hooks/useRecipe";
 import { call, newId } from "../lib/store";
 import { PageHead } from "../components/common/Layout";
 import { ui } from "../components/common/ui";
 import { RateBadge } from "../components/recipe/RateBadge";
 import { ItemsEditor, rowKey, type Row } from "../components/recipe/edit/ItemsEditor";
+import { PackagingEditor } from "../components/recipe/edit/PackagingEditor";
 import { StepsEditor } from "../components/recipe/edit/StepsEditor";
 
 type Draft = Omit<RecipeInput, "items">;
@@ -31,6 +34,7 @@ export function RecipeEditPage() {
   const { orgId, uid, org, canEdit } = useOrgCtx();
   const { recipe, loading } = useRecipe(orgId, id);
   const ings = useIngredients(orgId);
+  const pack = usePackaging(orgId);
   const nav = useNavigate();
   const [draft, setDraft] = useState<Draft | null>(null);
   const [rows, setRows] = useState<Row[]>([]);
@@ -76,7 +80,9 @@ export function RecipeEditPage() {
   const set = (p: Partial<Draft>) => setDraft({ ...d, ...p });
   const pieces = d.yield.pieces || 1;
   const cost = calcCost(rows, ings.byId);
-  const per = cost.total / pieces;
+  const packCost = calcPackaging(d.packaging, pack.ctx);
+  const per = cost.total / pieces + packCost.perPiece;
+  const missing = cost.missing + packCost.missing;
   const numOrNull = (v: string) => (v.trim() === "" ? null : Number(v.replace(/[^\d.]/g, "")) || null);
 
   async function save() {
@@ -119,6 +125,10 @@ export function RecipeEditPage() {
         <ItemsEditor rows={rows} set={setRows} own={ings.list} orgId={orgId} uid={uid} credits={org.credits} />
       </section>
       <section className="space-y-2">
+        <h2 className="font-bold">包装（1個あたり）</h2>
+        <PackagingEditor lines={d.packaging ?? []} set={(packaging) => set({ packaging })} materials={pack.materials} sets={pack.sets} ctx={pack.ctx} />
+      </section>
+      <section className="space-y-2">
         <h2 className="font-bold">作り方</h2>
         <StepsEditor steps={d.steps} set={(steps) => set({ steps })} photoDir={photoDir} />
       </section>
@@ -128,7 +138,7 @@ export function RecipeEditPage() {
       <div className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-paper/95 px-4 py-3 backdrop-blur">
         <div className="mx-auto flex max-w-3xl items-center gap-3">
           <div className="min-w-0 flex-1 text-sm">
-            <p>1個 <b>{yen(per)}</b>{cost.missing > 0 && <span className="ml-1 text-xs text-warn-strong">（{cost.missing}件 未計算）</span>}</p>
+            <p>1個 <b>{yen(per)}</b>{missing > 0 && <span className="ml-1 text-xs text-warn-strong">（{missing}件 未計算）</span>}</p>
             <RateBadge rate={costRate(per, d.sellingPrice)} target={d.targetCostRate ?? org.settings.targetCostRate} />
           </div>
           <button onClick={save} disabled={busy || !d.name.trim()} className={ui.primary}>{busy ? "保存しています…" : "保存する"}</button>

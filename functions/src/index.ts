@@ -10,5 +10,6 @@ export { parseImportPhotos } from "./ai/importPhotos";
 export { guessProduct, aiSuggest } from "./ai/assist";
 export { saveRecipe, restoreRecipeVersion, archiveRecipe } from "./recipes/save";
 export { onIngredientWritten } from "./recipes/costAlert";
+export { onPackagingWritten, onPackagingSetWritten } from "./recipes/packagingAlert";
 export { submitUgcProduct, onUgcVoteWritten } from "./ugc/products";
 export { createCheckout, grantCredits } from "./billing/credits";

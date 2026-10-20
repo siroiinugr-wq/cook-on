@@ -33,6 +33,7 @@ organizations/{orgId}                     名前・plan・credits・settings（c
   public/branding                          表示名・ロゴ・テーマ色（誰でも読める）
   members/{uid}  invites/{token}
   ingredients/{id}  └ priceHistory/{id}    材料（画面から書ける）と値段の記録
+  packaging/{id}  packagingSets/{id}       包装資材（袋・脱酸素剤。値段は税抜）と包装セット（画面から書ける）
   recipes/{id}  └ versions/{n}             レシピ（saveRecipe だけが書く）と前の版
   alerts/{id}                              原価が目標を超えたお知らせ（read だけ画面から）
   imports/{id}  creditLedger/{id}  aliases/{照合キー}  ugcVotes/{productId}
@@ -50,6 +51,7 @@ aiRequests/{orgId}_{requestId}             受付票（Functions だけ。AIの�
 - 名寄せは「無料の照合（完全一致・覚えた別名・似た名前）→ 決まらないものだけAIが候補から選ぶ」。AIは候補に無い id を返しても捨てる
 - 売価と原価率は **税抜**。税込は表示のときだけ（`TAX_RATES`）
 - レシピは画面から直接書けない（ルールで拒否）。`saveRecipe` が検索用の列（`ingredientIds`・`allergens`・`costCache`）を作り直し、前の版を `versions` に写す
+- 包装（`shared/packaging.ts`）：レシピの `packaging` に「1個あたり」でセットか資材を付ける。`costCache.perPiece` は材料＋包装（`packagingPerPiece` が包装の分）。資材の値段やセットの中身を変えると `onPackagingWritten`・`onPackagingSetWritten`（`recipes/packagingAlert.ts`）がレシピの `packagingIds`・`packagingSetIds` で探して計算し直す。計算し直しの本体は `costAlert.ts` の `recalcRecipes`（材料と共通）
 - 材料の値段を変えると `onIngredientWritten` が使っているレシピの原価を計算し直し、目標を初めて超えたら `alerts` に書く
 - ブランドと票はルールで項目を限っているので `saveDoc(..., { stamp: false })`（`updatedAt` を付けない）
 - 写真から取り込み（`/import/photos`、`pages/ImportPhotosPage.tsx`）：撮影と一覧は AI経理の撮影を流用（`components/import/CameraShooter`・`CaptureTray`、`hooks/useCaptureTray`、IndexedDB `cook-on-capture`）。画面が長い辺2000pxに縮めて `orgs/{orgId}/imports/{batchId}/` に上げ、`parseImportPhotos`（`ai/importPhotos.ts`）が撮った順に4枚ずつ Gemini で読む（続きのページをまとめるため）。1枚1クレジット、上限は `importMaxPhotos`（30枚・無制限の店舗は60枚）。1枚でも読めたら写真は消す。後半は文字の取り込みと同じ `buildPreview`

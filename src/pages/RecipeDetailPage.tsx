@@ -4,6 +4,7 @@ import { allergenName } from "@shared/allergens";
 import { scaleFactor } from "@shared/cost";
 import { useOrgCtx } from "../contexts/OrgContext";
 import { useIngredients } from "../hooks/useIngredients";
+import { usePackaging } from "../hooks/usePackaging";
 import { useRecipe, useScale } from "../hooks/useRecipe";
 import { call } from "../lib/store";
 import { PageHead } from "../components/common/Layout";
@@ -22,6 +23,7 @@ export function RecipeDetailPage() {
   const { orgId, org, canEdit } = useOrgCtx();
   const { recipe, loading } = useRecipe(orgId, id);
   const ings = useIngredients(orgId);
+  const pack = usePackaging(orgId);
   const [mode, setMode] = useScale();
   const confirm = useConfirm();
   const nav = useNavigate();
@@ -57,7 +59,7 @@ export function RecipeDetailPage() {
         <Link to={`/recipes/${recipe.id}/label${q}`} className={`${ui.secondary} flex items-center justify-center gap-1.5`}><Icon name="printer" />ラベルを作る</Link>
       </div>
 
-      <CostPanel recipe={recipe} byId={ings.byId} defaultTarget={org.settings.targetCostRate} />
+      <CostPanel recipe={recipe} byId={ings.byId} pack={pack.ctx} defaultTarget={org.settings.targetCostRate} />
 
       <ScaleControl mode={mode} set={setMode} pieces={pieces} />
       <ItemsTable items={recipe.items} byId={ings.byId} factor={factor} />

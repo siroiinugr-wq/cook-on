@@ -29,6 +29,27 @@ service cloud.firestore {
         && str(d.get('labelName', ''), 300) && str(d.get('supplier', ''), 60) && str(d.get('memo', ''), 300);
     }
 
+    // 包装資材（袋・脱酸素剤など）。値段は税抜。priceTax は入れたときの形（材料と同じ 0・0.08・0.1）
+    function validPackaging() {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['name', 'purchasePrice', 'purchaseQty', 'unit', 'priceTax', 'supplier', 'memo',
+                               'updatedAt', 'createdAt', 'createdBy'])
+        && str(d.name, 60) && d.name.size() > 0
+        && numOrNull(d.purchasePrice)
+        && d.purchaseQty is number && d.purchaseQty > 0
+        && d.unit in ['枚', '個', '本', 'm']
+        && d.get('priceTax', 0) in [0, 0.08, 0.1]
+        && str(d.get('supplier', ''), 60) && str(d.get('memo', ''), 300);
+    }
+    // 包装セット（例：10cm袋＋脱酸素剤30）。中身の形は数だけ守る（原価はサーバーが計算する）
+    function validPackagingSet() {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['name', 'items', 'memo', 'updatedAt', 'createdAt', 'createdBy'])
+        && str(d.name, 60) && d.name.size() > 0
+        && d.items is list && d.items.size() <= 20
+        && str(d.get('memo', ''), 300);
+    }
+
     match /organizations/{orgId} {
       allow read: if isMember(orgId);
       // お金と所有者の項目は画面から変えられない（クレジットを書き換える不正を防ぐ）
@@ -55,6 +76,18 @@ service cloud.firestore {
         // 消してもレシピには材料名が残る（原価は「単価なし」になる）
         allow delete: if canEdit(orgId);
         match /priceHistory/{h} { allow read: if isMember(orgId); allow write: if false; }
+      }
+
+      // 包装資材とセット：材料と同じく画面から書ける。値段やセットを直すとトリガがレシピの原価を計算し直す
+      match /packaging/{id} {
+        allow read: if isMember(orgId);
+        allow create, update: if canEdit(orgId) && validPackaging();
+        allow delete: if canEdit(orgId);
+      }
+      match /packagingSets/{id} {
+        allow read: if isMember(orgId);
+        allow create, update: if canEdit(orgId) && validPackagingSet();
+        allow delete: if canEdit(orgId);
       }
 
       // レシピは saveRecipe（Functions）だけが書く。版の記録・検索用の列を必ず作り直すため

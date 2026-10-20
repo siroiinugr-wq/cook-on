@@ -2,8 +2,9 @@
 // レシピの保存と版、原価アラートは shared の同じ計算で本物どおりに動く。AIの部分だけ demoAi.ts の簡易版。
 import { CREDIT_COST, type CreditAction } from "@shared/credits";
 import { DEFAULT_TARGET_RATE } from "@shared/cost";
+import type { PackCtx } from "@shared/packaging";
 import { deriveRecipe, sanitizeRecipe } from "@shared/recipe";
-import type { CostCache, Ingredient } from "@shared/types";
+import type { CostCache, Ingredient, PackagingMaterial, PackagingSet } from "@shared/types";
 import { judgeUgc } from "@shared/ugc";
 import { demoGet, demoListDocs, demoWrite, onDemoWrite } from "./demo";
 import { DEMO_ORG } from "./demoData";
@@ -19,6 +20,13 @@ export function demoIngredientMap(): Map<string, Ingredient> {
   return new Map(demoListDocs(`${O}/ingredients`).map((x) => [x.id, { ...(x.data as unknown as Ingredient), id: x.id }]));
 }
 
+export function demoPackaging(): PackCtx {
+  return {
+    matById: new Map(demoListDocs(`${O}/packaging`).map((x) => [x.id, { ...(x.data as unknown as PackagingMaterial), id: x.id }])),
+    setById: new Map(demoListDocs(`${O}/packagingSets`).map((x) => [x.id, { ...(x.data as unknown as PackagingSet), id: x.id }])),
+  };
+}
+
 /** 本番の writeRecipe と同じ：今の中身を versions に写してから版を上げる */
 export function demoWriteRecipe(recipeId: string | null, raw: unknown, note = "") {
   const input = sanitizeRecipe(raw);
@@ -30,7 +38,7 @@ export function demoWriteRecipe(recipeId: string | null, raw: unknown, note = ""
   const prev = cur ? Number(cur.version ?? 1) : 0;
   if (cur) demoWrite(`${path}/versions/${prev}`, { ...cur, archivedAt: now() }, false);
   demoWrite(path, {
-    ...input, ...deriveRecipe(input, demoIngredientMap()), version: prev + 1, archived: false,
+    ...input, ...deriveRecipe(input, demoIngredientMap(), demoPackaging()), version: prev + 1, archived: false,
     updatedAt: now(), updatedBy: "demo-user", ...(note ? { changeNote: note } : {}),
   });
   return { recipeId: id, version: prev + 1 };
@@ -91,6 +99,33 @@ export async function demoCall<T>(name: string, data: object): Promise<T> {
 
 // ── 本番のトリガの代わり ──
 
+/** recipes/costAlert.ts の recalcRecipes と同じ：使っているレシピを計算し直し、目標を初めて超えたらアラート */
+function demoRecalc(uses: (r: Data) => boolean, cause: { id: string; name: string }) {
+  const ingById = demoIngredientMap();
+  const pack = demoPackaging();
+  const target = Number((demoGet(O)?.settings as Data | undefined)?.targetCostRate) || DEFAULT_TARGET_RATE;
+  for (const r of demoListDocs(`${O}/recipes`)) {
+    if (!uses(r.data)) continue;
+    const input = sanitizeRecipe(r.data);
+    if (typeof input === "string") continue;
+    const derived = deriveRecipe(input, ingById, pack);
+    demoWrite(`${O}/recipes/${r.id}`, {
+      ...r.data, allergens: derived.allergens, costCache: derived.costCache,
+      packagingIds: derived.packagingIds, packagingSetIds: derived.packagingSetIds,
+    }, false);
+    const old = r.data.costCache as CostCache | null;
+    const t = input.targetCostRate ?? target;
+    const rate = derived.costCache.rate;
+    if (rate !== null && rate > t && (old?.rate ?? 0) <= t) {
+      demoWrite(`${O}/alerts/${rid()}`, {
+        kind: "costOverTarget", recipeId: r.id, recipeName: input.name, ingredientId: cause.id, ingredientName: cause.name,
+        oldRate: old?.rate ?? null, newRate: rate, target: t, read: false, createdAt: now(),
+      }, false);
+    }
+  }
+}
+const has = (field: string, id: string) => (r: Data) => !!(r[field] as string[] | undefined)?.includes(id);
+
 // 材料の仕入れ値が変わったら、使っているレシピの原価を計算し直し、目標を超えたらアラート（recipes/costAlert.ts と同じ）
 onDemoWrite((path, before, after) => {
   const m = /^organizations\/demo\/ingredients\/([^/]+)$/.exec(path);
@@ -103,24 +138,16 @@ onDemoWrite((path, before, after) => {
       to: { price: after.purchasePrice ?? null, qty: after.purchaseQty, unit: after.purchaseUnit }, at: now(),
     }, false);
   }
-  const ingById = demoIngredientMap();
-  const target = Number((demoGet(O)?.settings as Data | undefined)?.targetCostRate) || DEFAULT_TARGET_RATE;
-  for (const r of demoListDocs(`${O}/recipes`)) {
-    if (!(r.data.ingredientIds as string[] | undefined)?.includes(m[1])) continue;
-    const input = sanitizeRecipe(r.data);
-    if (typeof input === "string") continue;
-    const derived = deriveRecipe(input, ingById);
-    demoWrite(`${O}/recipes/${r.id}`, { ...r.data, allergens: derived.allergens, costCache: derived.costCache }, false);
-    const old = r.data.costCache as CostCache | null;
-    const t = input.targetCostRate ?? target;
-    const rate = derived.costCache.rate;
-    if (rate !== null && rate > t && (old?.rate ?? 0) <= t) {
-      demoWrite(`${O}/alerts/${rid()}`, {
-        kind: "costOverTarget", recipeId: r.id, recipeName: input.name, ingredientId: m[1], ingredientName: after.name,
-        oldRate: old?.rate ?? null, newRate: rate, target: t, read: false, createdAt: now(),
-      }, false);
-    }
-  }
+  demoRecalc(has("ingredientIds", m[1]), { id: m[1], name: String(after.name) });
+});
+
+// 包装資材・包装セットを直したら（recipes/packagingAlert.ts と同じ）
+onDemoWrite((path, before, after) => {
+  const m = /^organizations\/demo\/(packaging|packagingSets)\/([^/]+)$/.exec(path);
+  if (!m || !before) return;
+  const keys = m[1] === "packaging" ? ["purchasePrice", "purchaseQty"] : ["items"];
+  if (after && keys.every((k) => JSON.stringify(before[k] ?? null) === JSON.stringify(after[k] ?? null))) return;
+  demoRecalc(has(m[1] === "packaging" ? "packagingIds" : "packagingSetIds", m[2]), { id: m[2], name: String((after ?? before).name) });
 });
 
 // 票が入ったら数え直す（ugc/products.ts の onUgcVoteWritten と同じ決まり）

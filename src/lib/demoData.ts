@@ -1,7 +1,7 @@
 // デモモードの最初のデータ（架空の菓子店）。パスは本番の Firestore と同じ
 import { GLOBAL_SEED } from "@shared/globalSeed";
 import { deriveRecipe, type RecipeInput } from "@shared/recipe";
-import type { Ingredient } from "@shared/types";
+import type { Ingredient, PackagingMaterial, PackagingSet } from "@shared/types";
 import { DEFAULT_BRANDING } from "@shared/types";
 import { WELCOME_CREDITS } from "@shared/credits";
 
@@ -24,6 +24,18 @@ const ING: Ingredient[] = [
   { id: "vanilla", name: "バニラビーンズ", purchasePrice: null, purchaseQty: 1, purchaseUnit: "本", allergens: [], globalRef: "base_vanillabean" },
 ];
 
+const PACK: PackagingMaterial[] = [
+  { id: "bag10", name: "10cm袋（透明・脱気）", purchasePrice: 1500, purchaseQty: 100, unit: "枚", priceTax: 0.1, supplier: "包材のデモ商店" },
+  { id: "oxy30", name: "脱酸素剤30", purchasePrice: 2000, purchaseQty: 200, unit: "個", priceTax: 0 },
+  { id: "seal", name: "店名シール", purchasePrice: 3300, purchaseQty: 500, unit: "枚", priceTax: 0.1 },
+];
+const PACK_SETS: PackagingSet[] = [
+  { id: "set10", name: "焼き菓子の個包装（10cm袋）", items: [
+    { packagingId: "bag10", name: "10cm袋（透明・脱気）", qty: 1 }, { packagingId: "oxy30", name: "脱酸素剤30", qty: 1 }, { packagingId: "seal", name: "店名シール", qty: 1 },
+  ] },
+];
+const packCtx = { matById: new Map(PACK.map((p) => [p.id, p])), setById: new Map(PACK_SETS.map((p) => [p.id, p])) };
+
 const RECIPES: (RecipeInput & { id: string })[] = [
   {
     id: "financier", name: "フィナンシェ", category: "焼き菓子", tags: ["定番", "ギフト"], sellingPrice: 280, targetCostRate: 0.3,
@@ -36,6 +48,7 @@ const RECIPES: (RecipeInput & { id: string })[] = [
       { ingredientId: "egg", name: "全卵", qty: 2, unit: "個", note: "卵白だけでも可" },
       { ingredientId: "salt", name: "食塩", qty: null, unit: "適量" },
     ],
+    packaging: [{ kind: "set", refId: "set10", name: "焼き菓子の個包装（10cm袋）", qty: 1 }],
     steps: [
       { text: "バターを中火にかけ、薄い茶色になるまで焦がして濾す" },
       { text: "粉類と砂糖を合わせてふるう" },
@@ -73,7 +86,9 @@ export function seedDemo(): [string, Record<string, unknown>][] {
     [`${O}/creditLedger/welcome`, { kind: "welcome", amount: WELCOME_CREDITS, status: "done", createdAt: at }],
     [`${O}/alerts/a1`, { kind: "costOverTarget", recipeId: "gateau", recipeName: "ガトーショコラ", ingredientId: "choco", ingredientName: "チョコレート（ビター）", oldRate: 0.29, newRate: 0.34, target: 0.32, read: false, createdAt: at }],
     ...ING.map(({ id, ...d }) => [`${O}/ingredients/${id}`, { ...d, updatedAt: at }] as [string, Record<string, unknown>]),
-    ...RECIPES.map(({ id, ...r }) => [`${O}/recipes/${id}`, { ...r, ...deriveRecipe(r, ingById), version: 1, archived: false, updatedAt: at }] as [string, Record<string, unknown>]),
+    ...PACK.map(({ id, ...d }) => [`${O}/packaging/${id}`, { ...d, updatedAt: at }] as [string, Record<string, unknown>]),
+    ...PACK_SETS.map(({ id, ...d }) => [`${O}/packagingSets/${id}`, { ...d, updatedAt: at }] as [string, Record<string, unknown>]),
+    ...RECIPES.map(({ id, ...r }) => [`${O}/recipes/${id}`, { ...r, ...deriveRecipe(r, ingById, packCtx), version: 1, archived: false, updatedAt: at }] as [string, Record<string, unknown>]),
     ...GLOBAL_SEED.map(({ id, ...g }) => [`globalIngredients/${id}`, { ...g, source: "base" }] as [string, Record<string, unknown>]),
     ["ugcProducts/u1", { key: "明治ブラックチョコレート", maker: "明治", productName: "ブラックチョコレート", ingredientsText: "カカオマス、砂糖、ココアバター／乳化剤、香料、（一部に乳成分・大豆を含む）", allergens: ["milk", "soy"], createdByOrg: "other", goodCount: 7, badCount: 1, status: "pending", createdAt: at }],
     ["ugcProducts/u2", { key: "よつ葉乳業よつ葉バター食塩不使用", maker: "よつ葉乳業", productName: "よつ葉バター 食塩不使用", ingredientsText: "生乳（北海道産）", allergens: ["milk"], createdByOrg: "other", goodCount: 12, badCount: 0, status: "promoted", createdAt: at }],

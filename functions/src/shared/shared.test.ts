@@ -6,8 +6,9 @@ import { buildIndex, exactMatch, rankCandidates, toMatchKey } from "./matchKey";
 import { importCredits, splitForImport, aiMatchCredits } from "./credits";
 import { judgeUgc, voteDelta } from "./ugc";
 import { toGrams, parseUnit } from "./units";
-import { sanitizeRecipe } from "./recipe";
-import type { Ingredient, RecipeItem } from "./types";
+import { deriveRecipe, sanitizeRecipe } from "./recipe";
+import { calcPackaging, packUnitCost, sanitizePackLines, type PackCtx } from "./packaging";
+import type { Ingredient, PackagingMaterial, RecipeItem } from "./types";
 
 const ing = (id: string, o: Partial<Ingredient>): Ingredient => ({
   id, name: id, purchasePrice: 0, purchaseQty: 1, purchaseUnit: "kg", allergens: [], ...o,
@@ -62,6 +63,45 @@ describe("原価", () => {
     const c = costCacheOf(items, map, 10, 40);
     expect(c.perPiece).toBeCloseTo(12);
     expect(c.rate).toBeCloseTo(0.3);
+  });
+});
+
+describe("包装", () => {
+  const mat = (id: string, price: number | null, qty: number): PackagingMaterial => ({ id, name: id, purchasePrice: price, purchaseQty: qty, unit: "枚" });
+  const ctx: PackCtx = {
+    matById: new Map([["bag10", mat("bag10", 1500, 100)], ["oxy30", mat("oxy30", 2000, 200)], ["seal", mat("seal", null, 1)]]),
+    setById: new Map([["s1", { id: "s1", name: "10cm袋セット", items: [{ packagingId: "bag10", name: "10cm袋", qty: 1 }, { packagingId: "oxy30", name: "脱酸素剤30", qty: 1 }] }]]),
+  };
+  it("資材1枚の値段・セットの合計・値段の無い資材を数える", () => {
+    expect(packUnitCost(ctx.matById.get("bag10")!)).toBeCloseTo(15);
+    const r = calcPackaging([
+      { kind: "set", refId: "s1", name: "10cm袋セット", qty: 1 },
+      { kind: "item", refId: "seal", name: "シール", qty: 2 },
+      { kind: "set", refId: "gone", name: "消したセット", qty: 1 },
+    ], ctx);
+    expect(r.lines[0].cost).toBeCloseTo(25);
+    expect(r.perPiece).toBeCloseTo(25);
+    expect(r.missing).toBe(2);
+  });
+  it("1個あたりの原価に包装が足され、使っている資材とセットの id が残る", () => {
+    const map = new Map([["flour", ing("flour", { purchasePrice: 300, purchaseQty: 1, purchaseUnit: "kg" })]]);
+    const input = sanitizeRecipe({
+      name: "クッキー", yield: { pieces: 10 }, sellingPrice: 200,
+      items: [{ ingredientId: "flour", name: "薄力粉", qty: 500, unit: "g" }],
+      packaging: [{ kind: "set", refId: "s1", name: "10cm袋セット", qty: 1 }],
+    });
+    if (typeof input === "string") throw new Error(input);
+    const d = deriveRecipe(input, map, ctx);
+    expect(d.costCache.perPiece).toBeCloseTo(15 + 25);
+    expect(d.costCache.packagingPerPiece).toBeCloseTo(25);
+    expect(d.costCache.rate).toBeCloseTo(0.2);
+    expect(d.packagingIds.sort()).toEqual(["bag10", "oxy30"]);
+    expect(d.packagingSetIds).toEqual(["s1"]);
+  });
+  it("おかしな行を整える（数が0やマイナスは1、空の行は捨てる）", () => {
+    expect(sanitizePackLines([{ kind: "set", refId: "s1", name: "x", qty: -3 }, { kind: "item", refId: "", name: "" }])).toEqual([
+      { kind: "set", refId: "s1", name: "x", qty: 1 },
+    ]);
   });
 });
 

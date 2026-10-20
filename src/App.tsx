@@ -17,6 +17,7 @@ import { RecipeEditPage } from "./pages/RecipeEditPage";
 import { WorkModePage } from "./pages/WorkModePage";
 import { LabelPage } from "./pages/LabelPage";
 import { IngredientsPage } from "./pages/IngredientsPage";
+import { PackagingPage } from "./pages/PackagingPage";
 import { ProductsPage } from "./pages/ProductsPage";
 import { ImportPage } from "./pages/ImportPage";
 import { ImportPreviewPage } from "./pages/ImportPreviewPage";
@@ -70,6 +71,7 @@ function Main({ orgId, onCreated }: { orgId: string; onCreated: (id: string) => 
             <Route path="/recipes/:id/edit" element={<RecipeEditPage />} />
             <Route path="/ingredients" element={<IngredientsPage />} />
             <Route path="/products" element={<ProductsPage />} />
+            <Route path="/packaging" element={<PackagingPage />} />
             <Route path="/import" element={<ImportPage />} />
             <Route path="/import/photos" element={<ImportPhotosPage />} />
             <Route path="/import/:importId" element={<ImportPreviewPage />} />
