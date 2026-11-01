@@ -20,6 +20,7 @@ const dryRun = args.includes("--dry-run");
 const projectId = opt("--project");
 const csvPath = opt("--csv");
 const useEstat = args.includes("--estat");
+const debug = args.includes("--debug");
 if ((!useEstat && !csvPath) || (!dryRun && !projectId)) {
   console.error("使い方は scripts/import-prices.mjs の先頭に書いてあります（--estat か --csv、書くときは --project cook-on-plaz）。");
   process.exit(1);
@@ -98,7 +99,7 @@ if (useEstat) {
     ?? (want === "東京都区部" ? areaList.find((c) => /区部|特別区/.test(norm(c["@name"]))) : undefined);
   const areaDim = areaObj?.["@id"] === "area" ? "area" : areaObj?.["@id"];
   const times = cls("time").sort((a, b) => String(b["@code"]).localeCompare(String(a["@code"])));
-  const items = classes.filter((c) => /^cat/.test(c["@id"]) && c !== areaObj).flatMap((c) => list(c.CLASS).map((x) => ({ dim: c["@id"], code: x["@code"], name: String(x["@name"]), unit: String(x["@unit"] ?? "") })));
+  const items = classes.filter((c) => /^cat/.test(c["@id"]) && c !== areaObj).flatMap((c) => list(c.CLASS).map((x) => ({ dim: c["@id"], code: x["@code"], name: String(x["@name"]), unit: String(x["@unit"] ?? ""), note: String(x["@explanation"] ?? ""), raw: x })));
   if (!area || !times.length || !items.length) {
     console.error(`表の形が想定と違います（地域「${want}」${area ? "あり" : "なし"}・時点 ${times.length}・品目 ${items.length}）。`);
     console.error(`分類：${classes.map((c) => `${c["@id"]}=${c["@name"]}(${list(c.CLASS).length})`).join("、")}`);
@@ -130,14 +131,19 @@ if (useEstat) {
 
   console.log("■ 品目の結び先");
   for (const e of ESTAT_ITEM_MAP) {
-    const it = items.find((x) => e.tokens.every((t) => x.name.includes(t)));
-    const v = it && values.find((x) => String(x[`@${it.dim}`]) === String(it.code));
-    const qu = it && (parseQtyUnit(it.name) ?? parseQtyUnit(it.unit) ?? parseQtyUnit(String(v?.["@unit"] ?? "")));
+    // 同じ言葉を含む品目がいくつかあるとき（牛乳・牛乳（配達）など）は、値が入っているものを使う
+    const valueOf = (x) => values.find((y) => String(y[`@${x.dim}`]) === String(x.code));
+    const hits = items.filter((x) => e.tokens.every((t) => x.name.includes(t)));
+    const it = hits.find((x) => valueOf(x)) ?? hits[0];
+    const v = it && valueOf(it);
+    // 量（1kg・10個など）は、品目名・単位・銘柄の説明（@explanation）・値の単位のどこかに書いてある
+    const qu = it && (parseQtyUnit(it.name) ?? parseQtyUnit(it.unit) ?? parseQtyUnit(it.note) ?? parseQtyUnit(String(v?.["@unit"] ?? "")));
     if (!it || !v || !qu) {
       console.log(`  ${e.globalId.padEnd(20)} … 使えない（${!it ? "品目が無い" : !v ? "値が無い" : `量を読めない：${it.name} ${it.unit}`}）`);
+      if (it && v && !qu && debug) console.log(`      品目 ${JSON.stringify(it.raw)}\n      値 ${JSON.stringify(v)}`);
       continue;
     }
-    const refPrice = { price: Number(v.$), qty: qu.qty, unit: qu.unit, item: it.name.replace(/^\d+\s*/, "").slice(0, 120), area: String(area["@name"]), asOf, source: "総務省「小売物価統計調査」" };
+    const refPrice = { price: Number(v.$), qty: qu.qty, unit: qu.unit, item: `${it.name.replace(/^\d+\s*/, "")}${it.note ? `（${it.note}）` : ""}`.slice(0, 120), area: String(area["@name"]), asOf, source: "総務省「小売物価統計調査」" };
     console.log(`  ${e.globalId.padEnd(20)} ← ${refPrice.item}｜${refPrice.price}円（税込）/${qu.qty}${qu.unit}｜税抜 ${refPriceExTax(refPrice)}円`);
     rows.push({ globalId: e.globalId, refPrice });
   }
