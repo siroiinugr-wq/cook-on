@@ -33,7 +33,8 @@ export const onGlobalRefPrice = onDocumentWritten({ document: "globalIngredients
     // お店が入れた値段は変えない。参考価格のままなら新しい参考価格に入れ替える
     if (ing.purchasePrice !== null && ing.priceSource !== "ref") return [];
     const p = refPricePatch({ purchasePrice: null }, after);
-    return Object.keys(p).length ? [d.ref.update({ ...p, refWeb: null })] : [];
+    // ネットで調べた値段の記録（refWeb）は消さずに残す
+    return Object.keys(p).length ? [d.ref.update(p)] : [];
   });
   await Promise.all(writes);
   if (writes.length) console.log("参考価格をお店の材料に入れました", event.params.id, writes.length);
@@ -57,7 +58,7 @@ export const fillPricesFromWeb = onCall({ region: REGION, timeoutSeconds: 300, s
   const rest: Ingredient[] = [];
   for (const i of empty) {
     const p = i.globalRef ? refPricePatch(i, globals.get(i.globalRef)) : {};
-    if (Object.keys(p).length) { await col.doc(i.id).update({ ...p, refWeb: null }); free++; } else rest.push(i);
+    if (Object.keys(p).length) { await col.doc(i.id).update(p); free++; } else rest.push(i);
   }
   // (2) 残りは Google 検索つきのAIで1品ずつ（食材でない・見つからないものは入れない）
   const todo = rest.slice(0, PRICE_SEARCH_MAX);
@@ -81,9 +82,11 @@ export const fillPricesFromWeb = onCall({ region: REGION, timeoutSeconds: 300, s
           // 調べている間にお店が値段を入れていたら変えない
           const cur = await col.doc(i.id).get();
           if (!cur.exists || cur.get("purchasePrice") !== null) return;
+          const exPrice = refPriceExTax(w);
           await col.doc(i.id).update({
-            purchasePrice: refPriceExTax(w), priceTax: 0, purchaseQty: w.qty, purchaseUnit: w.unit, priceSource: "ref",
-            refWeb: { note: `${w.basis}${w.n ? `・${w.n}店` : ""}・税込${Math.round(w.price)}円`, sources: w.sources, searchHtml: w.searchHtml },
+            purchasePrice: exPrice, priceTax: 0, purchaseQty: w.qty, purchaseUnit: w.unit, priceSource: "ref",
+            // 調べた日・税込の値段・量も残す（お店が仕入れ値を直しても、この記録は消さない）
+            refWeb: { note: `${w.basis}${w.n ? `・${w.n}店` : ""}・税込${Math.round(w.price)}円`, sources: w.sources, searchHtml: w.searchHtml, at: new Date().toISOString(), price: Math.round(w.price), qty: w.qty, unit: w.unit, exPrice },
           });
           filled++;
           // 共有の材料に参考価格が無ければ、運営の精査画面に提案する（採用されるとほかのお店にも入る）

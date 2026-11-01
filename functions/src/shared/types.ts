@@ -1,7 +1,7 @@
 // 画面とサーバーで共通のデータの形（Firestore に保存する形と同じ）
 // 金額は円（小数可。表示のときに丸める）、重さは g。
 
-import type { WebOffers } from "./offers";
+import type { RefWeb, WebOffers } from "./offers";
 import type { AllergenId } from "./allergens";
 import type { LabelInfo } from "./label";
 import type { RefPrice } from "./refPrice";
@@ -36,8 +36,10 @@ export interface Ingredient {
   globalRef?: string | null;
   /** "ref"＝仕入れ値が空だったので共有の材料の参考価格を入れた（画面に「参考価格」と出す）。お店が値段を直すと消える */
   priceSource?: "ref" | null;
-  /** 参考価格をAIがネット（Google 検索）で調べて入れたとき：何を想定したか・見たページ・検索の候補（画面に出すのが利用の条件） */
-  refWeb?: { note: string; sources: { uri: string; title: string }[]; searchHtml: string } | null;
+  /** AIがネット（Google 検索）で調べた値段の記録：何を想定したか・見たページ・検索の候補（画面に出すのが利用の条件）。
+   *  調べた日 at・税込の値段 price・量 qty/unit も残し、お店が自分の仕入れ値に直しても消さない（あとで比べられるように）。
+   *  いまの仕入れ値がこの値段かどうかは webPriceInUse（shared/offers.ts） */
+  refWeb?: RefWeb | null;
   /** ネットで値段を比べた結果（shared/offers.ts。選んだ候補 picked も） */
   offers?: WebOffers | null;
   supplier?: string;

@@ -4,6 +4,7 @@ import { aiMatchCredits, priceSearchCredits, sizeSearchCredits, splitForImport }
 import type { ImportDoc, ItemMatch, ParsedRecipe } from "@shared/importTypes";
 import { buildIndex, rankCandidates, toMatchKey } from "@shared/matchKey";
 import { sizeFromName } from "@shared/invoice";
+import { withPast, type WebOffers } from "@shared/offers";
 import { NO_MATCH, resolveLocal } from "@shared/resolveLocal";
 import { parseUnit, type Unit } from "@shared/units";
 import { demoGet, demoListDocs, demoWrite } from "./demo";
@@ -154,8 +155,9 @@ export async function demoAiCall<T>(name: string, d: Data): Promise<T> {
           ],
           at: new Date().toISOString(), searchHtml: "<div style='font:12px sans-serif;padding:6px'>Google 検索の候補（デモ）</div>", picked: null,
         };
-        demoWrite(path, { ...ing, offers });
-        return { result: { offers } as T };
+        const withHist = withPast(offers as Omit<WebOffers, "past">, ing.offers as WebOffers | undefined);
+        demoWrite(path, { ...ing, offers: withHist });
+        return { result: { offers: withHist } as T };
       });
     }
     case "fillPricesFromWeb": {
@@ -172,8 +174,9 @@ export async function demoAiCall<T>(name: string, d: Data): Promise<T> {
           const w = web[i.name];
           if (!w) continue;
           const path = `${O}/ingredients/${i.id}`;
-          demoWrite(path, { ...demoGet(path), purchasePrice: Math.round((w.price / 1.08) * 10) / 10, priceTax: 0, purchaseQty: w.qty, purchaseUnit: w.unit, priceSource: "ref",
-            refWeb: { note: w.note, sources: [{ uri: "https://example.com/price", title: "example.com（デモ）" }], searchHtml: "<div style='font:12px sans-serif;padding:6px'>Google 検索の候補（デモ）</div>" } });
+          const exPrice = Math.round((w.price / 1.08) * 10) / 10;
+          demoWrite(path, { ...demoGet(path), purchasePrice: exPrice, priceTax: 0, purchaseQty: w.qty, purchaseUnit: w.unit, priceSource: "ref",
+            refWeb: { note: w.note, sources: [{ uri: "https://example.com/price", title: "example.com（デモ）" }], searchHtml: "<div style='font:12px sans-serif;padding:6px'>Google 検索の候補（デモ）</div>", at: new Date().toISOString(), price: w.price, qty: w.qty, unit: w.unit, exPrice } });
           filled++;
         }
         return { result: { free: 0, filled, tried: todo.length, left: empty.length - todo.length } as T };

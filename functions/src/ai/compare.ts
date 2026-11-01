@@ -4,7 +4,7 @@
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { getFirestore } from "firebase-admin/firestore";
 import { INVOICE_UNITS } from "../shared/invoice";
-import type { WebOffer, WebOffers } from "../shared/offers";
+import { withPast, type WebOffer, type WebOffers } from "../shared/offers";
 import type { Ingredient } from "../shared/types";
 import type { Unit } from "../shared/units";
 import { GEMINI_API_KEY, REGION } from "./config";
@@ -57,7 +57,8 @@ export const compareWebPrices = onCall({ region: REGION, timeoutSeconds: 120, se
       return [{ shop, product: String(o.product ?? "").trim().slice(0, 80), price: Math.round(price), qty, unit, url: sourceFor(String(o.site ?? ""), r.sources), note: String(o.note ?? "").trim().slice(0, 30) }];
     }).slice(0, MAX_OFFERS);
     if (!list.length) throw new HttpsError("not-found", "値段の分かる売り場が見つかりませんでした。クレジットは使われていません。");
-    const offers: WebOffers = { list, at: new Date().toISOString(), searchHtml: r.searchHtml.slice(0, 20000), picked: null };
+    // 前に調べた結果は past に残す（いつ・どこで・いくらだったかを、あとで比べられるように）
+    const offers: WebOffers = withPast({ list, at: new Date().toISOString(), searchHtml: r.searchHtml.slice(0, 20000), picked: null }, ing.offers);
     await ref.update({ offers });
     return { result: { offers }, usage: r.usage };
   });
