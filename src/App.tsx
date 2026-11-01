@@ -28,6 +28,7 @@ import { SettingsPage } from "./pages/SettingsPage";
 import { TidyPage } from "./pages/TidyPage";
 import { AdminSuggestionsPage } from "./pages/AdminSuggestionsPage";
 import { InvoicePhotosPage } from "./pages/InvoicePhotosPage";
+import { TodoPage } from "./pages/TodoPage";
 
 export default function App() {
   const s = useSession();
@@ -83,6 +84,7 @@ function Main({ orgId, onCreated }: { orgId: string; onCreated: (id: string) => 
             <Route path="/import/:importId" element={<ImportPreviewPage />} />
             <Route path="/credits" element={<CreditsPage />} />
             <Route path="/tidy" element={<TidyPage />} />
+            <Route path="/todo" element={<TodoPage />} />
             <Route path="/admin/suggestions" element={<AdminSuggestionsPage />} />
             <Route path="/ingredients/invoices" element={<InvoicePhotosPage />} />
             <Route path="/settings" element={<SettingsPage brand={brand} />} />

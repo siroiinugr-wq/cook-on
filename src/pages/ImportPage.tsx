@@ -59,7 +59,7 @@ export function ImportPage() {
   if (!canEdit) return <p className="py-10 text-center text-muted">取り込みには編集の権限が必要です。</p>;
   return (
     <div className="space-y-4">
-      <PageHead title="データの取り込み" />
+      <PageHead title="データの取り込み" back="/todo" />
       <p className="text-sm text-ink-soft">
         今まで使っていたアプリの書き出し（CSV）、Excel のレシピ表、メモ帳の文章など、形式はそろっていなくて大丈夫です。
         AIが材料と分量を読み取り、保存の前に一覧で確かめられます。

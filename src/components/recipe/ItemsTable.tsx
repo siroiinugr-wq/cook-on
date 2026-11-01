@@ -26,9 +26,9 @@ export function ItemsTable({ items, byId, factor }: { items: RecipeItem[]; byId:
             return (
               <tr key={i} className="border-t border-line align-top">
                 <td className="px-3 py-2">
-                  <span className="block">{it.name}</span>
+                  {it.ingredientId ? <Link to={`/ingredients?open=${it.ingredientId}`} className="block underline decoration-line-strong underline-offset-2">{it.name}</Link> : <span className="block">{it.name}</span>}
                   {it.note && <span className="block text-xs text-muted">{it.note}</span>}
-                  {l.missing && <Link to="/ingredients" className="block text-xs text-warn-strong underline">{MISSING_TEXT[l.missing]}</Link>}
+                  {l.missing && <Link to={it.ingredientId ? `/ingredients?open=${it.ingredientId}` : "/tidy#link"} className="block text-xs text-warn-strong underline">{MISSING_TEXT[l.missing]}</Link>}
                 </td>
                 <td className="whitespace-nowrap px-2 py-2 text-right">
                   {it.unit === "適量" ? "適量" : `${formatQty(qty)}${it.unit}`}

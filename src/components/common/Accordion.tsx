@@ -2,10 +2,11 @@
 import { useState, type ReactNode } from "react";
 import { Icon } from "./Icon";
 
-export function Accordion({ title, summary, children, defaultOpen = false }: { title: string; summary?: string; children: ReactNode; defaultOpen?: boolean }) {
-  const [open, setOpen] = useState(defaultOpen);
+/** id を付けると、アドレスが「#id」のとき開いた状態で始まる（ほかの画面から直接とべる） */
+export function Accordion({ title, summary, children, defaultOpen = false, id }: { title: string; summary?: string; children: ReactNode; defaultOpen?: boolean; id?: string }) {
+  const [open, setOpen] = useState(defaultOpen || (!!id && typeof window !== "undefined" && window.location.hash === `#${id}`));
   return (
-    <section className="rounded-2xl border border-line bg-paper">
+    <section id={id} className="scroll-mt-20 rounded-2xl border border-line bg-paper">
       <button type="button" onClick={() => setOpen(!open)} className="flex w-full items-center gap-3 px-4 py-3 text-left" aria-expanded={open}>
         <span className="flex-1">
           <span className="block font-medium">{title}</span>

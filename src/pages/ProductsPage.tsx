@@ -1,5 +1,6 @@
 // 既製品（メーカーの商品）の原材料。お店どうしで登録し、良い／違うで確かめ合う。
 // 良いが十分に集まると共有の材料に昇格し、どのお店でも名寄せの候補に出る
+import { MaterialTabs } from "../components/nav/MaterialTabs";
 import { useState } from "react";
 import { allergenName } from "@shared/allergens";
 import { PROMOTE_MIN_GOOD } from "@shared/ugc";
@@ -38,7 +39,8 @@ export function ProductsPage() {
 
   return (
     <div className="space-y-4">
-      <PageHead title="既製品" back="/ingredients" right={canEdit && <button onClick={() => setForm(true)} className={`${ui.primary} flex items-center gap-1 py-2`}><Icon name="plus" className="h-4 w-4" />登録</button>} />
+      <PageHead title="既製品" right={canEdit && <button onClick={() => setForm(true)} className={`${ui.primary} flex items-center gap-1 py-2`}><Icon name="plus" className="h-4 w-4" />登録</button>} />
+      <MaterialTabs />
       <p className="text-sm text-ink-soft">お店どうしで登録した既製品の原材料です。パッケージを撮ると、AIが原材料・アレルゲン・栄養成分を読み取ります。合っていれば「良い」、違えば「違う」を押してください。良いが{PROMOTE_MIN_GOOD}件集まると共有の材料になります。</p>
       <input className={ui.input} placeholder="メーカー・商品名で探す" value={q} onChange={(e) => setQ(e.target.value)} />
       {msg && <p className="rounded-xl bg-sand p-3 text-sm">{msg}</p>}
