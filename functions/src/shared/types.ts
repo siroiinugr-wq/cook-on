@@ -23,6 +23,8 @@ export interface Ingredient {
   /** 1ml あたりの g（液体。無ければ 1） */
   gramsPerMl?: number | null;
   allergens: AllergenId[];
+  /** お店での別の呼び方（キビ糖・きび糖など）。取り込みや材料選びで、この名前もこの材料に結びつく */
+  aliases?: string[];
   /** お店がアレルゲンを確かめたら true。取り込みで作った材料は無い（ラベルで「未確認」と出す） */
   allergensConfirmed?: boolean;
   /** ラベルに出す名前（無ければ name）。既製品は「チョコレート（砂糖、カカオマス…）」のように中身まで書ける */

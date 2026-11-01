@@ -46,6 +46,7 @@ export function IngredientSheet({ orgId, uid, ing, usedIn, onClose }: { orgId: s
       const data = {
         name: d.name.trim(), purchasePrice: d.purchasePrice, priceTax: d.priceTax ?? 0, purchaseQty: d.purchaseQty || 1, purchaseUnit: d.purchaseUnit,
         gramsPerPiece: d.gramsPerPiece ?? null, gramsPerMl: d.gramsPerMl ?? null, allergens: d.allergens, allergensConfirmed: true,
+        aliases: (d.aliases ?? []).filter((a) => a.trim() && a.trim() !== d.name.trim()).slice(0, 20),
         labelName: d.labelName?.trim() ?? "", isAdditive: !!d.isAdditive, supplier: d.supplier?.trim() ?? "", globalRef: d.globalRef ?? null,
         photoPath: d.photoPath ?? null,
       };
@@ -127,7 +128,11 @@ export function IngredientSheet({ orgId, uid, ing, usedIn, onClose }: { orgId: s
             ))}
           </div>
         </div>
-        <Accordion title="ラベル・仕入れ先" summary={d.labelName ? `ラベル：${d.labelName}` : "ラベルに出す名前を変えるとき"}>
+        <div className="space-y-1">
+          <p className={ui.label}>別名（レシピでの呼び方。取り込みのとき、この名前もこの材料に結びつきます）</p>
+          <Aliases list={d.aliases ?? []} set={(aliases) => set({ aliases })} />
+        </div>
+        <Accordion title="ラベル・仕入れ先" summary={d.labelName ? `ラベル：${d.labelName}` : "ラベル（品質表示）に出す名前を変えるとき"} defaultOpen={!!ing && !d.labelName}>
           <div className="space-y-2">
             <label className="block space-y-1"><span className={ui.label}>ラベルに出す名前（既製品は中身まで。例：チョコレート（砂糖、カカオマス、ココアバター））</span>
               <textarea className={`${input} h-16`} value={d.labelName ?? ""} maxLength={300} onChange={(e) => set({ labelName: e.target.value })} /></label>
@@ -151,5 +156,29 @@ export function IngredientSheet({ orgId, uid, ing, usedIn, onClose }: { orgId: s
         {ing && <button onClick={remove} className={`w-full ${ui.quiet} text-ng`}>この材料を消す</button>}
       </div>
     </Sheet>
+  );
+}
+
+/** 別名のチップ。入れて Enter（または「足す」）で増え、× で消える */
+function Aliases({ list, set }: { list: string[]; set: (l: string[]) => void }) {
+  const [text, setText] = useState("");
+  const add = () => {
+    const names = text.split(/[、,，\n]/).map((x) => x.trim().slice(0, 60)).filter(Boolean);
+    if (names.length) set([...new Set([...list, ...names])].slice(0, 20));
+    setText("");
+  };
+  return (
+    <div className="space-y-1.5">
+      {list.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {list.map((a) => <button key={a} type="button" onClick={() => set(list.filter((x) => x !== a))} className={ui.chip}>{a} ×</button>)}
+        </div>
+      )}
+      <div className="flex gap-2">
+        <input className={ui.input} value={text} placeholder="例：キビ糖、きび糖" onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) { e.preventDefault(); add(); } }} />
+        <button type="button" onClick={add} disabled={!text.trim()} className={`${ui.secondary} shrink-0 py-2 text-sm`}>足す</button>
+      </div>
+    </div>
   );
 }

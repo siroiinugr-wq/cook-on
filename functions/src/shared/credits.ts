@@ -14,6 +14,8 @@ export const CREDIT_COST = {
   productGuess: 1,
   /** 既製品のパッケージの裏（原材料・栄養成分）の写真を読む：1枚ごと。表の写真は画像にするだけで使わない */
   productPhoto: 1,
+  /** ラベルに出す名前（一般的名称）の案：LABEL_NAME_BATCH 件ごと */
+  labelName: 1,
   /** 原価ダウン・新作の提案（1回の質問） */
   aiSuggest: 2,
 } as const;
@@ -26,12 +28,21 @@ export const ACTION_LABEL: Record<CreditAction | "purchase" | "grant" | "welcome
   productGuess: "既製品の情報をAIで下書き",
   productPhoto: "既製品のパッケージを読み取り",
   aiSuggest: "AIに相談",
+  labelName: "ラベルの名前をAIで提案",
   purchase: "購入",
   grant: "付与",
   welcome: "はじめてのプレゼント",
 };
 
 export const AI_MATCH_BATCH = 20;
+/** ラベルの名前の案：1クレジットで何件まで */
+export const LABEL_NAME_BATCH = 20;
+/** ラベルの名前の案：1回に頼める件数 */
+export const LABEL_NAME_MAX = 200;
+
+export function labelNameCredits(n: number): number {
+  return Math.ceil(Math.min(n, LABEL_NAME_MAX) / LABEL_NAME_BATCH);
+}
 export const IMPORT_CHUNK_CHARS = 6000;
 /** 1回の取り込みの上限（これを超えるファイルは分けてもらう） */
 export const IMPORT_MAX_CHARS = 120_000;

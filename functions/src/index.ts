@@ -9,6 +9,7 @@ export { parseImport, commitImport } from "./ai/importRecipes";
 export { parseImportPhotos } from "./ai/importPhotos";
 export { guessProduct, aiSuggest } from "./ai/assist";
 export { readProductPhoto } from "./ai/productPhoto";
+export { suggestLabelNames } from "./ai/labelNames";
 export { saveRecipe, restoreRecipeVersion, archiveRecipe } from "./recipes/save";
 export { onIngredientWritten } from "./recipes/costAlert";
 export { tidyRecipes, mergeIngredients, relinkIngredients } from "./recipes/tidy";

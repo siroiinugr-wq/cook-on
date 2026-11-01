@@ -18,7 +18,7 @@ function matchInput() {
   const globals = demoListDocs("globalIngredients").map((x) => ({ id: x.id, name: String(x.data.name), aliases: (x.data.aliases as string[]) ?? [] }));
   return {
     ingredients,
-    tenantIndex: buildIndex(ingredients.map((i) => ({ id: i.id, name: i.name, aliases: [] }))),
+    tenantIndex: buildIndex(ingredients.map((i) => ({ id: i.id, name: i.name, aliases: i.aliases ?? [] }))),
     aliases: new Map(demoListDocs(`${O}/aliases`).map((x) => [x.id, String(x.data.globalId)])),
     globalIndex: buildIndex(globals),
     globalById: new Map(globals.map((g) => [g.id, g])),

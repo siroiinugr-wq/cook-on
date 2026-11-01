@@ -21,7 +21,7 @@ export async function saveImportedRecipes(orgId: string, uid: string, recipes: P
   const ingById = await loadIngredientMap(orgId);
   const g = await globalIndex();
   const byGlobal = new Map([...ingById.values()].filter((i) => i.globalRef).map((i) => [i.globalRef!, i.id]));
-  const byName = new Map([...ingById.values()].map((i) => [toMatchKey(i.name), i.id]));
+  const byName = new Map([...ingById.values()].flatMap((i) => [i.name, ...(i.aliases ?? [])].map((n) => [toMatchKey(n), i.id] as const)));
   const newIngs: Ingredient[] = [];
   const aliases: { name: string; globalId: string }[] = [];
 

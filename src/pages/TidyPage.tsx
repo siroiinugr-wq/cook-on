@@ -1,5 +1,5 @@
 // データの整理：取り込んだあとの見直しを、上から順に片付ける画面。AIは使わないので無料。
-// 1. 共有の材料に結ぶ → 2. アレルゲンの確認 → 3. 仕入れ値 → 4. 何個分 → 5. 名前・レシピでないもの → 6. 同じ材料の行 → 7. 表記ゆれ
+// 共有の材料に結ぶ → 1. アレルゲンの確認 → 2. 仕入れ値 → 3. 何個分 → 4. 名前・レシピでないもの → 5. 同じ材料の行 → 6. 表記ゆれ → 7. ラベルの名前
 import { useMemo, useState } from "react";
 import { calcCost } from "@shared/cost";
 import { duplicateItems, guessPieces, HEAVY_SINGLE_GRAMS, isPlaceholderName, needsPieces, looksNotRecipe, similarIngredientGroups } from "@shared/tidy";
@@ -15,9 +15,10 @@ import { AllergenReview } from "../components/tidy/AllergenReview";
 import { PriceFill } from "../components/tidy/PriceFill";
 import { PiecesFix, NamesFix, DupRows } from "../components/tidy/RecipeFixes";
 import { MergeGroups } from "../components/tidy/MergeGroups";
+import { LabelNames } from "../components/tidy/LabelNames";
 
 export function TidyPage() {
-  const { orgId, canEdit } = useOrgCtx();
+  const { orgId, canEdit, org } = useOrgCtx();
   const ings = useIngredients(orgId);
   const recipes = useCol<Recipe>(`organizations/${orgId}/recipes`, { where: [["archived", "==", false]] });
   const [linkMsg, setLinkMsg] = useState("");
@@ -92,6 +93,9 @@ export function TidyPage() {
       </Accordion>
       <Accordion title={`6. 材料の表記ゆれ（${n(groups.length, "組")}）`} summary="きび砂糖／キビ糖のような同じ材料を1つにまとめます">
         <MergeGroups orgId={orgId} groups={groups} usedIn={usedIn} />
+      </Accordion>
+      <Accordion title={`7. ラベルの名前（${n(ings.list.filter((x) => !x.labelName?.trim()).length)}）`} summary="キビ糖→きび砂糖、薄力粉→小麦粉のように、品質表示に出す名前。AIが案を出し、最後に確かめます">
+        <LabelNames orgId={orgId} list={byUse(ings.list)} usedIn={usedIn} credits={org.credits} />
       </Accordion>
     </div>
   );

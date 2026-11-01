@@ -89,8 +89,11 @@ export const mergeIngredients = onCall({ region: REGION, timeoutSeconds: 540, me
   const priced = keep.purchasePrice === null ? drops.find((d) => d.purchasePrice !== null) : undefined;
   const allergens = sortAllergens([keep, ...drops].flatMap((d) => d.allergens ?? []));
   const sameAllergens = allergens.length === (keep.allergens ?? []).length;
+  // まとめた側の名前と別名は、残す材料の別名として覚える（次の取り込みから同じ材料に結びつく）
+  const aliases = [...new Set([...(keep.aliases ?? []), ...drops.flatMap((d) => [d.name, ...(d.aliases ?? [])])])]
+    .filter((a) => a && a !== keep.name).slice(0, 20);
   await db.doc(`${org}/ingredients/${keepId}`).set({
-    allergens,
+    allergens, aliases,
     // 足したアレルゲンがあれば、もう一度確かめてもらう
     allergensConfirmed: keep.allergensConfirmed === true && sameAllergens,
     ...(keep.globalRef ? {} : { globalRef: drops.find((d) => d.globalRef)?.globalRef ?? null }),

@@ -23,7 +23,7 @@ export async function loadOrgMatchData(orgId: string): Promise<OrgMatchData> {
   const ingredients = ings.docs.map((d) => ({ ...(d.data() as Ingredient), id: d.id }));
   return {
     ingredients,
-    tenantIndex: buildIndex(ingredients.map((i) => ({ id: i.id, name: i.name, aliases: [] }))),
+    tenantIndex: buildIndex(ingredients.map((i) => ({ id: i.id, name: i.name, aliases: i.aliases ?? [] }))),
     aliases: new Map(als.docs.map((d) => [d.id, String(d.data().globalId ?? "")])),
   };
 }

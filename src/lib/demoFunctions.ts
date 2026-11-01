@@ -1,6 +1,6 @@
 // デモモードの「にせの Cloud Functions」。本番の関数と同じ名前・同じ引数・同じ返り値の形にしてある。
 // レシピの保存と版、原価アラートは shared の同じ計算で本物どおりに動く。AIの部分だけ demoAi.ts の簡易版。
-import { CREDIT_COST, type CreditAction } from "@shared/credits";
+import { CREDIT_COST, LABEL_NAME_BATCH, type CreditAction } from "@shared/credits";
 import { DEFAULT_TARGET_RATE } from "@shared/cost";
 import type { PackCtx } from "@shared/packaging";
 import { deriveRecipe, sanitizeRecipe } from "@shared/recipe";
@@ -93,6 +93,16 @@ export async function demoCall<T>(name: string, data: object): Promise<T> {
     case "createInvite":
     case "createOrganization":
       throw new Error("デモモードではこの操作はできません。Firebase をつないでからお試しください。");
+    case "suggestLabelNames": {
+      const ids = (d.ingredientIds as string[]) ?? [];
+      const ings = demoIngredientMap();
+      return demoWithCredits("labelName", Math.ceil(ids.length / LABEL_NAME_BATCH), async () => ({
+        result: { suggestions: ids.flatMap((id) => {
+          const i = ings.get(id);
+          return i ? [{ ingredientId: id, ...demoLabelName(i.name), confidence: 0.8 }] : [];
+        }) },
+      })) as Promise<T>;
+    }
     case "tidyRecipes":
     case "mergeIngredients":
     case "relinkIngredients":
@@ -100,6 +110,16 @@ export async function demoCall<T>(name: string, data: object): Promise<T> {
     default:
       return demoAiCall<T>(name, d);
   }
+}
+
+/** AIの代わり：よくある材料だけ一般的名称に直す */
+function demoLabelName(name: string): { label: string; additive: boolean } {
+  const rules: [RegExp, string, boolean?][] = [
+    [/薄力|強力|中力/, "小麦粉"], [/全卵|卵$|^卵/, "鶏卵"], [/バター/, "バター"], [/キビ糖|きび砂糖|きび糖/i, "きび砂糖"], [/グラニュー|上白糖/, "砂糖"],
+    [/生クリーム/, "クリーム（乳製品）"], [/ベーキングパウダー|BP/, "膨張剤", true], [/バニラ(エッセンス|オイル)/, "香料", true], [/塩/, "食塩"],
+  ];
+  const hit = rules.find(([re]) => re.test(name));
+  return hit ? { label: hit[1], additive: hit[2] === true } : { label: name.replace(/（.*?）/g, ""), additive: false };
 }
 
 // ── 本番のトリガの代わり ──
