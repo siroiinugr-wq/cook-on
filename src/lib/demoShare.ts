@@ -34,11 +34,12 @@ export function demoShareCall(name: string, d: Data): unknown | undefined {
       const s: Omit<GlobalSuggestion, "id"> = {
         source: "ai", kind: "update", status: "pending", orgId: null, orgName: "AIの推定", ingredientId: null, globalId: t.id, globalName: String(t.data.name),
         name: String(t.data.name), aliases: [], allergens: null, labelName: "", price: { price: Math.round(price / 1.08), qty: 1, unit: "kg" },
-        note: `デモの推定・製菓用1kg・自信 50%・税込 ${price}円`, sig: `ai:${price}`, updatedAt: new Date().toISOString(),
+        note: `デモの検索・製菓用1kg・3店・自信 50%・税込 ${price}円`, sig: `ai:${price}`, updatedAt: new Date().toISOString(),
+        sources: [{ uri: "https://example.com/", title: "example.com（デモ）" }],
       };
       demoWrite(`globalSuggestions/ai_${t.id}`, s as unknown as Data);
     }
-    return { made: Math.min(8, targets.length), checked: targets.length };
+    return { made: Math.min(8, targets.length), checked: Math.min(8, targets.length), left: Math.max(0, targets.length - 8) };
   }
   if (name === "reviewSuggestion") {
     const sp = `globalSuggestions/${d.id}`;

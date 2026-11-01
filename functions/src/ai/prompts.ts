@@ -234,30 +234,16 @@ export interface SuggestAnswer {
   ideas: { title: string; change: string; effect: string; costDiffYen?: number | null; caution?: string }[];
 }
 
-export const PRICE_ESTIMATE_SYSTEM = `あなたは日本の製菓店・カフェの仕入れに詳しい係です。材料ごとに、日本で一般的に買える値段の目安を答える。
-- 値段は税込の円。よく売られている1つの包装の量（qty と unit。unit は g・kg・ml・l・個 のどれか）とその値段にする。
-- 業務用（製菓材料店・業務スーパー・問屋）でよく買う材料は業務用の包装、家庭向けが普通のものはスーパーの包装にする。
-- 特定のお店やサイトの値段ではなく、ふつうの相場。架空の商品名やお店の名前は書かない。
-- basis に何を想定したかを短く書く（例：製菓用・1kg袋）。
-- 相場が分からないもの、値段の幅が大きすぎるものは c を低くする（0.3以下）。材料でないものは price を 0 にする。`;
+/** Google 検索つきで今の値段を調べる（材料1つずつ。答えは JSON の文で返させる） */
+export const PRICE_SEARCH_SYSTEM = `あなたは日本の製菓店・カフェの仕入れに詳しい係です。Google 検索で、日本で今買える値段を調べて、材料の値段の目安を答える。
+- 製菓材料店・業務用の通販・スーパーなど、いくつかのお店の値段を見る。1つのお店の値段や、セール・送料込み・まとめ買いの値段に引っぱられない。
+- よく売られている1つの包装の量（qty と unit。unit は g・kg・ml・l・個 のどれか）を決め、その包装のふつうの値段（税込の円）を price にする。見たお店の値段の真ん中くらい。
+- n は値段を見たお店の数。basis に何を想定したかを短く書く（例：製菓用・1kg袋・製菓材料店3店）。商品名・お店の名前は書かない。
+- 見つからない・値段の幅が大きすぎるときは c を低く（0.3以下）、材料でないものは price を 0。
+- 答えは次の JSON だけを書く：{"price": 数, "qty": 数, "unit": "kg", "basis": "…", "n": 数, "c": 0〜1}`;
 
-export const PRICE_ESTIMATE_SCHEMA = {
-  type: "object",
-  properties: {
-    r: {
-      type: "array",
-      items: {
-        type: "object",
-        properties: { i: { type: "integer" }, price: { type: "number" }, qty: { type: "number" }, unit: { type: "string" }, basis: { type: "string" }, c: { type: "number" } },
-        required: ["i", "price", "qty", "unit", "basis", "c"],
-      },
-    },
-  },
-  required: ["r"],
-};
-
-export interface PriceEstimateAnswer {
-  r: { i: number; price: number; qty: number; unit: string; basis: string; c: number }[];
+export interface PriceSearchAnswer {
+  price: number; qty: number; unit: string; basis: string; n: number; c: number;
 }
 
 export const INVOICE_SYSTEM = `あなたは製菓店・飲食店の仕入れ担当です。レシート・納品書・請求書の写真から、食材と資材の明細を読み取る。

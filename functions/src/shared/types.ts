@@ -245,6 +245,10 @@ export interface GlobalSuggestion {
   /** 値段（税抜・円）。AIの推定は note に理由 */
   price: { price: number; qty: number; unit: Unit; supplier?: string } | null;
   note: string;
+  /** AIが Google 検索で調べた値段のとき：見たページ（運営が精査で確かめる） */
+  sources?: { uri: string; title: string }[];
+  /** Google 検索の「検索の候補」（グラウンディングの結果を見せるときに出す決まり。精査画面に出す） */
+  searchHtml?: string;
   /** 同じ中身を何度も出さないための印 */
   sig: string;
   updatedAt?: unknown;

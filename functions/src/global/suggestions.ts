@@ -1,6 +1,6 @@
 // 共有の材料への提案（globalSuggestions）と、運営の精査。
 // - onIngredientShared：設定 shareIngredients がオンのお店で、アレルゲンを確かめた材料が変わったら提案を作る（新しい呼び方・アレルゲンの違い・自分の仕入れ値・共有に無い材料）
-// - estimateRefPrices：参考価格が無い共有の材料に、AIの推定値段を提案として作る（運営だけ。お店のクレジットは使わない）
+// - estimateRefPrices：参考価格が無い共有の材料の値段を、AIが Google 検索で調べて提案にする（出典つき。運営だけ。お店のクレジットは使わない）
 // - reviewSuggestion：運営が採用・却下する。採用した分だけ globalIngredients に入る
 // 運営かどうかは operators/{uid} があるか（Firebase コンソールで MASA が作る）
 import { HttpsError, onCall } from "firebase-functions/v2/https";
@@ -11,13 +11,14 @@ import { buildSuggestion, suggestionRefPrice } from "../shared/suggest";
 import type { GlobalIngredient, GlobalSuggestion, Ingredient } from "../shared/types";
 import { isUnit, type Unit } from "../shared/units";
 import { costYen, GEMINI_API_KEY, GEMINI_MODEL, REGION } from "../ai/config";
-import { addUsage, callGeminiJson, type Usage } from "../ai/gemini";
-import { PRICE_ESTIMATE_SCHEMA, PRICE_ESTIMATE_SYSTEM, type PriceEstimateAnswer } from "../ai/prompts";
+import { addUsage, callGeminiSearchJson, type Usage } from "../ai/gemini";
+import { PRICE_SEARCH_SYSTEM, type PriceSearchAnswer } from "../ai/prompts";
 import { idOf } from "../core/auth";
 
 const COL = "globalSuggestions";
-const ESTIMATE_BATCH = 20;
-const ESTIMATE_MAX = 100;
+/** 1回に調べる材料の数（1つずつ検索するので時間がかかる。残りはもう一度押す）と、同時に調べる数 */
+const ESTIMATE_MAX = 40;
+const SEARCH_PARALLEL = 4;
 
 export async function requireOperator(auth: { uid: string } | undefined): Promise<string> {
   if (!auth) throw new HttpsError("unauthenticated", "ログインしてください。");
@@ -53,45 +54,56 @@ export const onIngredientShared = onDocumentWritten(
   },
 );
 
+/**
+ * 参考価格の無い共有の材料の値段を、AIが Google 検索で今のネットの販売価格を調べて提案にする（材料1つずつ、出典つき）。
+ * 運営の費用（お店のクレジットは使わない）。結果は精査画面で運営が出典を見て採用する
+ */
 export const estimateRefPrices = onCall({ region: REGION, timeoutSeconds: 540, secrets: [GEMINI_API_KEY] }, async (req) => {
   const uid = await requireOperator(req.auth);
   const db = getFirestore();
-  const snap = await db.collection("globalIngredients").where("source", "in", ["base", "shop", "ugc"]).get();
-  const targets = snap.docs.map((d) => ({ ...(d.data() as GlobalIngredient), id: d.id })).filter((g) => !g.refPrice).slice(0, ESTIMATE_MAX);
-  if (!targets.length) return { made: 0, checked: 0 };
+  const [snap, pending] = await Promise.all([
+    db.collection("globalIngredients").where("source", "in", ["base", "shop", "ugc"]).get(),
+    db.collection(COL).where("source", "==", "ai").where("status", "==", "pending").get(),
+  ]);
+  const waiting = new Set(pending.docs.map((d) => String(d.get("globalId"))));
+  const all = snap.docs.map((d) => ({ ...(d.data() as GlobalIngredient), id: d.id })).filter((g) => !g.refPrice && !waiting.has(g.id));
+  const targets = all.slice(0, ESTIMATE_MAX);
+  if (!targets.length) return { made: 0, checked: 0, left: 0 };
   let usage: Usage = { in: 0, out: 0 };
   let made = 0;
-  for (let i = 0; i < targets.length; i += ESTIMATE_BATCH) {
-    const b = targets.slice(i, i + ESTIMATE_BATCH);
-    try {
-      const prompt = b.map((g, k) => `${k}. ${g.name}${g.aliases?.length ? `（${g.aliases.slice(0, 3).join("・")}）` : ""}`).join("\n");
-      const r = await callGeminiJson<PriceEstimateAnswer>({ system: PRICE_ESTIMATE_SYSTEM, prompt, schema: PRICE_ESTIMATE_SCHEMA, maxOutputTokens: 4096 });
-      usage = addUsage(usage, r.usage);
-      const w = db.batch();
-      b.forEach((g, k) => {
-        const a = r.output.r?.find((x) => x.i === k);
+  for (let i = 0; i < targets.length; i += SEARCH_PARALLEL) {
+    await Promise.all(targets.slice(i, i + SEARCH_PARALLEL).map(async (g) => {
+      try {
+        const r = await callGeminiSearchJson<PriceSearchAnswer>({
+          system: PRICE_SEARCH_SYSTEM,
+          prompt: `材料：${g.name}${g.aliases?.length ? `（別名：${g.aliases.slice(0, 3).join("・")}）` : ""}${g.category ? `\n分類：${g.category}` : ""}`,
+          maxOutputTokens: 2048,
+        });
+        usage = addUsage(usage, r.usage);
+        const a = r.output;
         const unit = String(a?.unit ?? "") as Unit;
         if (!a || !(a.price > 0) || !(a.qty > 0) || !isUnit(unit) || !["g", "kg", "ml", "l", "個"].includes(unit)) return;
         const c = Math.max(0, Math.min(1, Number(a.c) || 0));
+        const sources = r.sources.slice(0, 8);
         const s: Omit<GlobalSuggestion, "id"> = {
-          source: "ai", kind: "update", status: "pending", orgId: null, orgName: "AIの推定", ingredientId: null,
+          source: "ai", kind: "update", status: "pending", orgId: null, orgName: sources.length ? "ネットの価格（AIが検索）" : "AIの推定", ingredientId: null,
           globalId: g.id, globalName: g.name, name: g.name, aliases: [], allergens: null, labelName: "",
-          // 提案の値段は税抜で持つ（お店の提案とそろえる）。AIは税込で答えるので割り戻す
+          // 提案の値段は税抜で持つ（お店の提案とそろえる）。ネットの値段は税込なので割り戻す
           price: { price: Math.round((a.price / 1.08) * 10) / 10, qty: a.qty, unit },
-          note: `${String(a.basis ?? "").slice(0, 80)}・自信 ${Math.round(c * 100)}%・税込 ${Math.round(a.price)}円`,
+          note: `${String(a.basis ?? "").slice(0, 80)}・${Number(a.n) > 0 ? `${Math.round(Number(a.n))}店・` : ""}自信 ${Math.round(c * 100)}%・税込 ${Math.round(a.price)}円`,
+          sources, searchHtml: r.searchHtml.slice(0, 20000),
           sig: `ai:${a.price}:${a.qty}:${unit}`, updatedAt: FieldValue.serverTimestamp(),
         };
-        w.set(db.doc(`${COL}/ai_${g.id}`), s);
+        await db.doc(`${COL}/ai_${g.id}`).set(s);
         made++;
-      });
-      await w.commit();
-    } catch (e) {
-      console.warn("参考価格の推定に失敗", String((e as Error)?.message ?? e));
-    }
+      } catch (e) {
+        console.warn("参考価格の検索に失敗", g.id, String((e as Error)?.message ?? e));
+      }
+    }));
   }
-  // AIの原価は aiRequests だけに残す（お店の記録には出さない）
-  await db.collection("aiRequests").add({ kind: "estimateRefPrices", by: uid, usage, costYen: costYen(usage), model: GEMINI_MODEL, at: FieldValue.serverTimestamp() });
-  return { made, checked: targets.length };
+  // AIの原価は aiRequests だけに残す（お店の記録には出さない）。検索は1回ごとに別の料金がかかる
+  await db.collection("aiRequests").add({ kind: "estimateRefPrices", by: uid, usage, searches: targets.length, costYen: costYen(usage), model: GEMINI_MODEL, at: FieldValue.serverTimestamp() });
+  return { made, checked: targets.length, left: all.length - targets.length };
 });
 
 interface Decision {
