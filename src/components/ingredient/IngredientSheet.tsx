@@ -19,8 +19,10 @@ import { PhotoThumb } from "./PhotoThumb";
 import { WebSources } from "../common/WebSources";
 import { ProductForm } from "./ProductForm";
 import { WebOfferList } from "./WebOfferList";
-import { offerPatch } from "@shared/offers";
+import { offerPatch, OFFER_TAX, webPriceInUse, type RefWeb } from "@shared/offers";
+import { per100 } from "@shared/invoice";
 import { numText } from "../../lib/num";
+import { fmtAt } from "../../lib/date";
 
 const BUY_UNITS = UNITS.filter((u) => u !== "適量");
 const PIECE: Unit[] = ["個", "枚", "本"];
@@ -59,7 +61,7 @@ export function IngredientSheet({ orgId, uid, ing, usedIn, usedBy = [], onClose 
         labelName: d.labelName?.trim() ?? "", isAdditive: !!d.isAdditive, supplier: d.supplier?.trim() ?? "", globalRef: d.globalRef ?? null,
         photoPath: d.photoPath ?? null, priceSource: d.purchasePrice === null ? null : d.priceSource ?? null,
         // ネットで調べた参考価格の出典は、参考価格のままのときだけ残す
-        refWeb: d.purchasePrice !== null && d.priceSource === "ref" ? d.refWeb ?? null : null,
+        refWeb: d.refWeb ?? null,
       };
       if (ing) await saveDoc(`organizations/${orgId}/ingredients/${ing.id}`, data);
       else await createIngredient(orgId, uid, data);
@@ -123,11 +125,11 @@ export function IngredientSheet({ orgId, uid, ing, usedIn, usedBy = [], onClose 
           </div>
           {tax > 0 && d.purchasePrice !== null && <p className="text-xs text-muted">税抜 {yen(d.purchasePrice)} で原価を計算します。</p>}
         {d.priceSource === "ref" && d.purchasePrice !== null && (
-          <div className="text-xs text-warn-strong">
-            <p><RefBadge /> {d.refWeb ? `AIがネットの販売価格を調べて入れた目安です（${d.refWeb.note}）` : "共有の材料の参考価格を入れています"}。お店の仕入れ値に直すと、この印は消えます。</p>
-            {d.refWeb && <WebSources sources={d.refWeb.sources} searchHtml={d.refWeb.searchHtml} />}
-          </div>
+          <p className="text-xs text-warn-strong">
+            <RefBadge /> {webPriceInUse(d) ? "AIがネットの販売価格を調べて入れた目安です" : "共有の材料の参考価格を入れています"}。お店の仕入れ値に直すと、この印は消えます{webPriceInUse(d) ? "（調べた値段の記録は下に残ります）" : ""}。
+          </p>
         )}
+        {d.refWeb && <WebPriceRecord w={d.refWeb} ing={d} />}
           <p className="text-xs text-muted">{perG !== null ? `1gあたり ${yen(perG)}（税抜）／1kgあたり ${yen(perG * 1000)}` : "1gあたりの値段を出すには、仕入れ値と量を入れてください。"}</p>
         </div>
         {ing && <WebOfferList ing={{ ...ing, ...d, id: ing.id }} onUse={(o) => { const p = offerPatch(o); setPriceText(String(o.price)); set(p); }} />}
@@ -216,3 +218,20 @@ function Aliases({ list, set }: { list: string[]; set: (l: string[]) => void }) 
     </div>
   );
 }
+
+/** AIがネットで調べた値段の記録。お店が仕入れ値を直しても残し、今の仕入れ値と100gあたりで比べる */
+function WebPriceRecord({ w, ing }: { w: RefWeb; ing: Omit<Ingredient, "id"> }) {
+  const web = w.price && w.qty && w.unit ? per100(w.price, OFFER_TAX, w.qty, w.unit, ing.gramsPerPiece) : null;
+  const now = ing.purchasePrice !== null && !webPriceInUse(ing) ? per100(ing.purchasePrice, 0, ing.purchaseQty, ing.purchaseUnit, ing.gramsPerPiece) : null;
+  const diff = web !== null && now ? Math.round(((now - web) / web) * 100) : null;
+  return (
+    <div className="space-y-1 rounded-xl border border-line p-3 text-xs">
+      <p className="text-sm font-bold">AIがネットで調べた値段{w.at ? <span className="ml-1 text-[11px] font-normal text-muted">{fmtAt(w.at)}</span> : null}</p>
+      {w.price && w.qty ? <p>税込 <b>{yen(w.price)}</b>／{w.qty}{w.unit}{web !== null && <span className="text-muted">（100gあたり税抜 {yen(web)}）</span>}</p> : null}
+      <p className="text-muted">{w.note}</p>
+      {diff !== null && diff !== 0 && <p className={diff < 0 ? "text-ok" : "text-ng"}>今の仕入れ値はネットより{diff < 0 ? `${-diff}%安い` : `${diff}%高い`}です（100gあたり・税抜）</p>}
+      <WebSources sources={w.sources} searchHtml={w.searchHtml} />
+    </div>
+  );
+}
+

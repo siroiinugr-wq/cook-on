@@ -4,6 +4,7 @@ import { unitCostPerGram } from "@shared/cost";
 import { useOrgCtx } from "../contexts/OrgContext";
 import { useCol } from "./useData";
 import { useIngredients } from "./useIngredients";
+import { useAutoRefPrice } from "./useAutoRefPrice";
 
 export interface Todo { key: string; title: string; sub: string; to: string; count: number; tone: "ng" | "warn" | "info" }
 
@@ -12,6 +13,8 @@ export function useTodo() {
   const alerts = useCol(`organizations/${orgId}/alerts`, { where: [["read", "==", false]] });
   const inbox = useCol(canEdit ? `organizations/${orgId}/purchaseInbox` : null);
   const ings = useIngredients(orgId);
+  // 参考価格があるのに空の材料は、ここで自動で入れる（どの画面を開いても動くように、下の入口と同じ所で）
+  useAutoRefPrice(orgId, ings.list, canEdit && !ings.loading);
 
   return useMemo(() => {
     const noPrice = ings.list.filter((i) => unitCostPerGram(i) === null).length;

@@ -13,7 +13,7 @@ import { Icon, type IconName } from "./Icon";
 type Tab = "recipes" | "materials" | "buy" | "todo" | "settings";
 const NAV: { tab: Tab; to: string; label: string; icon: IconName }[] = [
   { tab: "recipes", to: "/", label: "レシピ", icon: "book" },
-  { tab: "materials", to: "/ingredients", label: "材料", icon: "box" },
+  { tab: "materials", to: "/ingredients", label: "材料", icon: "scale" },
   { tab: "buy", to: "/ingredients/invoices", label: "仕入れ", icon: "receipt" },
   { tab: "todo", to: "/todo", label: "やること", icon: "sparkle" },
   { tab: "settings", to: "/settings", label: "設定", icon: "settings" },

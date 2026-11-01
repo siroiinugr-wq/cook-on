@@ -3,7 +3,9 @@
 import { useState } from "react";
 import { CREDIT_COST } from "@shared/credits";
 import { yen } from "@shared/cost";
-import { rankOffers, type WebOffer, type WebOffers } from "@shared/offers";
+import { rankOffers, type PastOffers, type WebOffer, type WebOffers } from "@shared/offers";
+import { fmtAt } from "../../lib/date";
+import { Accordion } from "../common/Accordion";
 import type { Ingredient } from "@shared/types";
 import { useOrgCtx } from "../../contexts/OrgContext";
 import { call, newRequestId, saveDoc } from "../../lib/store";
@@ -48,7 +50,7 @@ export function WebOfferList({ ing, onUse }: { ing: Ingredient; onUse: (o: WebOf
     <div className="space-y-2 rounded-xl border border-line p-3">
       <div className="flex items-center justify-between gap-2">
         <p className="text-sm font-bold">ネットの値段と比べる</p>
-        {offers && <span className="text-[11px] text-muted">{offers.at.slice(0, 10)} に調べた</span>}
+        {offers && <span className="text-[11px] text-muted">{fmtAt(offers.at)} に調べた</span>}
       </div>
       {ranked.length > 0 && (
         <ul className="space-y-1.5">
@@ -74,10 +76,32 @@ export function WebOfferList({ ing, onUse }: { ing: Ingredient; onUse: (o: WebOf
       )}
       {offers && <p className="text-[11px] text-muted">AIが見つけた範囲の目安です。送料・まとめ買いの条件・今の値段は、売り場のページで確かめてください。</p>}
       {offers && <WebSources searchHtml={offers.searchHtml} />}
+      {(offers?.past?.length ?? 0) > 0 && (
+        <Accordion title="前に調べた結果" summary={`${offers!.past!.length}回分（日時と売り場・値段を残しています）`}>
+          <ul className="space-y-3">{offers!.past!.map((p) => <PastList key={p.at} p={p} ing={ing} />)}</ul>
+        </Accordion>
+      )}
       {err && <p className="text-xs text-ng">{err}</p>}
       <button type="button" disabled={busy} onClick={search} className={`w-full ${ui.secondary} text-sm`}>
         {busy ? "探しています…" : offers ? "もう一度調べる" : "売っているお店と値段をAIが探す"}{!busy && <CostTag credits={CREDIT_COST.priceCompare} />}
       </button>
     </div>
+  );
+}
+
+/** 前に調べた結果（その時の売り場・値段・量。100gあたりの安い順） */
+function PastList({ p, ing }: { p: PastOffers; ing: Ingredient }) {
+  return (
+    <li className="space-y-1">
+      <p className="text-xs font-bold">{fmtAt(p.at)}</p>
+      <ul className="space-y-0.5 text-xs">
+        {rankOffers(p.list, ing).map((o) => (
+          <li key={o.index} className="flex justify-between gap-2">
+            <span className="min-w-0">{p.picked === o.index ? "★ " : ""}{o.url ? <a href={o.url} target="_blank" rel="noreferrer" className="underline">{o.shop}</a> : o.shop}<span className="text-muted">・{o.product}・税込 {yen(o.price)}／{o.qty}{o.unit}</span></span>
+            <span className="shrink-0">{o.per100 !== null ? `${yen(o.per100)}/100g` : "—"}</span>
+          </li>
+        ))}
+      </ul>
+    </li>
   );
 }

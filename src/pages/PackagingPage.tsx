@@ -37,7 +37,6 @@ export function PackagingPage() {
     <div className="space-y-5">
       <PageHead title="包装資材" />
       <MaterialTabs />
-      <p className="text-sm text-ink-soft">袋・脱酸素剤・シールなどの値段を入れ、よく使う組み合わせをセットにしておくと、レシピに「1個あたり」で付けて原価に入れられます。</p>
 
       <section className="space-y-2">
         <div className="flex items-center justify-between"><h2 className="font-bold">セット</h2>{add(() => setEditSet("new"), "セットを作る")}</div>
