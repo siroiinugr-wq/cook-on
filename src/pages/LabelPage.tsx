@@ -11,6 +11,7 @@ import { call } from "../lib/store";
 import { Icon } from "../components/common/Icon";
 import { ui } from "../components/common/ui";
 import { LabelSheet, printCss, type LabelData } from "../components/label/LabelSheet";
+import { numText } from "../lib/num";
 
 const PAPER_KEY = "cookon-labelPaper";
 const readPaper = () => { try { return localStorage.getItem(PAPER_KEY); } catch { return null; } };
@@ -122,7 +123,7 @@ export function LabelPage() {
             <select className={input} value={paperId} onChange={(e) => { setPaperId(e.target.value); keepPaper(e.target.value); }}>
               {LABEL_PAPERS.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select></label>
-          <label className="flex items-center gap-2 text-sm">枚数<input className={`${input} w-20`} type="number" min={1} max={200} value={copies} onChange={(e) => setCopies(Math.max(1, Math.min(200, Number(e.target.value) || 1)))} /></label>
+          <label className="flex items-center gap-2 text-sm">枚数<input className={`${input} w-20`} inputMode="numeric" value={copies} onChange={(e) => setCopies(Math.max(1, Math.min(200, Number(numText(e.target.value)) || 1)))} /></label>
           <button disabled={blocked} className={`w-full ${ui.primary} flex items-center justify-center gap-2`} onClick={() => window.print()}><Icon name="printer" />{blocked ? "上の赤い項目を済ませると印刷できます" : "印刷する"}</button>
           <p className="text-xs text-muted">印刷の画面で「余白なし」「倍率100%」を選んでください。PDFに保存もできます。</p>
         </section>

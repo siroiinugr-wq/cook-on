@@ -7,6 +7,7 @@ import { ESTAT_CREDIT, refPriceExTax } from "@shared/refPrice";
 import type { GlobalIngredient, Ingredient } from "@shared/types";
 import { UNITS, type Unit } from "@shared/units";
 import { getOnce, saveDoc } from "../../lib/store";
+import { numText } from "../../lib/num";
 
 const PAGE = 20;
 const BUY_UNITS = UNITS.filter((u) => u !== "適量");
@@ -75,8 +76,8 @@ function Row({ orgId, ing, uses, g }: { orgId: string; ing: Ingredient; uses: nu
     }
   }
 
-  const n = Number(price.replace(/[^\d.]/g, ""));
-  const q = Number(qty.replace(/[^\d.]/g, ""));
+  const n = Number(numText(price));
+  const q = Number(numText(qty));
   const input = "rounded-lg border border-line-strong bg-paper px-2 py-1.5 text-sm";
   return (
     <li className="space-y-1.5 py-2.5">

@@ -5,6 +5,7 @@ import { calcPackaging, PACK_LIMITS, type PackCtx } from "@shared/packaging";
 import type { PackagingMaterial, PackagingSet, RecipePackLine } from "@shared/types";
 import { Icon } from "../../common/Icon";
 import { ui } from "../../common/ui";
+import { numText } from "../../../lib/num";
 
 interface Props {
   lines: RecipePackLine[];
@@ -46,7 +47,7 @@ export function PackagingEditor({ lines, set, materials, sets, ctx }: Props) {
               {known && cost.missing > 0 && <span className="block text-xs text-warn-strong">値段の無い資材が{cost.missing}つ</span>}
             </span>
             <input className="w-14 rounded-lg border border-line-strong px-2 py-1 text-right" inputMode="decimal" aria-label="1個に使う数" value={l.qty}
-              onChange={(e) => patch(i, { qty: Number(e.target.value.replace(/[^\d.]/g, "")) || 0 })} />
+              onChange={(e) => patch(i, { qty: Number(numText(e.target.value)) || 0 })} />
             <span className="w-16 text-right text-xs">{cost.cost === null ? "—" : yen(cost.cost)}</span>
             <button className="px-1 text-faint" aria-label="この包装を外す" onClick={() => set(lines.filter((_, j) => j !== i))}><Icon name="trash" className="h-4 w-4" /></button>
           </div>

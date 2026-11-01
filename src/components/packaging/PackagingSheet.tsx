@@ -8,6 +8,7 @@ import { newId, removeDoc, saveDoc } from "../../lib/store";
 import { useConfirm } from "../common/ConfirmDialog";
 import { Sheet } from "../common/Sheet";
 import { ui } from "../common/ui";
+import { numText } from "../../lib/num";
 
 export function PackagingSheet({ orgId, uid, mat, usedIn, onClose }: { orgId: string; uid: string; mat: PackagingMaterial | null; usedIn: number; onClose: () => void }) {
   const [name, setName] = useState(mat?.name ?? "");
@@ -19,7 +20,7 @@ export function PackagingSheet({ orgId, uid, mat, usedIn, onClose }: { orgId: st
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const confirm = useConfirm();
-  const num = (v: string) => (v.trim() === "" ? null : Number(v.replace(/[^\d.]/g, "")));
+  const num = (v: string) => (v.trim() === "" ? null : Number(numText(v)));
   const exTax = num(price) === null ? null : toExTax(num(price)!, tax);
   const per = packUnitCost({ purchasePrice: exTax, purchaseQty: num(qty) ?? 0 });
 

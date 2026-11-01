@@ -8,6 +8,7 @@ import { useConfirm } from "../common/ConfirmDialog";
 import { Icon } from "../common/Icon";
 import { Sheet } from "../common/Sheet";
 import { ui } from "../common/ui";
+import { numText } from "../../lib/num";
 
 interface Props {
   orgId: string;
@@ -73,7 +74,7 @@ export function PackSetSheet({ orgId, uid, set, materials, usedIn, onClose }: Pr
               <div key={it.packagingId} className="flex items-center gap-1.5 rounded-xl border border-line bg-paper p-2 text-sm">
                 <span className="min-w-0 flex-1 truncate">{m?.name ?? `${it.name}（消した資材）`}</span>
                 <input className="w-14 rounded-lg border border-line-strong px-2 py-1 text-right" inputMode="decimal" value={it.qty}
-                  onChange={(e) => patch(i, { qty: Number(e.target.value.replace(/[^\d.]/g, "")) || 0 })} />
+                  onChange={(e) => patch(i, { qty: Number(numText(e.target.value)) || 0 })} />
                 <span className="w-6 text-xs text-muted">{m?.unit ?? ""}</span>
                 <span className="w-16 text-right text-xs">{unit === null ? <span className="text-warn-strong">値段なし</span> : yen(unit * it.qty)}</span>
                 <button className="px-1 text-faint" aria-label="外す" onClick={() => setItems(items.filter((_, j) => j !== i))}><Icon name="trash" className="h-4 w-4" /></button>

@@ -15,6 +15,7 @@ import { ui } from "../common/ui";
 import { RefBadge } from "./RefBadge";
 import { GlobalInfo } from "./GlobalInfo";
 import { PhotoThumb } from "./PhotoThumb";
+import { numText } from "../../lib/num";
 
 const BUY_UNITS = UNITS.filter((u) => u !== "適量");
 const PIECE: Unit[] = ["個", "枚", "本"];
@@ -28,7 +29,7 @@ export function IngredientSheet({ orgId, uid, ing, usedIn, onClose }: { orgId: s
   const confirm = useConfirm();
   const hist = useCol<Hist>(ing ? `organizations/${orgId}/ingredients/${ing.id}/priceHistory` : null, { orderBy: ["at", "desc"], limit: 10 });
   const set = (p: Partial<Ingredient>) => setD({ ...d, ...p });
-  const num = (v: string) => (v.trim() === "" ? null : Number(v.replace(/[^\d.]/g, "")));
+  const num = (v: string) => (v.trim() === "" ? null : Number(numText(v)));
   // 値段の欄は「入れた形」（税込なら税込）で出し、保存する purchasePrice は税抜に直す
   const tax = d.priceTax ?? 0;
   const [priceText, setPriceText] = useState(d.purchasePrice === null ? "" : String(fromExTax(d.purchasePrice, tax)));
