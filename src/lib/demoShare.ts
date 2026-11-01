@@ -101,6 +101,7 @@ export function demoLinkCall(name: string): unknown {
       { date: now.slice(0, 10), supplier: "業務スーパー", name: "ｸﾞﾗﾆｭｰﾄｳ 1KG", genericName: "グラニュー糖", quantity: 2, unitPrice: 278, amount: 556, taxRate: 8, taxIncluded: true, ref: "demo" },
       { date: now.slice(0, 10), supplier: "業務スーパー", name: "とちおとめ 300g", genericName: "いちご", quantity: 1, unitPrice: 698, amount: 698, taxRate: 8, taxIncluded: true, ref: "demo" },
       { date: now.slice(0, 10), supplier: "業務スーパー", name: "ﾖﾂﾊﾞﾊﾞﾀｰ食塩不使用", genericName: "無塩バター", quantity: 1, unitPrice: 1080, amount: 1080, taxRate: 8, taxIncluded: true, ref: "demo" },
+      { date: now.slice(0, 10), supplier: "業務スーパー", name: "ﾀｶﾅｼ 特選北海道", genericName: "生クリーム", quantity: 1, unitPrice: 538, amount: 538, taxRate: 8, taxIncluded: true, ref: "demo" },
       { date: now.slice(0, 10), supplier: "業務スーパー", name: "ﾀﾏｺﾞ M 10ｺ", genericName: "鶏卵", quantity: 1, unitPrice: 298, amount: 298, taxRate: 8, taxIncluded: true, ref: "demo" },
     ],
   });

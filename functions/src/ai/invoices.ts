@@ -3,14 +3,16 @@
 // お店の材料の一覧も一緒に渡し、AIに同じ材料を選ばせる（候補に無い番号は捨てる）。保存はしない：画面で人が確かめて材料に反映する
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { getStorage } from "firebase-admin/storage";
-import { AI_MATCH_BATCH, INVOICE_MAX_PHOTOS } from "../shared/credits";
-import { INVOICE_UNITS, isPieceUnit, SIZE_BASES, type InvoiceLine, type SizeBasis } from "../shared/invoice";
+import { AI_MATCH_BATCH, INVOICE_MAX_PHOTOS, SIZE_SEARCH_BATCH, SIZE_SEARCH_MAX } from "../shared/credits";
+import { INVOICE_UNITS, isPieceUnit, productSizeKey, SIZE_BASES, sameSizePrice, type InvoiceLine, type SizeBasis } from "../shared/invoice";
+import { toExTax } from "../shared/cost";
 import type { Unit } from "../shared/units";
 import { GEMINI_API_KEY, REGION } from "./config";
 import { idOf, requireRole, requireVerified, ROLES } from "../core/auth";
 import { requestIdOf, runWithCredits } from "../core/credits";
-import { addUsage, callGeminiJson, type Usage } from "./gemini";
-import { INVOICE_SCHEMA, INVOICE_SYSTEM, PURCHASE_MATCH_SCHEMA, PURCHASE_MATCH_SYSTEM, type InvoiceAnswer, type PurchaseMatchAnswer, type SizeAnswer } from "./prompts";
+import { addUsage, callGeminiJson, callGeminiSearchJson, type Usage, type WebSource } from "./gemini";
+import { FieldValue, getFirestore } from "firebase-admin/firestore";
+import { INVOICE_SCHEMA, INVOICE_SYSTEM, PURCHASE_MATCH_SCHEMA, PURCHASE_MATCH_SYSTEM, SIZE_SEARCH_SYSTEM, type InvoiceAnswer, type PurchaseMatchAnswer, type SizeAnswer, type SizeSearchAnswer } from "./prompts";
 import { loadIngredientMap } from "../recipes/save";
 import { loadOrgMatchData, resolveNames } from "./resolve";
 
@@ -180,5 +182,98 @@ export const matchPurchaseLines = onCall({ region: REGION, timeoutSeconds: 300, 
     usage = await attachGlobals(orgId, asLines, usage);
     asLines.forEach((l, k) => Object.assign(out[k], { ingredientId: l.ingredientId, confidence: l.confidence, global: l.global ?? null }));
     return { result: { matches: out }, usage, usedUnits: ok };
+  });
+});
+
+/** 共有の「商品の量」の表（productSizes/{照合キー}）。Functions だけが読み書きする。お店の名前・値段の出どころは残さない */
+interface ProductSize {
+  name: string;
+  qty: number;
+  unit: Unit;
+  gramsPerPiece: number | null;
+  product: string;
+  note: string;
+  /** 調べたときの1つの値段（税抜）。値段が大きく違えば容量違いの商品かもしれないので使わない */
+  priceExTax: number;
+  sources: WebSource[];
+  searchHtml: string;
+  hits: number;
+}
+const SEARCH_PARALLEL = 4;
+
+/**
+ * 量をネットで確かめる：AIでも決めきれなかった品を、Google 検索つきのAIが1品ずつ調べる（SIZE_SEARCH_BATCH 品で1クレジット sizeSearch）。
+ * 調べた量は共有の表に覚え、ほかのお店が同じ商品（値段が近い）を読んだときは検索せず無料で返す。保存はしない：画面で人が確かめて反映する。
+ * 見たページと Google の「検索の候補」は画面に出す（グラウンディングの利用条件）
+ */
+export const searchPackSizes = onCall({ region: REGION, timeoutSeconds: 300, secrets: [GEMINI_API_KEY] }, async (req) => {
+  const orgId = idOf(req.data?.orgId, "店舗ID");
+  const uid = requireRole(req.auth, orgId, ROLES.EDIT);
+  requireVerified(req.auth);
+  const requestId = requestIdOf(req.data?.requestId);
+  type In = { name: string; generic: string; price: number; tax: number; clue: string };
+  const items: In[] = (Array.isArray(req.data?.lines) ? req.data.lines : []).map((x: Record<string, unknown>) => ({
+    name: String(x?.name ?? "").trim().slice(0, 80), generic: String(x?.generic ?? "").trim().slice(0, 40),
+    price: Number(x?.price) > 0 ? Number(x.price) : 0, tax: [0, 0.08, 0.1].includes(Number(x?.tax)) ? Number(x.tax) : 0.08,
+    clue: String(x?.clue ?? "").trim().slice(0, 160),
+  }));
+  if (!items.length || items.some((i) => !i.name)) throw new HttpsError("invalid-argument", "調べる品名がありません。");
+  if (items.length > SIZE_SEARCH_MAX) throw new HttpsError("invalid-argument", `1回に調べられるのは${SIZE_SEARCH_MAX}品までです。`);
+
+  type Out = Pick<InvoiceLine, "qty" | "unit" | "gramsPerPiece" | "sizeNote" | "sizeSources" | "sizeSearchHtml"> & { found: boolean; shared: boolean };
+  const none: Out = { found: false, shared: false, qty: 0, unit: "個", gramsPerPiece: null, sizeNote: "", sizeSources: [], sizeSearchHtml: "" };
+  const db = getFirestore();
+  const keys = items.map((i) => productSizeKey(i.name));
+  // 共有の表で分かる品（値段が近いもの）は無料
+  const snaps = await Promise.all(keys.map((k) => (k ? db.doc(`productSizes/${k}`).get() : Promise.resolve(null))));
+  const out: Out[] = items.map((it, k) => {
+    const c = snaps[k]?.exists ? (snaps[k]!.data() as ProductSize) : null;
+    if (!c || !sameSizePrice(c.priceExTax, it.price, it.tax)) return { ...none };
+    return { found: true, shared: true, qty: c.qty, unit: c.unit, gramsPerPiece: c.gramsPerPiece, sizeNote: c.note, sizeSources: c.sources, sizeSearchHtml: c.searchHtml };
+  });
+  // 共有の表を使った回数（どの品がよく使われるか）
+  await Promise.all(out.map((o, k) => (o.shared && keys[k] ? db.doc(`productSizes/${keys[k]}`).update({ hits: FieldValue.increment(1) }).catch(() => undefined) : undefined)));
+  const todo = items.map((it, k) => ({ it, k })).filter(({ k }) => !out[k].found);
+  if (!todo.length) return { results: out, searched: 0 };
+
+  return runWithCredits({ orgId, uid, action: "sizeSearch", units: Math.ceil(todo.length / SIZE_SEARCH_BATCH), requestId }, async () => {
+    let usage: Usage = { in: 0, out: 0 };
+    let ok = 0;
+    for (let i = 0; i < todo.length; i += SEARCH_PARALLEL) {
+      await Promise.all(todo.slice(i, i + SEARCH_PARALLEL).map(async ({ it, k }) => {
+        try {
+          const r = await callGeminiSearchJson<SizeSearchAnswer>({
+            system: SIZE_SEARCH_SYSTEM,
+            prompt: `品名：${it.name}${it.generic ? `\n一般名：${it.generic}` : ""}\n値段：1つ${Math.round(it.price)}円（${it.tax ? `税込${Math.round(it.tax * 100)}%` : "税抜"}）${it.clue ? `\n手がかり：${it.clue}` : ""}`,
+            maxOutputTokens: 1024,
+          });
+          usage = addUsage(usage, r.usage);
+          ok++;
+          const a = r.output;
+          const unit = String(a?.unit ?? "") as Unit;
+          const c = Math.max(0, Math.min(1, Number(a?.c) || 0));
+          if (!a || c < 0.6 || !(Number(a.qty) > 0) || !INVOICE_UNITS.includes(unit)) return;
+          const gpp = Number(a.gpp);
+          const found: Out = {
+            found: true, shared: false, qty: Number(a.qty), unit,
+            gramsPerPiece: isPieceUnit(unit) && gpp > 0 && gpp < 5000 ? Math.round(gpp * 10) / 10 : null,
+            sizeNote: [String(a.product ?? "").trim().slice(0, 40), String(a.note ?? "").trim().slice(0, 40)].filter(Boolean).join("：").slice(0, 80),
+            sizeSources: r.sources.slice(0, 5), sizeSearchHtml: r.searchHtml.slice(0, 20000),
+          };
+          out[k] = found;
+          if (keys[k]) {
+            const doc: ProductSize = {
+              name: it.name, qty: found.qty, unit, gramsPerPiece: found.gramsPerPiece ?? null, product: String(a.product ?? "").slice(0, 80),
+              note: found.sizeNote ?? "", priceExTax: toExTax(it.price, it.tax), sources: found.sizeSources ?? [], searchHtml: found.sizeSearchHtml ?? "", hits: 0,
+            };
+            await db.doc(`productSizes/${keys[k]}`).set({ ...doc, updatedAt: FieldValue.serverTimestamp() });
+          }
+        } catch (e) {
+          console.warn("量の検索に失敗", orgId, String((e as Error)?.message ?? e));
+        }
+      }));
+    }
+    if (!ok) throw new HttpsError("internal", "ネットで調べられませんでした。クレジットは使われていません。");
+    return { result: { results: out, searched: ok }, usage, usedUnits: Math.ceil(ok / SIZE_SEARCH_BATCH) };
   });
 });

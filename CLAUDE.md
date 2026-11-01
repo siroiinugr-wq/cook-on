@@ -41,6 +41,7 @@ globalIngredients/{id}                     共有の材料（base_* ＝はじめ
 ugcProducts/{id}                           既製品（お店どうしで確認）
 tenantDomains/{ドメイン}                   独自ドメイン → orgId
 aiRequests/{orgId}_{requestId}             受付票（Functions だけ。AIの原価もここ）
+productSizes/{照合キー}                     ネットで確かめた商品の内容量（Functions だけ。お店をまたいで使い回す）
 ```
 
 ## このアプリだけの決まり
@@ -64,6 +65,7 @@ aiRequests/{orgId}_{requestId}             受付票（Functions だけ。AIの�
 - **AI経理から自動で届く**（`link/keiri.ts`）：設定「AI経理と連携」で `createLinkCode`（管理者、コードは1回だけ表示、ハッシュを `linkCodes/{hash}` に）→ AI経理の設定に貼る → AI経理が承認のたびに `receivePurchaseLines`（HTTPS・公開、`https://asia-northeast1-cook-on-plaz.cloudfunctions.net/receivePurchaseLines`）へレシート1枚ずつ送る。`organizations/{orgId}/purchaseInbox` に置くだけ（同じレシートは上書き、300件まで）。画面の「AI経理から届いた明細」で読み込むと消す。状態は `organizations.keiriLink`（画面から変えられない）。この URL は AI経理の `integrations/cookon.ts` にも書いてある
 - **品名からAIが判断**（写真もファイルも）：AIが一般名（`generic`：ﾊｸﾘｷｺ→薄力粉）も返し、お店に無い材料は `attachGlobals`（`ai/invoices.ts`、`resolveNames`）で共有の材料（成分表の成分・アレルゲン・参考価格）を探す。画面は「新しく登録：薄力粉（成分表・アレルゲンつき）」を選んでおき、`globalRef` 付きで作る。各行に100gあたりの税抜の値段と前との差（`per100`）
 - **量・重さ・入り数もAIが判断**（`shared/invoice.ts`）：品名の量は `sizeFromName`（450g・200ml×3・10個入・6P）で無料で読む。AIは量と根拠 `size`（printed＝書いてある／known＝商品の決まった量／price＝値段から推定）・理由 `sizeNote`・個で買うものの1つの重さ `gramsPerPiece` を返す（プロンプトは `prompts.ts` の `SIZE_RULES`）。「AIで判断する」（`matchPurchaseLines`、`aiMatch` 20行で1クレジット）は結び先の無い行に加え、`sizeDoubt`＝量が分からない・1つの重さが分からない・今の材料の100gあたりと2.5倍以上違う行も `fixed` で量だけ確かめる（手がかりは `sizeHint`）。推定は黄色で出し、人が量を直すと `edited`。反映で材料に無い `gramsPerPiece` を写す
+- **量をネットで確かめる**（`searchPackSizes`、`ai/invoices.ts`）：「AIで判断する」のあとも量が決まらない行（`needsWebSize`）を、Google 検索つきのAI（`callGeminiSearchJson`、`SIZE_SEARCH_SYSTEM`）が1品ずつ調べる（`sizeSearch`＝`SIZE_SEARCH_BATCH` 5品で1クレジット、1回20品）。見たページと検索の候補は `components/common/WebSources.tsx` で出す（利用の条件）。調べた量は共有の表 `productSizes/{productSizeKey}`（Functions だけ）に覚え、値段が近い（`sameSizePrice`）同じ商品はほかのお店でも検索せず無料
 - 仕入れ値は税抜で持つ（`purchasePrice`）。税込で入れたら `priceTax`（0・0.08・0.1）に印を残し、`toExTax`/`fromExTax`（`shared/cost.ts`）で直す
 - 既製品はパッケージの裏を撮ると `readProductPhoto`（`ai/productPhoto.ts`、1クレジット）が下書きし、裏の写真は読んだら消す。表の写真はAIに渡さず、登録のときに上げて商品の画像にする（`ugc/{orgId}/{draftId}/front.jpg`）。登録するとお店の材料に入り、`settings.shareProducts` がオンならみんなの一覧（ugcProducts）にも入る（null＝初回に1回だけ聞く）
 - 材料の写真は `orgs/{orgId}/ingredients/`（`photoPath`）

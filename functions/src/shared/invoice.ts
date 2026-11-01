@@ -1,6 +1,6 @@
 // レシート・納品書から読んだ明細（ai/invoices.ts）を、お店の材料の仕入れ値に直す。画面（確かめて反映）とテストで使う。
 import { toExTax } from "./cost";
-import { buildIndex, exactMatch, rankCandidates } from "./matchKey";
+import { buildIndex, exactMatch, rankCandidates, toMatchKey } from "./matchKey";
 import type { PurchaseLine } from "./purchaseLines";
 import type { Ingredient } from "./types";
 import type { Unit } from "./units";
@@ -35,20 +35,23 @@ export interface InvoiceLine {
   global?: { id: string; name: string; confidence: number } | null;
   /**
    * 量（qty・unit）をどう決めたか。printed＝品名に書いてある、known＝商品の決まった量をAIが知っている、
-   * price＝値段からAIが推定、none＝分からない（1個のまま）、edited＝人が直した。無ければ分からない扱い
+   * price＝値段からAIが推定、web＝ネット（Google 検索）で確かめた、none＝分からない（1個のまま）、edited＝人が直した。無ければ分からない扱い
    */
   size?: SizeBasis;
+  /** ネットで確かめたときに見たページと、Google の「検索の候補」（画面に出すのが利用の条件） */
+  sizeSources?: { uri: string; title: string }[];
+  sizeSearchHtml?: string;
   /** AIが量を決めた理由（「よつ葉バター食塩不使用は通常450g」など。画面に小さく出す） */
   sizeNote?: string;
   /** 個・枚・本で買うものの1つの重さ（g。卵M＝約50g）。材料に無ければ反映のとき写す */
   gramsPerPiece?: number | null;
 }
 
-export type SizeBasis = "printed" | "known" | "price" | "none" | "edited";
-export const SIZE_BASES: SizeBasis[] = ["printed", "known", "price", "none", "edited"];
+export type SizeBasis = "printed" | "known" | "price" | "web" | "none" | "edited";
+export const SIZE_BASES: SizeBasis[] = ["printed", "known", "price", "web", "none", "edited"];
 /** 画面に出す「量の根拠」 */
 export const SIZE_LABEL: Record<SizeBasis, string> = {
-  printed: "品名に書いてある量", known: "AIの推定（商品の決まった量）", price: "AIの推定（値段から）", none: "量が分からない", edited: "手で直した量",
+  printed: "品名に書いてある量", known: "AIの推定（商品の決まった量）", price: "AIの推定（値段から）", web: "ネットで確かめた量", none: "量が分からない", edited: "手で直した量",
 };
 
 /** 量の単位を g（ml は g とみなす）にそろえる。個・枚・本は null */
@@ -126,9 +129,32 @@ export function sizeDoubt(
     const r = now / before;
     if (r > SIZE_SUSPECT_RATIO || r < 1 / SIZE_SUSPECT_RATIO) return `今の材料の100gあたり（${Math.round(before)}円）と${r > 1 ? `${Math.round(r * 10) / 10}倍` : `${Math.round((1 / r) * 10) / 10}分の1`}違う`;
   }
-  if (l.size === "printed" || l.size === "known" || l.size === "price") return now === null && isPieceUnit(l.unit) ? "1つの重さが分からない" : null;
+  if (l.size === "printed" || l.size === "known" || l.size === "price" || l.size === "web") return now === null && isPieceUnit(l.unit) ? "1つの重さが分からない" : null;
   if (l.qty === 1 && l.unit === "個") return "量が分からない";
   return now === null ? "1つの重さが分からない" : null;
+}
+
+/**
+ * ネット（Google 検索つきのAI）で量を確かめる行か。AIでも決めきれなかった（値段からの推定・分からない）か、
+ * 量が怪しいまま残った行。人が直した量・ネットで確かめた量・品名に書いてある量（怪しくなければ）は調べない
+ */
+export function needsWebSize(
+  l: Pick<InvoiceLine, "price" | "tax" | "qty" | "unit" | "size" | "gramsPerPiece">,
+  ing?: Pick<Ingredient, "purchasePrice" | "purchaseQty" | "purchaseUnit" | "gramsPerPiece"> | null,
+): boolean {
+  if (l.size === "edited" || l.size === "web") return false;
+  return l.size === "price" || l.size === "none" || !l.size || !!sizeDoubt(l, ing);
+}
+
+/** 共有の「商品の量」の表のキー（品名から量・記号を除いて照合キーにしたもの） */
+export function productSizeKey(name: string): string {
+  return toMatchKey(name.normalize("NFKC").replace(/\d+(?:\.\d+)?\s*(kg|ml|g|l|ℓ|個|枚|本|p|入)/gi, " ")).slice(0, 120);
+}
+
+/** 共有の表の量を使ってよいか：前に調べたときの値段（税抜・1つ）と今の値段が近いとき（容量違いの商品を取り違えないため） */
+export function sameSizePrice(cachedExTax: number, price: number, tax: number): boolean {
+  const now = toExTax(price, tax);
+  return cachedExTax > 0 && now > 0 && now / cachedExTax < 1.6 && cachedExTax / now < 1.6;
 }
 
 /** AIに量を確かめてもらうときに、品名と一緒に渡す手がかり（数量・値段・今の材料の量と値段） */

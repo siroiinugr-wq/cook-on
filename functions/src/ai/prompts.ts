@@ -330,3 +330,22 @@ export interface SizeAnswer {
   sn?: string;
   gpp?: number;
 }
+
+/** 仕入れ明細の1品の包装の量を Google 検索で確かめる（ai/invoices.ts の searchPackSizes）。検索つきは JSON の形を指定できないので、文の中に JSON だけを書かせる */
+export const SIZE_SEARCH_SYSTEM = `あなたは製菓店・飲食店の仕入れ担当です。レシートの品名（略称・半角カナのことがある）の商品を Google 検索で調べ、1つの値段で買える量（内容量）を答える。
+- メーカー・お店・通販の商品ページの内容量の表記を優先する。容量違い（200gと450gなど）があれば、渡された値段に合うほう。
+- 入り数のある商品（卵10個入り・6P）は qty を入り数、unit を 個 にし、gpp に1つの重さ（g）を入れる。重さで量れるものの gpp は 0。
+- unit は g・kg・ml・l・個・枚・本 のどれか。
+- product は見つけた商品名、note は量を決めた理由をひとこと（30字まで）。
+- c は自信（0〜1）。商品が特定できない・見つからなければ c を 0 にする。推測で作らない。
+- 答えは次の JSON だけを書く（説明や前置きは書かない）：
+{"qty":450,"unit":"g","gpp":0,"product":"よつ葉バター 食塩不使用 450g","note":"メーカーの表記で450g","c":0.9}`;
+
+export interface SizeSearchAnswer {
+  qty: number;
+  unit: string;
+  gpp?: number;
+  product?: string;
+  note?: string;
+  c: number;
+}

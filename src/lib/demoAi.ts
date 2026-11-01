@@ -1,6 +1,6 @@
 // デモモードの「にせのAI」。本番の Gemini の代わりに、決まった手順で同じ形の答えを返す。
 // クレジットは本番と同じように引かれる（押す前の表示 → 残高が減る → 通帳に残る、を試せるように）。
-import { aiMatchCredits, splitForImport } from "@shared/credits";
+import { aiMatchCredits, sizeSearchCredits, splitForImport } from "@shared/credits";
 import type { ImportDoc, ItemMatch, ParsedRecipe } from "@shared/importTypes";
 import { buildIndex, rankCandidates, toMatchKey } from "@shared/matchKey";
 import { sizeFromName } from "@shared/invoice";
@@ -139,6 +139,18 @@ export async function demoAiCall<T>(name: string, d: Data): Promise<T> {
           }),
         } as T,
       }));
+    }
+    case "searchPackSizes": {
+      // デモのネット検索：知っている商品だけ見つかる（本物は Google 検索つきのAIが商品のページを探す）
+      const lines = d.lines as { name: string }[];
+      const results = lines.map((l) => {
+        const hit = /タカナシ.*特選/.test(l.name.normalize("NFKC"));
+        return hit
+          ? { found: true, shared: false, qty: 200, unit: "ml", gramsPerPiece: null, sizeNote: "タカナシ 特選北海道純生クリーム47：メーカーの表記で200ml",
+            sizeSources: [{ uri: "https://example.com/takanashi", title: "example.com（デモ）" }], sizeSearchHtml: "<div style='font:12px sans-serif;padding:6px'>Google 検索の候補（デモ）：タカナシ 特選北海道 内容量</div>" }
+          : { found: false, shared: false, qty: 0, unit: "個", gramsPerPiece: null, sizeNote: "", sizeSources: [], sizeSearchHtml: "" };
+      });
+      return demoWithCredits("sizeSearch", sizeSearchCredits(lines.length), async () => ({ result: { results, searched: lines.length } as T }));
     }
     case "parseImportPhotos": {
       // デモでは写真を読めないので、写真の枚数ぶんのクレジットで見本のレシピを1件返す

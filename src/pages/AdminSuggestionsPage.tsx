@@ -8,6 +8,7 @@ import { useOrgCtx } from "../contexts/OrgContext";
 import { useCol, useDoc } from "../hooks/useData";
 import { call } from "../lib/store";
 import { PageHead } from "../components/common/Layout";
+import { WebSources } from "../components/common/WebSources";
 import { ui } from "../components/common/ui";
 
 export function AdminSuggestionsPage() {
@@ -125,19 +126,13 @@ function Card({ s }: { s: GlobalSuggestion }) {
           <span>
             参考価格にする：{yen(s.price.price)}（税抜）/{s.price.qty}{s.price.unit}
             {s.note && <span className="block text-xs text-muted">{s.note}</span>}
-            {s.sources && s.sources.length > 0 && (
-              <span className="mt-1 block text-xs text-muted">
-                見たページ：{s.sources.map((x, k) => (
-                  <a key={k} href={x.uri} target="_blank" rel="noreferrer" className="mr-2 underline">{x.title || `ページ${k + 1}`}</a>
-                ))}
-              </span>
-            )}
+            <WebSources sources={s.sources} />
             {g?.refPrice && <span className="block text-xs text-muted">今の参考価格：{yen(g.refPrice.price)}（税込）/{g.refPrice.qty}{g.refPrice.unit}・{g.refPrice.source}</span>}
           </span>
         </label>
       )}
       {/* Google 検索の結果を見せるときは「検索の候補」も出す決まり（グラウンディングの利用条件） */}
-      {s.searchHtml && <iframe title="Google 検索の候補" srcDoc={s.searchHtml} sandbox="allow-popups allow-popups-to-escape-sandbox" className="h-16 w-full rounded-lg border border-line" />}
+      <WebSources searchHtml={s.searchHtml} />
       {s.labelName && <p className="text-xs text-muted">お店のラベルの名前：{s.labelName}</p>}
       {err && <p className="text-sm text-ng">{err}</p>}
       <div className="grid grid-cols-2 gap-2">

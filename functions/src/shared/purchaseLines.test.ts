@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fromPurchaseLines, invoicePatch, per100, sizeDoubt, sizeFromName } from "./invoice";
+import { fromPurchaseLines, invoicePatch, needsWebSize, per100, productSizeKey, sameSizePrice, sizeDoubt, sizeFromName } from "./invoice";
 import { parsePurchaseCsv, toPurchaseCsv, type PurchaseLine } from "./purchaseLines";
 
 const line = (p: Partial<PurchaseLine>): PurchaseLine => ({
@@ -52,6 +52,19 @@ describe("仕入れ明細ファイル", () => {
     const ing = { purchasePrice: 540, purchaseQty: 450, purchaseUnit: "g" as const };
     expect(sizeDoubt({ price: 540, tax: 0, qty: 450, unit: "g", size: "printed" }, ing)).toBeNull();
     expect(sizeDoubt({ price: 540, tax: 0, qty: 45, unit: "g", size: "printed" }, ing)).toMatch(/10倍/);
+  });
+
+  it("ネットで確かめる行と、共有の量の表の使い方", () => {
+    const l = { price: 540, tax: 0, qty: 450, unit: "g" as const };
+    expect(needsWebSize({ ...l, size: "price" })).toBe(true);
+    expect(needsWebSize({ ...l, size: "known" })).toBe(false);
+    expect(needsWebSize({ ...l, size: "web" })).toBe(false);
+    expect(needsWebSize({ ...l, size: "edited" })).toBe(false);
+    // 量の書き方が違っても同じ商品は同じキー
+    expect(productSizeKey("ﾖﾂﾊﾞﾊﾞﾀｰ 食塩不使用 450g")).toBe(productSizeKey("ﾖﾂﾊﾞﾊﾞﾀｰ食塩不使用"));
+    // 値段が大きく違えば容量違いかもしれないので使わない（税込を税抜に直して比べる）
+    expect(sameSizePrice(1000, 1080, 0.08)).toBe(true);
+    expect(sameSizePrice(1000, 500, 0)).toBe(false);
   });
 
   it("個で買う材料は、1つの重さを材料に写す（お店が入れた値は変えない）", () => {
