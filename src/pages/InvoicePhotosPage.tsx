@@ -1,9 +1,10 @@
 // レシート・納品書から仕入れ値を入れる：撮る → まとめて読み取る（1枚1クレジット）→ 明細ごとにお店の材料を確かめて反映。
 // 撮影と一覧は「写真から取り込み」と同じ部品（一覧はお店ごと・この画面専用にためる）。値段が変わると原価の計算し直しと値段の記録は材料のトリガが行う
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { CREDIT_COST, INVOICE_MAX_PHOTOS } from "@shared/credits";
+import { aiMatchCredits, CREDIT_COST, INVOICE_MAX_PHOTOS } from "@shared/credits";
 import { PRICE_TAX_OPTIONS, yen } from "@shared/cost";
-import { invoicePatch, INVOICE_UNITS, type InvoiceLine } from "@shared/invoice";
+import { fromPurchaseLines, invoicePatch, INVOICE_UNITS, type InvoiceLine } from "@shared/invoice";
+import { parsePurchaseCsv } from "@shared/purchaseLines";
 import type { Unit } from "@shared/units";
 import { useOrgCtx } from "../contexts/OrgContext";
 import { useCaptureTray, type TrayItem } from "../hooks/useCaptureTray";
@@ -22,6 +23,15 @@ import { CaptureTray } from "../components/import/CaptureTray";
 type Row = InvoiceLine & { use: boolean; target: string };
 const NEW = "__new__";
 const SAVE_KEY = (orgId: string) => `cookon-invoice-${orgId}`;
+/** AI経理（別のアプリ）。仕入れ明細ファイルを書き出せる */
+const KEIRI_URL = "https://keiri.iwakuni-design.com";
+
+/** CSV の文字を読む。Excel で保存した Shift_JIS にも対応 */
+async function readText(f: File): Promise<string> {
+  const buf = await f.arrayBuffer();
+  const utf8 = new TextDecoder("utf-8").decode(buf);
+  return utf8.includes("\uFFFD") ? new TextDecoder("shift_jis").decode(buf) : utf8;
+}
 
 export function InvoicePhotosPage() {
   const { orgId, uid, org, canEdit } = useOrgCtx();
@@ -78,6 +88,52 @@ export function InvoicePhotosPage() {
     }
   }
 
+  async function loadFile(f: File) {
+    setErr("");
+    setMsg("");
+    try {
+      const { lines, skipped } = parsePurchaseCsv(await readText(f));
+      const got = fromPurchaseLines(lines, ings.list);
+      if (!got.length) throw new Error("値段の入った明細が見つかりませんでした。");
+      setRows((cur) => [...cur, ...got.map((l) => ({ ...l, use: !!l.ingredientId && l.confidence >= 0.85, target: l.ingredientId ?? "" }))]);
+      const linked = got.filter((l) => l.ingredientId).length;
+      setMsg(`${lines.length}行から${got.length}品を読み込みました（同じ品名は一番新しい値段だけ）。${linked}品は名前で結べました${skipped ? `。読めない${skipped}行は飛ばしました` : ""}。`);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  // 名前で結べなかった行（ファイルから読んだ分も写真の分も）を、AIがお店の材料から探す
+  // 1回に200行まで（サーバーの上限）。残りはもう一度押す
+  const loose = rows.map((r, k) => ({ r, k })).filter(({ r }) => !r.target).slice(0, 200);
+  async function aiMatch() {
+    setErr("");
+    setMsg("");
+    setBusy(true);
+    try {
+      const names = loose.map(({ r }) => r.raw);
+      const res = await run({
+        title: "仕入れ明細の材料をAIで探す", credits: aiMatchCredits(names.length),
+        detail: `結び先が決まっていない${names.length}行を、AIがお店の材料から探します。反映するのは確かめてからです。`,
+        exec: () => call<{ matches: { ingredientId: string | null; confidence: number; qty: number; unit: Unit }[] }>("matchPurchaseLines", { orgId, names, requestId: newRequestId() }),
+      });
+      if (!res) return;
+      const at = new Map(loose.map(({ k }, j) => [k, res.matches[j]]));
+      setRows((cur) => cur.map((r, k) => {
+        const m = at.get(k);
+        if (!m?.ingredientId || r.target) return r;
+        const sized = r.qty === 1 && r.unit === "個" && m.qty > 0;
+        return { ...r, ingredientId: m.ingredientId, confidence: m.confidence, via: "ai" as const, target: m.ingredientId, use: m.confidence >= 0.6, ...(sized ? { qty: m.qty, unit: m.unit } : {}) };
+      }));
+      const found = res.matches.filter((m) => m.ingredientId).length;
+      setMsg(`AIが${names.length}行のうち${found}行の結び先を見つけました。確かめてから「反映」を押してください。`);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function apply() {
     setBusy(true);
     setErr("");
@@ -110,7 +166,7 @@ export function InvoicePhotosPage() {
     <div className="space-y-4 pb-10">
       <PageHead title="レシート・納品書から仕入れ値" back="/ingredients" />
       <p className="text-sm text-ink-soft">
-        仕入れのレシート・納品書・請求書を撮ると、AIが明細を読んで、お店の材料と結びつけます。季節で変わる値段も、撮るだけで原価に反映できます。反映するのは確かめてからです。
+        仕入れのレシート・納品書・請求書を撮ると、AIが明細を読んで、お店の材料と結びつけます。季節で変わる値段も、撮るだけで原価に反映できます。仕入れ明細ファイルの読み込みもできます。反映するのは確かめてからです。
       </p>
       <button type="button" onClick={() => setShooting(true)} disabled={busy}
         className="flex h-32 w-full flex-col items-center justify-center rounded-2xl border border-line bg-paper">
@@ -125,6 +181,16 @@ export function InvoicePhotosPage() {
           <input type="file" accept="image/*" multiple className="hidden" onChange={(e) => { tray.add(Array.from(e.target.files ?? []), "upload"); e.target.value = ""; }} />
         </label>
       </div>
+      <section className={`${ui.card} space-y-2`}>
+        <p className="font-bold">仕入れ明細ファイルを読み込む（無料）</p>
+        <p className="text-sm text-ink-soft">
+          経理アプリ「<a href={KEIRI_URL} target="_blank" rel="noreferrer" className="underline">AI経理</a>」を使っているお店は、レシートを撮った明細を「仕入れ明細ファイル」として書き出せます。それを読み込むと、撮り直さずに仕入れ値を入れられます（同じ形の CSV なら、ほかのアプリや手で作ったものでも読めます）。
+        </p>
+        <label className={`block cursor-pointer text-center ${ui.secondary} ${busy ? "pointer-events-none opacity-50" : ""}`}>
+          ファイルを選ぶ（.csv）
+          <input type="file" accept=".csv,text/csv" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) void loadFile(f); e.target.value = ""; }} />
+        </label>
+      </section>
       <CaptureTray items={tray.items} onRemove={tray.remove} busy={busy} onRetake={() => undefined} />
       {count > INVOICE_MAX_PHOTOS && <p className="text-sm text-ng">1回に読めるのは{INVOICE_MAX_PHOTOS}枚までです。</p>}
       {count > 0 && (
@@ -141,6 +207,11 @@ export function InvoicePhotosPage() {
             <h2 className="font-bold">読み取った明細（{rows.length}行）</h2>
             <button className="text-xs text-muted underline" onClick={() => setRows([])}>全部消す</button>
           </div>
+          {loose.length > 0 && (
+            <button disabled={busy} onClick={aiMatch} className={`w-full ${ui.secondary}`}>
+              結び先が無い{loose.length}行をAIで探す<CostTag credits={aiMatchCredits(loose.length)} />
+            </button>
+          )}
           <ul className="space-y-2">
             {rows.map((r, k) => {
               const ing = byId.get(r.target);
@@ -152,7 +223,7 @@ export function InvoicePhotosPage() {
                     <input type="checkbox" className="mt-1 h-4 w-4 accent-clay" checked={r.use} onChange={(e) => set(k, { use: e.target.checked })} />
                     <span className="min-w-0 flex-1">
                       <span className="block text-sm font-medium">{r.raw}</span>
-                      <span className="block text-xs text-muted">{[r.supplier, r.date, `写真${r.photo + 1}`, r.count > 1 ? `${r.count}つ` : ""].filter(Boolean).join("・")}</span>
+                      <span className="block text-xs text-muted">{[r.supplier, r.date, r.photo < 0 ? (r.count > 1 ? `ファイル・${r.count}回の仕入れ` : "ファイル") : `写真${r.photo + 1}`, r.photo >= 0 && r.count > 1 ? `${r.count}つ` : ""].filter(Boolean).join("・")}</span>
                     </span>
                   </label>
                   <div className="flex items-center gap-1.5 text-sm">
@@ -160,7 +231,7 @@ export function InvoicePhotosPage() {
                     <select className={`${input} min-w-0 flex-1`} value={r.target} onChange={(e) => set(k, { target: e.target.value, use: !!e.target.value })}>
                       <option value="">結ばない</option>
                       <option value={NEW}>新しい材料として登録</option>
-                      {sorted.map((i) => <option key={i.id} value={i.id}>{i.name}{i.id === r.ingredientId ? `（AI ${Math.round(r.confidence * 100)}%）` : ""}</option>)}
+                      {sorted.map((i) => <option key={i.id} value={i.id}>{i.name}{i.id === r.ingredientId ? (r.via === "name" ? "（名前が同じ）" : r.via === "similar" ? "（似た名前）" : `（AI ${Math.round(r.confidence * 100)}%）`) : ""}</option>)}
                     </select>
                   </div>
                   <div className="flex flex-wrap items-center gap-1.5">

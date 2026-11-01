@@ -294,3 +294,29 @@ export interface InvoiceAnswer {
   date: string;
   lines: { name: string; price: number; count: number; qty: number; unit: string; tax: number; ingredient: number; c: number }[];
 }
+
+export const PURCHASE_MATCH_SYSTEM = `あなたは製菓店・飲食店の仕入れ担当です。仕入れ明細の品名（レシートの表記）ごとに、下の「お店の材料」から同じ材料の番号を選ぶ。
+- 商品名・ブランド・規格・半角カナ・略し方が違っても同じ材料なら選ぶ（例：ﾖﾂﾊﾞﾊﾞﾀｰ食塩不使用450 → 無塩バター、ﾊｸﾘｷｺ → 薄力粉）。
+- 違う材料（発酵バターと無塩バター、薄力粉と強力粉、グラニュー糖と上白糖など）は選ばない。食材・資材でないもの（文房具・洗剤など）や、迷うものは -1。
+- c は選んだ自信（0〜1）。
+- qty と unit は品名から分かる1つの包装の量（「450g」なら 450・g、「1L」なら 1・l）。分からなければ qty 1・unit 個。unit は g・kg・ml・l・個・枚・本 のどれか。
+- 答えは lines に、聞かれた行と同じ番号（n）で入れる。`;
+
+export const PURCHASE_MATCH_SCHEMA = {
+  type: "object",
+  properties: {
+    lines: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: { n: { type: "integer" }, ingredient: { type: "integer" }, c: { type: "number" }, qty: { type: "number" }, unit: { type: "string" } },
+        required: ["n", "ingredient", "c", "qty", "unit"],
+      },
+    },
+  },
+  required: ["lines"],
+};
+
+export interface PurchaseMatchAnswer {
+  lines: { n: number; ingredient: number; c: number; qty: number; unit: string }[];
+}
