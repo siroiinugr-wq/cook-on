@@ -9,6 +9,12 @@ import { parseUnit, type Unit } from "@shared/units";
 import { demoGet, demoListDocs, demoWrite } from "./demo";
 import { DEMO_ORG } from "./demoData";
 import { demoIngredientMap, demoWithCredits, demoWriteRecipe } from "./demoFunctions";
+
+/** デモのAIが知っている商品の量 */
+const DEMO_SIZES: { re: RegExp; qty: number; unit: string; note: string; gpp?: number }[] = [
+  { re: /(ヨツバ|よつ葉).*(食塩不使用|無塩)/, qty: 450, unit: "g", note: "よつ葉の食塩不使用は450g入り" },
+  { re: /タマゴ|たまご|卵/, qty: 10, unit: "個", note: "10ｺ＝10個入り。Mは殻なし約50g", gpp: 50 },
+];
 import { demoInvoiceLines } from "./demoShare";
 
 type Data = Record<string, unknown>;
@@ -111,17 +117,23 @@ export async function demoAiCall<T>(name: string, d: Data): Promise<T> {
       // デモのAIは「いちばん似た名前」を選ぶだけ。一般名は書き出したアプリの推定（hints）か品名から量を除いたもの
       const names = d.names as string[];
       const hints = (d.hints as string[] | undefined) ?? [];
+      const fixed = (d.fixed as boolean[] | undefined) ?? [];
       const index = buildIndex([...demoIngredientMap().values()].map((i) => ({ id: i.id, name: i.name, aliases: i.aliases ?? [] })));
       const gIndex = matchInput().globalIndex;
       return demoWithCredits("aiMatch", aiMatchCredits(names.length), async () => ({
         result: {
           matches: names.map((n, k) => {
             const generic = hints[k] || n.replace(/[\d.]+\s*(kg|g|ml|l|個|枚|本)/gi, "").trim();
-            const c = rankCandidates(generic, index, 1)[0];
-            const g = c && c.score >= 0.5 ? null : rankCandidates(generic, gIndex, 1)[0];
-            const size = sizeFromName(n);
+            const c = fixed[k] ? undefined : rankCandidates(generic, index, 1)[0];
+            const g = fixed[k] || (c && c.score >= 0.5) ? null : rankCandidates(generic, gIndex, 1)[0];
+            const printed = sizeFromName(n);
+            // デモのAIが知っている決まった量（本物のAIは商品名と値段から判断する）
+            const known = DEMO_SIZES.find((x) => x.re.test(n.normalize("NFKC")));
+            const size = printed ? { qty: printed.qty, unit: printed.unit, size: "printed", sizeNote: "", gramsPerPiece: known?.gpp ?? null }
+              : known ? { qty: known.qty, unit: known.unit, size: "known", sizeNote: known.note, gramsPerPiece: known.gpp ?? null }
+              : { qty: 0, unit: "個", size: "none", sizeNote: "", gramsPerPiece: null };
             return {
-              ingredientId: c && c.score >= 0.5 ? c.id : null, confidence: c ? Math.min(0.9, c.score + 0.2) : 0, qty: size?.qty ?? 0, unit: size?.unit ?? "個",
+              ingredientId: c && c.score >= 0.5 ? c.id : null, confidence: c ? Math.min(0.9, c.score + 0.2) : 0, ...size,
               generic, global: g && g.score >= 0.4 ? { id: g.id, name: g.name, confidence: Math.min(0.9, g.score + 0.2) } : null,
             };
           }),

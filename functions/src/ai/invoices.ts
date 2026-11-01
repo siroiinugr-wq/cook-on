@@ -4,13 +4,13 @@
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { getStorage } from "firebase-admin/storage";
 import { AI_MATCH_BATCH, INVOICE_MAX_PHOTOS } from "../shared/credits";
-import { INVOICE_UNITS, type InvoiceLine } from "../shared/invoice";
+import { INVOICE_UNITS, isPieceUnit, SIZE_BASES, type InvoiceLine, type SizeBasis } from "../shared/invoice";
 import type { Unit } from "../shared/units";
 import { GEMINI_API_KEY, REGION } from "./config";
 import { idOf, requireRole, requireVerified, ROLES } from "../core/auth";
 import { requestIdOf, runWithCredits } from "../core/credits";
 import { addUsage, callGeminiJson, type Usage } from "./gemini";
-import { INVOICE_SCHEMA, INVOICE_SYSTEM, PURCHASE_MATCH_SCHEMA, PURCHASE_MATCH_SYSTEM, type InvoiceAnswer, type PurchaseMatchAnswer } from "./prompts";
+import { INVOICE_SCHEMA, INVOICE_SYSTEM, PURCHASE_MATCH_SCHEMA, PURCHASE_MATCH_SYSTEM, type InvoiceAnswer, type PurchaseMatchAnswer, type SizeAnswer } from "./prompts";
 import { loadIngredientMap } from "../recipes/save";
 import { loadOrgMatchData, resolveNames } from "./resolve";
 
@@ -38,6 +38,16 @@ async function attachGlobals(orgId: string, lines: InvoiceLine[], usage: Usage):
     console.warn("共有の材料を探せませんでした", orgId, String((e as Error)?.message ?? e));
     return usage;
   }
+}
+
+/** AIが答えた量の根拠・理由・1つの重さを、画面の行の形にそろえる（人が直したことにはさせない） */
+function sizeOf(a: SizeAnswer, unit: Unit): Pick<InvoiceLine, "size" | "sizeNote" | "gramsPerPiece"> {
+  const size: SizeBasis = SIZE_BASES.includes(a.sb as SizeBasis) && a.sb !== "edited" ? (a.sb as SizeBasis) : "none";
+  const gpp = Number(a.gpp);
+  return {
+    size, sizeNote: String(a.sn ?? "").trim().slice(0, 40),
+    gramsPerPiece: isPieceUnit(unit) && gpp > 0 && gpp < 5000 ? Math.round(gpp * 10) / 10 : null,
+  };
 }
 
 const PARALLEL = 3;
@@ -92,6 +102,7 @@ export const readInvoices = onCall({ region: REGION, memory: "1GiB", timeoutSeco
               supplier: String(r.output.supplier ?? "").trim().slice(0, 60), date: /^\d{4}-\d{2}-\d{2}$/.test(r.output.date ?? "") ? r.output.date : "",
               ingredientId: ing?.id ?? null, confidence: ing ? Math.max(0, Math.min(1, Number(l.c) || 0)) : 0, via: "ai",
               generic: String(l.generic ?? "").trim().slice(0, 40),
+              ...sizeOf(l, unit),
             });
           }
         } catch (e) {
@@ -111,7 +122,8 @@ const MATCH_MAX_LINES = 200;
 
 /**
  * 仕入れ明細ファイル（AI経理などが書き出したもの）で、名前では結べなかった行をAIがお店の材料から探す。
- * AI_MATCH_BATCH 行で1クレジット（aiMatch）。包装の量も品名から読む。保存はしない：画面で人が確かめて反映する
+ * AI_MATCH_BATCH 行で1クレジット（aiMatch）。包装の量・1つの重さも品名と値段から判断する（根拠つき）。
+ * 結び先が決まっている行（fixed）は量だけ確かめる（量が分からない・100gあたりが前と大きく違う行）。保存はしない：画面で人が確かめて反映する
  */
 export const matchPurchaseLines = onCall({ region: REGION, timeoutSeconds: 300, secrets: [GEMINI_API_KEY] }, async (req) => {
   const orgId = idOf(req.data?.orgId, "店舗ID");
@@ -121,6 +133,8 @@ export const matchPurchaseLines = onCall({ region: REGION, timeoutSeconds: 300, 
   const names: string[] = (Array.isArray(req.data?.names) ? req.data.names : []).map((x: unknown) => String(x ?? "").trim().slice(0, 80));
   if (!names.length || names.some((n) => !n)) throw new HttpsError("invalid-argument", "探す品名がありません。");
   const hints: string[] = (Array.isArray(req.data?.hints) ? req.data.hints : []).map((x: unknown) => String(x ?? "").trim().slice(0, 40));
+  const fixed: boolean[] = (Array.isArray(req.data?.fixed) ? req.data.fixed : []).map((x: unknown) => x === true);
+  const clues: string[] = (Array.isArray(req.data?.clues) ? req.data.clues : []).map((x: unknown) => String(x ?? "").trim().slice(0, 160));
   if (names.length > MATCH_MAX_LINES) throw new HttpsError("invalid-argument", `1回にAIで探せるのは${MATCH_MAX_LINES}行までです。`);
   const ings = [...(await loadIngredientMap(orgId)).values()].slice(0, MAX_INGREDIENTS);
   const list = ings.map((i, k) => `${k}. ${i.name}${i.aliases?.length ? `（${i.aliases.slice(0, 4).join("・")}）` : ""}`).join("\n");
@@ -128,25 +142,32 @@ export const matchPurchaseLines = onCall({ region: REGION, timeoutSeconds: 300, 
 
   return runWithCredits({ orgId, uid, action: "aiMatch", units: batches, requestId }, async () => {
     let usage: Usage = { in: 0, out: 0 };
-    const out = names.map(() => ({ ingredientId: null as string | null, confidence: 0, qty: 0, unit: "個" as Unit, generic: "", global: null as InvoiceLine["global"] }));
+    type Match = Pick<InvoiceLine, "ingredientId" | "confidence" | "qty" | "unit" | "generic" | "global" | "size" | "sizeNote" | "gramsPerPiece">;
+    const out: Match[] = names.map(() => ({ ingredientId: null, confidence: 0, qty: 0, unit: "個", generic: "", global: null, size: "none", sizeNote: "", gramsPerPiece: null }));
     let ok = 0;
     for (let b = 0; b < batches; b++) {
       const part = names.slice(b * AI_MATCH_BATCH, (b + 1) * AI_MATCH_BATCH);
       try {
         const r = await callGeminiJson<PurchaseMatchAnswer>({
           system: PURCHASE_MATCH_SYSTEM,
-          prompt: `お店の材料：\n${list || "（まだありません。ingredient はすべて -1）"}\n\n仕入れ明細の品名：\n${part.map((n, k) => `${k}. ${n}${hints[b * AI_MATCH_BATCH + k] ? `［${hints[b * AI_MATCH_BATCH + k]}］` : ""}`).join("\n")}`,
+          prompt: `お店の材料：\n${list || "（まだありません。ingredient はすべて -1）"}\n\n仕入れ明細の品名：\n${part.map((n, k) => {
+            const at = b * AI_MATCH_BATCH + k;
+            const hint = [hints[at] && `一般名：${hints[at]}`, clues[at], fixed[at] && "結び先は決まっています（量だけ）"].filter(Boolean).join("・");
+            return `${k}. ${n}${hint ? `［${hint}］` : ""}`;
+          }).join("\n")}`,
           schema: PURCHASE_MATCH_SCHEMA, maxOutputTokens: 4096,
         });
         usage = addUsage(usage, r.usage);
         ok++;
         for (const l of r.output.lines ?? []) {
           if (!Number.isInteger(l.n) || l.n < 0 || l.n >= part.length) continue;
-          const ing = Number.isInteger(l.ingredient) && l.ingredient >= 0 ? ings[l.ingredient] : undefined;
-          out[b * AI_MATCH_BATCH + l.n] = {
+          const at = b * AI_MATCH_BATCH + l.n;
+          const ing = !fixed[at] && Number.isInteger(l.ingredient) && l.ingredient >= 0 ? ings[l.ingredient] : undefined;
+          const unit = (INVOICE_UNITS.includes(l.unit as Unit) ? l.unit : "個") as Unit;
+          out[at] = {
             ingredientId: ing?.id ?? null, confidence: ing ? Math.max(0, Math.min(1, Number(l.c) || 0)) : 0,
-            qty: Number(l.qty) > 0 ? Number(l.qty) : 0, unit: (INVOICE_UNITS.includes(l.unit as Unit) ? l.unit : "個") as Unit,
-            generic: String(l.generic ?? "").trim().slice(0, 40), global: null,
+            qty: Number(l.qty) > 0 ? Number(l.qty) : 0, unit,
+            generic: String(l.generic ?? "").trim().slice(0, 40), global: null, ...sizeOf(l, unit),
           };
         }
       } catch (e) {
@@ -155,7 +176,7 @@ export const matchPurchaseLines = onCall({ region: REGION, timeoutSeconds: 300, 
     }
     if (!ok) throw new HttpsError("internal", "AIで探せませんでした。クレジットは使われていません。");
     // お店に無い材料は、一般名で共有の材料（成分表つき）を探す
-    const asLines = out.map((m) => ({ ingredientId: m.ingredientId, confidence: m.confidence, generic: m.generic, global: null }) as unknown as InvoiceLine);
+    const asLines = out.map((m, k) => ({ ingredientId: m.ingredientId, confidence: m.confidence, generic: fixed[k] ? "" : m.generic, global: null }) as unknown as InvoiceLine);
     usage = await attachGlobals(orgId, asLines, usage);
     asLines.forEach((l, k) => Object.assign(out[k], { ingredientId: l.ingredientId, confidence: l.confidence, global: l.global ?? null }));
     return { result: { matches: out }, usage, usedUnits: ok };

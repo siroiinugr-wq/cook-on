@@ -81,7 +81,7 @@ export function demoInvoiceLines(paths: string[], ings: Ingredient[]): InvoiceLi
   return paths.flatMap((_, photo) => pool.slice(photo * 2, photo * 2 + 2).map((i, k) => ({
     photo, raw: `${i.name}（デモ）${i.purchaseQty}${i.purchaseUnit}`, price: Math.round(((i.purchasePrice ?? 500) * 1.08) * (1.05 + k * 0.03)),
     count: 1, qty: i.purchaseQty, unit: (["g", "kg", "ml", "l", "個", "枚", "本"].includes(i.purchaseUnit) ? i.purchaseUnit : "個") as InvoiceLine["unit"],
-    tax: 0.08, supplier: "デモ製菓材料店", date: new Date().toISOString().slice(0, 10), ingredientId: i.id, confidence: 0.9,
+    tax: 0.08, supplier: "デモ製菓材料店", date: new Date().toISOString().slice(0, 10), ingredientId: i.id, confidence: 0.9, size: "printed" as const,
   })));
 }
 
@@ -100,6 +100,8 @@ export function demoLinkCall(name: string): unknown {
     lines: [
       { date: now.slice(0, 10), supplier: "業務スーパー", name: "ｸﾞﾗﾆｭｰﾄｳ 1KG", genericName: "グラニュー糖", quantity: 2, unitPrice: 278, amount: 556, taxRate: 8, taxIncluded: true, ref: "demo" },
       { date: now.slice(0, 10), supplier: "業務スーパー", name: "とちおとめ 300g", genericName: "いちご", quantity: 1, unitPrice: 698, amount: 698, taxRate: 8, taxIncluded: true, ref: "demo" },
+      { date: now.slice(0, 10), supplier: "業務スーパー", name: "ﾖﾂﾊﾞﾊﾞﾀｰ食塩不使用", genericName: "無塩バター", quantity: 1, unitPrice: 1080, amount: 1080, taxRate: 8, taxIncluded: true, ref: "demo" },
+      { date: now.slice(0, 10), supplier: "業務スーパー", name: "ﾀﾏｺﾞ M 10ｺ", genericName: "鶏卵", quantity: 1, unitPrice: 298, amount: 298, taxRate: 8, taxIncluded: true, ref: "demo" },
     ],
   });
   return { code: "cookon-demo-xxxxxxxxxxxxxxxx" };

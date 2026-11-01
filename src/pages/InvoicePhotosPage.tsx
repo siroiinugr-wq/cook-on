@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { aiMatchCredits, CREDIT_COST, INVOICE_MAX_PHOTOS } from "@shared/credits";
 import { PRICE_TAX_OPTIONS, yen } from "@shared/cost";
-import { fromPurchaseLines, invoicePatch, INVOICE_UNITS, per100, type InvoiceLine } from "@shared/invoice";
+import { fromPurchaseLines, invoicePatch, INVOICE_UNITS, isPieceUnit, per100, SIZE_LABEL, sizeDoubt, sizeHint, type InvoiceLine } from "@shared/invoice";
+import type { Ingredient } from "@shared/types";
 import { suggestAllergens } from "@shared/allergenGuess";
 import type { GlobalIngredient } from "@shared/types";
 import { parsePurchaseCsv } from "@shared/purchaseLines";
@@ -25,8 +26,8 @@ import { CameraShooter } from "../components/import/CameraShooter";
 import { CaptureTray } from "../components/import/CaptureTray";
 import { numText } from "../lib/num";
 
-/** tried＝AIで探した（見つからなかった行をもう一度クレジットで探さない） */
-type Row = InvoiceLine & { use: boolean; target: string; tried?: boolean };
+/** tried＝AIで探した（見つからなかった行をもう一度クレジットで探さない）、sizeTried＝AIで量を確かめた */
+type Row = InvoiceLine & { use: boolean; target: string; tried?: boolean; sizeTried?: boolean };
 const NEW = "__new__";
 /** 読んだ明細を画面の行にする。お店の材料に無くても、共有の材料（成分表つき）が見つかれば「新しく登録」を選んでおく */
 const toRow = (l: InvoiceLine, min: number): Row => {
@@ -134,33 +135,55 @@ export function InvoicePhotosPage() {
     }
   }
 
-  // 名前で結べなかった行（ファイルから読んだ分も写真の分も）を、AIがお店の材料から探す
-  // 1回に200行まで（サーバーの上限）。残りはもう一度押す
-  const loose = rows.map((r, k) => ({ r, k })).filter(({ r }) => !r.target && !r.tried).slice(0, 200);
+  // AIに判断してもらう行：名前で結べなかった行（材料を探す＋量）と、結び先はあるが量が怪しい行（量だけ）。
+  // 量が怪しい＝量が分からない・個で買うのに1つの重さが分からない・今の材料の100gあたりと大きく違う。1回に200行まで（サーバーの上限）
+  const doubt = (r: Row) => (r.sizeTried ? null : sizeDoubt(r, byId.get(r.target)));
+  const todo = rows.map((r, k) => ({ r, k }))
+    .filter(({ r }) => (!r.target && !r.tried) || (!!r.target && !!doubt(r)))
+    .slice(0, 200);
+  const looseN = todo.filter(({ r }) => !r.target).length;
+  const sizeN = todo.length - looseN;
   async function aiMatch() {
     setErr("");
     setMsg("");
     setBusy(true);
     try {
-      const names = loose.map(({ r }) => r.raw);
-      const hints = loose.map(({ r }) => r.generic ?? "");
+      const names = todo.map(({ r }) => r.raw);
+      const hints = todo.map(({ r }) => r.generic ?? "");
+      const fixed = todo.map(({ r }) => !!r.target);
+      const clues = todo.map(({ r }) => sizeHint(r, byId.get(r.target)));
+      type Match = Pick<InvoiceLine, "ingredientId" | "confidence" | "qty" | "unit" | "generic" | "global" | "size" | "sizeNote" | "gramsPerPiece">;
       const res = await run({
-        title: "仕入れ明細の材料をAIで探す", credits: aiMatchCredits(names.length),
-        detail: `結び先が決まっていない${names.length}行を、AIがお店の材料から探します。反映するのは確かめてからです。`,
-        exec: () => call<{ matches: { ingredientId: string | null; confidence: number; qty: number; unit: Unit; generic: string; global: InvoiceLine["global"] }[] }>("matchPurchaseLines", { orgId, names, hints, requestId: newRequestId() }),
+        title: "仕入れ明細をAIで判断する", credits: aiMatchCredits(names.length),
+        detail: `${[looseN && `結び先が決まっていない${looseN}行はお店の材料から探し`, sizeN && `${sizeN}行は量（重さ・入り数・1つの重さ）を品名と値段から確かめ`].filter(Boolean).join("、")}ます。反映するのは確かめてからです。`,
+        exec: () => call<{ matches: Match[] }>("matchPurchaseLines", { orgId, names, hints, fixed, clues, requestId: newRequestId() }),
       });
       if (!res) return;
-      const at = new Map(loose.map(({ k }, j) => [k, res.matches[j]]));
-      setRows((cur) => cur.map((r, k) => {
+      const at = new Map(todo.map(({ k }, j) => [k, res.matches[j]]));
+      let sized = 0;
+      // 押している間は行を変えられない（busy）ので、今の行から作り直す
+      setRows(rows.map((r, k) => {
         const m = at.get(k);
-        if (!m || r.target) return r;
-        if (!m.ingredientId && !m.global) return { ...r, tried: true, generic: m.generic || r.generic };
-        const sized = r.qty === 1 && r.unit === "個" && m.qty > 0;
-        return toRow({ ...r, ingredientId: m.ingredientId, confidence: m.confidence, via: "ai", generic: m.generic || r.generic, global: m.global, ...(sized ? { qty: m.qty, unit: m.unit } : {}) }, 0.6);
+        if (!m) return r;
+        // 量：人が直した量は変えない。AIが「分からない」なら今のまま
+        const useSize = r.size !== "edited" && m.size !== "none" && m.qty > 0 && (m.qty !== r.qty || m.unit !== r.unit || r.size !== m.size);
+        const gpp = r.size !== "edited" && m.gramsPerPiece && isPieceUnit(useSize ? m.unit : r.unit) ? m.gramsPerPiece : r.gramsPerPiece;
+        if (useSize || gpp !== r.gramsPerPiece) sized++;
+        const size: Partial<Row> = {
+          sizeTried: true, gramsPerPiece: gpp ?? null,
+          ...(useSize ? { qty: m.qty, unit: m.unit, size: m.size, sizeNote: m.sizeNote } : {}),
+        };
+        if (r.target) return { ...r, ...size };
+        if (!m.ingredientId && !m.global) return { ...r, ...size, tried: true, generic: m.generic || r.generic };
+        return toRow({ ...r, ...size, ingredientId: m.ingredientId, confidence: m.confidence, via: "ai", generic: m.generic || r.generic, global: m.global }, 0.6);
       }));
-      const found = res.matches.filter((m) => m.ingredientId).length;
-      const fresh = res.matches.filter((m) => !m.ingredientId && m.global).length;
-      setMsg(`AIが${names.length}行のうち${found}行をお店の材料に結びました${fresh ? `。${fresh}行はお店に無い材料なので、共有の材料（成分表つき）として新しく登録します` : ""}。確かめてから「反映」を押してください。`);
+      const found = res.matches.filter((m, j) => !fixed[j] && m.ingredientId).length;
+      const fresh = res.matches.filter((m, j) => !fixed[j] && !m.ingredientId && m.global).length;
+      setMsg([
+        looseN && `AIが${looseN}行のうち${found}行をお店の材料に結びました${fresh ? `（${fresh}行はお店に無い材料なので、共有の材料（成分表つき）として新しく登録します）` : ""}。`,
+        sized && `${sized}行の量をAIが判断しました（黄色の「AIの推定」は確かめてください）。`,
+        "確かめてから「反映」を押してください。",
+      ].filter(Boolean).join(""));
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
     } finally {
@@ -257,9 +280,9 @@ export function InvoicePhotosPage() {
             <h2 className="font-bold">読み取った明細（{rows.length}行）</h2>
             <button className="text-xs text-muted underline" onClick={() => setRows([])}>全部消す</button>
           </div>
-          {loose.length > 0 && (
+          {todo.length > 0 && (
             <button disabled={busy} onClick={aiMatch} className={`w-full ${ui.secondary}`}>
-              結び先が無い{loose.length}行をAIで探す<CostTag credits={aiMatchCredits(loose.length)} />
+              AIで判断する：{[looseN && `結び先が無い${looseN}行`, sizeN && `量を確かめる${sizeN}行`].filter(Boolean).join("・")}<CostTag credits={aiMatchCredits(todo.length)} />
             </button>
           )}
           <ul className="space-y-2">
@@ -287,11 +310,19 @@ export function InvoicePhotosPage() {
                   <div className="flex flex-wrap items-center gap-1.5">
                     <input className={`${input} w-24`} inputMode="decimal" value={r.price} onChange={(e) => set(k, { price: Number(numText(e.target.value)) || 0 })} />
                     <span className="text-sm">円で</span>
-                    <input className={`${input} w-16`} inputMode="decimal" value={r.qty} onChange={(e) => set(k, { qty: Number(numText(e.target.value)) || 0 })} />
-                    <select className={input} value={r.unit} onChange={(e) => set(k, { unit: e.target.value as Unit })}>{INVOICE_UNITS.map((u) => <option key={u}>{u}</option>)}</select>
+                    <input className={`${input} w-16`} inputMode="decimal" value={r.qty} onChange={(e) => set(k, { qty: Number(numText(e.target.value)) || 0, size: "edited" })} />
+                    <select className={input} value={r.unit} onChange={(e) => set(k, { unit: e.target.value as Unit, size: "edited" })}>{INVOICE_UNITS.map((u) => <option key={u}>{u}</option>)}</select>
                     <select className={input} value={r.tax} onChange={(e) => set(k, { tax: Number(e.target.value) })}>{PRICE_TAX_OPTIONS.map((o) => <option key={o.rate} value={o.rate}>{o.label}</option>)}</select>
                   </div>
-                  <Per100Line r={r} ing={ing} />
+                  {isPieceUnit(r.unit) && (
+                    <div className="flex items-center gap-1.5 text-sm">
+                      <span className="text-muted">1{r.unit}あたり 約</span>
+                      <input className={`${input} w-16`} inputMode="decimal" placeholder={ing?.gramsPerPiece ? String(ing.gramsPerPiece) : ""} value={r.gramsPerPiece ?? ""}
+                        onChange={(e) => set(k, { gramsPerPiece: Number(numText(e.target.value)) || null })} />
+                      <span className="text-muted">g（100gあたりの値段と原価の計算に使います）</span>
+                    </div>
+                  )}
+                  <Per100Line r={r} ing={ing} doubt={doubt(r) ?? (r.sizeTried ? sizeDoubt(r, ing) : null)} />
                   {before && <p className="text-xs text-muted">{before}</p>}
                 </li>
               );
@@ -309,17 +340,23 @@ export function InvoicePhotosPage() {
   );
 }
 
-/** 100g あたりの値段（税抜）と、AIの判断（一般名）。今の仕入れ値より上がったか下がったかも出す */
-function Per100Line({ r, ing }: { r: Row; ing?: { purchasePrice: number | null; purchaseQty: number; purchaseUnit: string } }) {
-  const now = per100(r.price, r.tax, r.qty, r.unit);
-  const before = ing && ing.purchasePrice !== null ? per100(ing.purchasePrice, 0, ing.purchaseQty, ing.purchaseUnit as Unit) : null;
+/** 100g あたりの値段（税抜）と、AIの判断（一般名・量の根拠）。今の仕入れ値より上がったか下がったか、量が怪しければその理由も出す */
+function Per100Line({ r, ing, doubt }: { r: Row; ing?: Ingredient; doubt: string | null }) {
+  const now = per100(r.price, r.tax, r.qty, r.unit, r.gramsPerPiece ?? ing?.gramsPerPiece);
+  const before = ing && ing.purchasePrice !== null ? per100(ing.purchasePrice, 0, ing.purchaseQty, ing.purchaseUnit, ing.gramsPerPiece) : null;
   const diff = now !== null && before ? Math.round(((now - before) / before) * 100) : null;
-  if (now === null && !r.generic) return null;
+  const guess = r.size === "known" || r.size === "price";
   return (
-    <p className="text-xs text-ink-soft">
-      {now !== null && <>100gあたり <b>{yen(now)}</b>（税抜）</>}
-      {diff !== null && diff !== 0 && <span className={diff > 0 ? "text-ng" : "text-ok"}>　前より{diff > 0 ? `${diff}%高い` : `${-diff}%安い`}</span>}
-      {r.generic && <span className="text-muted">{now !== null ? "　" : ""}AIの判断：{r.generic}</span>}
-    </p>
+    <div className="space-y-0.5 text-xs">
+      {(now !== null || r.generic) && (
+        <p className="text-ink-soft">
+          {now !== null && <>100gあたり <b>{yen(now)}</b>（税抜）</>}
+          {diff !== null && diff !== 0 && !doubt && <span className={diff > 0 ? "text-ng" : "text-ok"}>　前より{diff > 0 ? `${diff}%高い` : `${-diff}%安い`}</span>}
+          {r.generic && <span className="text-muted">{now !== null ? "　" : ""}AIの判断：{r.generic}</span>}
+        </p>
+      )}
+      {guess && <p><span className="rounded bg-warn-soft px-1.5 py-0.5 text-warn-strong">{SIZE_LABEL[r.size!]}</span>{r.sizeNote && <span className="text-muted">　{r.sizeNote}</span>}</p>}
+      {doubt && <p className="text-ng">量を確かめてください：{doubt}{r.sizeTried ? "" : "（「AIで判断する」で確かめられます）"}</p>}
+    </div>
   );
 }

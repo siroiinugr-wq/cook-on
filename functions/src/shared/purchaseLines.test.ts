@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fromPurchaseLines, per100, sizeFromName } from "./invoice";
+import { fromPurchaseLines, invoicePatch, per100, sizeDoubt, sizeFromName } from "./invoice";
 import { parsePurchaseCsv, toPurchaseCsv, type PurchaseLine } from "./purchaseLines";
 
 const line = (p: Partial<PurchaseLine>): PurchaseLine => ({
@@ -29,12 +29,36 @@ describe("仕入れ明細ファイル", () => {
     expect(per100(1080, 0.08, 1, "kg")).toBe(100);
     expect(per100(540, 0, 450, "g")).toBe(120);
     expect(per100(300, 0, 10, "枚")).toBeNull();
+    // 1つの重さが分かれば個でも出す（卵10個 330円・1個50g → 66円）
+    expect(per100(330, 0, 10, "個", 50)).toBe(66);
   });
 
   it("品名から包装の量を読む", () => {
     expect(sizeFromName("よつ葉バター 450g")).toEqual({ qty: 450, unit: "g" });
     expect(sizeFromName("牛乳１Ｌ")).toEqual({ qty: 1, unit: "l" });
     expect(sizeFromName("卵")).toBeNull();
+    expect(sizeFromName("生クリーム200ml×3")).toEqual({ qty: 600, unit: "ml" });
+    expect(sizeFromName("ﾁｮｺ 3x200g")).toEqual({ qty: 600, unit: "g" });
+    expect(sizeFromName("たまご 10個入")).toEqual({ qty: 10, unit: "個" });
+    expect(sizeFromName("ポーションバター 6P")).toEqual({ qty: 6, unit: "個" });
+  });
+
+  it("量をAIに確かめる行（量が分からない・1つの重さが分からない・前の100gあたりと大きく違う）", () => {
+    const l = { price: 540, tax: 0, qty: 1, unit: "個" as const };
+    expect(sizeDoubt({ ...l, size: "none" })).toBe("量が分からない");
+    expect(sizeDoubt({ ...l, size: "edited" })).toBeNull();
+    expect(sizeDoubt({ ...l, qty: 10, size: "printed" })).toBe("1つの重さが分からない");
+    expect(sizeDoubt({ ...l, qty: 10, size: "printed", gramsPerPiece: 50 })).toBeNull();
+    const ing = { purchasePrice: 540, purchaseQty: 450, purchaseUnit: "g" as const };
+    expect(sizeDoubt({ price: 540, tax: 0, qty: 450, unit: "g", size: "printed" }, ing)).toBeNull();
+    expect(sizeDoubt({ price: 540, tax: 0, qty: 45, unit: "g", size: "printed" }, ing)).toMatch(/10倍/);
+  });
+
+  it("個で買う材料は、1つの重さを材料に写す（お店が入れた値は変えない）", () => {
+    const line = { price: 330, qty: 10, unit: "個" as const, tax: 0, supplier: "", raw: "卵10個", gramsPerPiece: 50 };
+    expect(invoicePatch(line, { name: "卵" }).gramsPerPiece).toBe(50);
+    expect(invoicePatch(line, { name: "卵", gramsPerPiece: 55 }).gramsPerPiece).toBeUndefined();
+    expect(invoicePatch({ ...line, unit: "g", qty: 500 }, { name: "卵" }).gramsPerPiece).toBeUndefined();
   });
 
   it("同じ品名は一番新しい値段だけ。名前・別名・一般的な名前で結び、値引きは入れない", () => {
