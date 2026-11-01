@@ -137,13 +137,14 @@ if (useEstat) {
     const it = hits.find((x) => valueOf(x)) ?? hits[0];
     const v = it && valueOf(it);
     // 量（1kg・10個など）は、品目名・単位・銘柄の説明（@explanation）・値の単位のどこかに書いてある
-    const qu = it && (parseQtyUnit(it.name) ?? parseQtyUnit(it.unit) ?? parseQtyUnit(it.note) ?? parseQtyUnit(String(v?.["@unit"] ?? "")));
+    // 無ければ shared/refPrice.ts に書いた銘柄の量（spec）を使う
+    const qu = it && (parseQtyUnit(it.name) ?? parseQtyUnit(it.unit) ?? parseQtyUnit(it.note) ?? parseQtyUnit(String(v?.["@unit"] ?? "")) ?? e.spec);
     if (!it || !v || !qu) {
-      console.log(`  ${e.globalId.padEnd(20)} … 使えない（${!it ? "品目が無い" : !v ? "値が無い" : `量を読めない：${it.name} ${it.unit}`}）`);
+      console.log(`  ${e.globalId.padEnd(20)} … 使えない（${!it ? "品目が無い" : !v ? "値が無い（今月は調べていない品目）" : `量が分からない：${it.name}。shared/refPrice.ts の spec に銘柄の量を書くと使える`}）`);
       if (it && v && !qu && debug) console.log(`      品目 ${JSON.stringify(it.raw)}\n      値 ${JSON.stringify(v)}`);
       continue;
     }
-    const refPrice = { price: Number(v.$), qty: qu.qty, unit: qu.unit, item: `${it.name.replace(/^\d+\s*/, "")}${it.note ? `（${it.note}）` : ""}`.slice(0, 120), area: String(area["@name"]), asOf, source: "総務省「小売物価統計調査」" };
+    const refPrice = { price: Number(v.$), qty: qu.qty, unit: qu.unit, item: `${it.name.replace(/^\d+\s*/, "")}${it.note || e.spec?.note ? `（${it.note || e.spec.note}）` : ""}`.slice(0, 120), area: String(area["@name"]), asOf, source: "総務省「小売物価統計調査」" };
     console.log(`  ${e.globalId.padEnd(20)} ← ${refPrice.item}｜${refPrice.price}円（税込）/${qu.qty}${qu.unit}｜税抜 ${refPriceExTax(refPrice)}円`);
     rows.push({ globalId: e.globalId, refPrice });
   }

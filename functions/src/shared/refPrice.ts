@@ -25,25 +25,30 @@ export function refPriceExTax(p: Pick<RefPrice, "price">): number {
   return Math.round((p.price / (1 + TAX_RATES.takeout)) * 10) / 10;
 }
 
-/** 小売物価統計の品目 → はじめの材料。品目名にすべて含まれる言葉で探す。 */
-export const ESTAT_ITEM_MAP: { globalId: string; tokens: string[] }[] = [
-  { globalId: "base_hakurikiko", tokens: ["小麦粉"] },
-  { globalId: "base_joohakuto", tokens: ["砂糖"] },
-  { globalId: "base_egg", tokens: ["鶏卵"] },
-  { globalId: "base_milk", tokens: ["牛乳"] },
-  { globalId: "base_butter_salted", tokens: ["バター"] },
+/**
+ * 小売物価統計の品目 → はじめの材料。品目名にすべて含まれる言葉で探す。
+ * e-Stat の API は品目名だけで量を返さないので、調査の「銘柄」（量の決まり）をここに書く（spec）。
+ * 銘柄は調査の年で変わることがあるので、--dry-run の「値段/量」がおかしくないかを見てから書く。
+ * spec が無い品目は、量が読めないので使わない（紅茶は銘柄の量が確かめられていないので外してある）。
+ */
+export const ESTAT_ITEM_MAP: { globalId: string; tokens: string[]; spec?: { qty: number; unit: Unit; note: string } }[] = [
+  { globalId: "base_hakurikiko", tokens: ["小麦粉"], spec: { qty: 1, unit: "kg", note: "薄力粉・1kg袋入り" } },
+  { globalId: "base_joohakuto", tokens: ["砂糖"], spec: { qty: 1, unit: "kg", note: "上白糖・1kg袋入り" } },
+  { globalId: "base_egg", tokens: ["鶏卵"], spec: { qty: 10, unit: "個", note: "白色卵・Lサイズ・10個入りパック" } },
+  { globalId: "base_milk", tokens: ["牛乳"], spec: { qty: 1000, unit: "ml", note: "紙パック入り・1000mL" } },
+  { globalId: "base_butter_salted", tokens: ["バター"], spec: { qty: 200, unit: "g", note: "箱入り・200g" } },
   { globalId: "base_cream", tokens: ["生クリーム"] },
-  { globalId: "base_yogurt", tokens: ["ヨーグルト"] },
-  { globalId: "base_salad_oil", tokens: ["食用油"] },
+  { globalId: "base_yogurt", tokens: ["ヨーグルト"], spec: { qty: 400, unit: "g", note: "プレーン・400g" } },
+  { globalId: "base_salad_oil", tokens: ["食用油"], spec: { qty: 1000, unit: "g", note: "キャノーラ油・1000g" } },
   { globalId: "base_katakuriko", tokens: ["かたくり粉"] },
   { globalId: "base_hachimitsu", tokens: ["はちみつ"] },
-  { globalId: "base_salt", tokens: ["食塩"] },
-  { globalId: "base_soy_milk", tokens: ["豆乳"] },
-  { globalId: "base_banana", tokens: ["バナナ"] },
-  { globalId: "base_apple", tokens: ["りんご"] },
+  { globalId: "base_salt", tokens: ["食塩"], spec: { qty: 1, unit: "kg", note: "精製塩・1kg袋入り" } },
+  { globalId: "base_soy_milk", tokens: ["豆乳"], spec: { qty: 1000, unit: "ml", note: "無調整・1000mL" } },
+  { globalId: "base_banana", tokens: ["バナナ"], spec: { qty: 1, unit: "kg", note: "1kg" } },
+  { globalId: "base_apple", tokens: ["りんご"], spec: { qty: 1, unit: "kg", note: "ふじ又はつがる・1kg" } },
   { globalId: "base_strawberry", tokens: ["いちご"] },
   { globalId: "base_lemon", tokens: ["レモン"] },
-  { globalId: "base_coffee_beans", tokens: ["コーヒー豆"] },
+  { globalId: "base_coffee_beans", tokens: ["コーヒー豆"], spec: { qty: 100, unit: "g", note: "炒り豆・100g" } },
   { globalId: "base_tea_leaves", tokens: ["紅茶"] },
 ];
 
