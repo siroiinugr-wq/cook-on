@@ -13,7 +13,9 @@ import { useCaptureTray, type TrayItem } from "../hooks/useCaptureTray";
 import { useIngredients } from "../hooks/useIngredients";
 import { createIngredient } from "../lib/ingredientLink";
 import { uploadImportPhoto } from "../lib/photos";
-import { call, getOnce, newRequestId, saveDoc } from "../lib/store";
+import { call, getOnce, newRequestId, removeDoc, saveDoc } from "../lib/store";
+import { useCol } from "../hooks/useData";
+import type { PurchaseLine } from "@shared/purchaseLines";
 import { PageHead } from "../components/common/Layout";
 import { CostTag } from "../components/common/CreditBadge";
 import { Icon } from "../components/common/Icon";
@@ -97,16 +99,35 @@ export function InvoicePhotosPage() {
     }
   }
 
+  // AI経理から自動で届いた明細（設定で連携したお店だけ）
+  const inbox = useCol<{ lines: PurchaseLine[]; sender: string }>(`organizations/${orgId}/purchaseInbox`).list;
+  const inboxLines = inbox.reduce((n, d) => n + (d.lines?.length ?? 0), 0);
+  async function loadInbox() {
+    setErr("");
+    setMsg("");
+    try {
+      const lines = inbox.flatMap((d) => d.lines ?? []);
+      addLines(lines, 0, `AI経理から届いた${inbox.length}枚・`);
+      await Promise.all(inbox.map((d) => removeDoc(`organizations/${orgId}/purchaseInbox/${d.id}`)));
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  function addLines(lines: PurchaseLine[], skipped: number, head = "") {
+    const got = fromPurchaseLines(lines, ings.list);
+    if (!got.length) throw new Error("値段の入った明細が見つかりませんでした。");
+    setRows((cur) => [...cur, ...got.map((l) => toRow(l, 0.85))]);
+    const linked = got.filter((l) => l.ingredientId).length;
+    setMsg(`${head}${lines.length}行から${got.length}品を読み込みました（同じ品名は一番新しい値段だけ）。${linked}品は名前で結べました${skipped ? `。読めない${skipped}行は飛ばしました` : ""}。`);
+  }
+
   async function loadFile(f: File) {
     setErr("");
     setMsg("");
     try {
       const { lines, skipped } = parsePurchaseCsv(await readText(f));
-      const got = fromPurchaseLines(lines, ings.list);
-      if (!got.length) throw new Error("値段の入った明細が見つかりませんでした。");
-      setRows((cur) => [...cur, ...got.map((l) => toRow(l, 0.85))]);
-      const linked = got.filter((l) => l.ingredientId).length;
-      setMsg(`${lines.length}行から${got.length}品を読み込みました（同じ品名は一番新しい値段だけ）。${linked}品は名前で結べました${skipped ? `。読めない${skipped}行は飛ばしました` : ""}。`);
+      addLines(lines, skipped);
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
     }
@@ -202,10 +223,17 @@ export function InvoicePhotosPage() {
           <input type="file" accept="image/*" multiple className="hidden" onChange={(e) => { tray.add(Array.from(e.target.files ?? []), "upload"); e.target.value = ""; }} />
         </label>
       </div>
+      {inbox.length > 0 && (
+        <section className="space-y-2 rounded-2xl border border-clay bg-clay-soft p-4">
+          <p className="font-bold">AI経理から届いた明細：{inbox.length}枚（{inboxLines}行）</p>
+          <p className="text-sm text-ink-soft">AI経理で承認したレシートの明細です。読み込むと下に並ぶので、確かめてから反映してください（無料）。</p>
+          <button type="button" disabled={busy} onClick={loadInbox} className={`w-full ${ui.primary}`}>読み込む</button>
+        </section>
+      )}
       <section className={`${ui.card} space-y-2`}>
         <p className="font-bold">仕入れ明細ファイルを読み込む（無料）</p>
         <p className="text-sm text-ink-soft">
-          経理アプリ「<a href={KEIRI_URL} target="_blank" rel="noreferrer" className="underline">AI経理</a>」を使っているお店は、レシートを撮った明細を「仕入れ明細ファイル」として書き出せます。それを読み込むと、撮り直さずに仕入れ値を入れられます（同じ形の CSV なら、ほかのアプリや手で作ったものでも読めます）。
+          経理アプリ「<a href={KEIRI_URL} target="_blank" rel="noreferrer" className="underline">AI経理</a>」を使っているお店は、レシートを撮った明細を「仕入れ明細ファイル」として書き出せます（設定の「AI経理と連携」でつなぐと、ファイルを渡さなくても自動で届きます）。それを読み込むと、撮り直さずに仕入れ値を入れられます（同じ形の CSV なら、ほかのアプリや手で作ったものでも読めます）。
         </p>
         <label className={`block cursor-pointer text-center ${ui.secondary} ${busy ? "pointer-events-none opacity-50" : ""}`}>
           ファイルを選ぶ（.csv）
