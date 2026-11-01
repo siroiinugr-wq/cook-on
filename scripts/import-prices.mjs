@@ -88,12 +88,22 @@ if (useEstat) {
   const meta = await api("getMetaInfo", { statsDataId: tableId });
   const classes = list(meta?.GET_META_INFO?.METADATA_INF?.CLASS_INF?.CLASS_OBJ);
   const cls = (id) => list(classes.find((c) => c["@id"] === id)?.CLASS);
-  const areaName = opt("--area") || "東京都区部";
-  const area = cls("area").find((c) => String(c["@name"]).includes(areaName));
+  // 地域の分類は id が "area" のことも、"cat01" などで名前が「地域」「都市」のこともある
+  const norm = (x) => String(x ?? "").normalize("NFKC").replace(/\s/g, "");
+  const areaObj = classes.find((c) => c["@id"] === "area") ?? classes.find((c) => /地域|都市|市/.test(norm(c["@name"])));
+  const areaList = list(areaObj?.CLASS);
+  const want = norm(opt("--area") || "東京都区部");
+  // 「13100 東京都区部」「東京都 区部」「区部」などの書き方でも見つける
+  const area = areaList.find((c) => norm(c["@name"]).includes(want))
+    ?? (want === "東京都区部" ? areaList.find((c) => /区部|特別区/.test(norm(c["@name"]))) : undefined);
+  const areaDim = areaObj?.["@id"] === "area" ? "area" : areaObj?.["@id"];
   const times = cls("time").sort((a, b) => String(b["@code"]).localeCompare(String(a["@code"])));
-  const items = classes.filter((c) => /^cat/.test(c["@id"])).flatMap((c) => list(c.CLASS).map((x) => ({ dim: c["@id"], code: x["@code"], name: String(x["@name"]), unit: String(x["@unit"] ?? "") })));
+  const items = classes.filter((c) => /^cat/.test(c["@id"]) && c !== areaObj).flatMap((c) => list(c.CLASS).map((x) => ({ dim: c["@id"], code: x["@code"], name: String(x["@name"]), unit: String(x["@unit"] ?? "") })));
   if (!area || !times.length || !items.length) {
-    console.error(`表の形が想定と違います（地域「${areaName}」${area ? "あり" : "なし"}・時点 ${times.length}・品目 ${items.length}）。--table で別の表を選んでください。`);
+    console.error(`表の形が想定と違います（地域「${want}」${area ? "あり" : "なし"}・時点 ${times.length}・品目 ${items.length}）。`);
+    console.error(`分類：${classes.map((c) => `${c["@id"]}=${c["@name"]}(${list(c.CLASS).length})`).join("、")}`);
+    if (areaList.length) console.error(`地域の例：${areaList.slice(0, 40).map((c) => c["@name"]).join("、")}`);
+    console.error("地域を変えるときは --area 広島市 のように付けてください。");
     process.exit(1);
   }
 
@@ -101,7 +111,9 @@ if (useEstat) {
   let values = [];
   let time = null;
   for (const t of times.slice(0, 3)) {
-    const d = await api("getStatsData", { statsDataId: tableId, cdArea: area["@code"], cdTime: t["@code"] });
+    // 地域が "area" 以外の分類（cat01 など）のときは、その分類の絞り込み（cdCat01 など）で渡す
+    const areaParam = areaDim === "area" ? { cdArea: area["@code"] } : { [`cd${areaDim[0].toUpperCase()}${areaDim.slice(1)}`]: area["@code"] };
+    const d = await api("getStatsData", { statsDataId: tableId, ...areaParam, cdTime: t["@code"] });
     values = list(d?.GET_STATS_DATA?.STATISTICAL_DATA?.DATA_INF?.VALUE).filter((v) => Number(v.$) > 0);
     if (values.length) {
       time = t;
