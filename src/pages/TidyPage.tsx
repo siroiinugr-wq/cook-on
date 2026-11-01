@@ -15,6 +15,7 @@ import { PiecesFix, NamesFix, DupRows } from "../components/tidy/RecipeFixes";
 import { MergeGroups } from "../components/tidy/MergeGroups";
 import { LabelNames } from "../components/tidy/LabelNames";
 import { LinkCard } from "../components/tidy/LinkCard";
+import { useHashScroll } from "../hooks/useHashScroll";
 
 export function TidyPage() {
   const { orgId, canEdit, org } = useOrgCtx();
@@ -41,6 +42,7 @@ export function TidyPage() {
   const dupRows = recipes.list.map((r) => ({ r, names: duplicateItems(r.items) })).filter((x) => x.names.length);
   const groups = similarIngredientGroups(ings.list).map(byUse);
 
+  useHashScroll(!ings.loading && !recipes.loading);
   if (!canEdit) return <p className="py-10 text-center text-muted">データを整理する権限がありません。</p>;
   if (ings.loading || recipes.loading) return <p className="py-10 text-center text-muted">読み込み中…</p>;
 
@@ -48,30 +50,30 @@ export function TidyPage() {
   const n = (k: number, unit = "件") => (k ? `${k}${unit}` : "済み");
   return (
     <div className="space-y-3 pb-10">
-      <PageHead title="データの整理" back="/settings" />
+      <PageHead title="データの整理" back="/todo" />
       <p className="text-sm text-ink-soft">取り込んだレシピと材料を、上から順に見直します。どれも無料で、レシピは前の版が履歴に残ります。</p>
 
-      <LinkCard orgId={orgId} loose={loose} credits={org.credits} />
+      <div id="link" className="scroll-mt-20"><LinkCard orgId={orgId} loose={loose} credits={org.credits} /></div>
 
-      <Accordion title={`1. アレルゲンの確認（${n(unconfirmed.length)}）`} summary="名前から推定した候補を見て、確定します。確定するまでラベルは印刷できません" defaultOpen={unconfirmed.length > 0}>
+      <Accordion id="allergen" title={`1. アレルゲンの確認（${n(unconfirmed.length)}）`} summary="名前から推定した候補を見て、確定します。確定するまでラベルは印刷できません" defaultOpen={unconfirmed.length > 0}>
         <AllergenReview orgId={orgId} list={unconfirmed} usedIn={usedIn} />
       </Accordion>
-      <Accordion title={`2. 仕入れ値（${noPrice.length || refPriced.length ? `空${noPrice.length}件・参考価格${refPriced.length}件` : "済み"}）`} summary="よく使う材料から順に。参考価格は目安なので、お店の仕入れ値が分かったら直します">
+      <Accordion id="price" title={`2. 仕入れ値（${noPrice.length || refPriced.length ? `空${noPrice.length}件・参考価格${refPriced.length}件` : "済み"}）`} summary="よく使う材料から順に。参考価格は目安なので、お店の仕入れ値が分かったら直します">
         <PriceFill orgId={orgId} list={[...noPrice, ...refPriced]} usedIn={usedIn} />
       </Accordion>
-      <Accordion title={`3. 何個分のレシピか（${n(noPieces.length)}）`} summary={`材料が${HEAVY_SINGLE_GRAMS}g以上あるのに「1ロット＝1個」のもの`}>
+      <Accordion id="pieces" title={`3. 何個分のレシピか（${n(noPieces.length)}）`} summary={`材料が${HEAVY_SINGLE_GRAMS}g以上あるのに「1ロット＝1個」のもの`}>
         <PiecesFix orgId={orgId} rows={noPieces} />
       </Accordion>
-      <Accordion title={`4. 名前のないレシピ・レシピでないもの（${n(badNames.length)}）`} summary="名前を付けるか、しまう（消えません）">
+      <Accordion id="names" title={`4. 名前のないレシピ・レシピでないもの（${n(badNames.length)}）`} summary="名前を付けるか、しまう（消えません）">
         <NamesFix orgId={orgId} list={badNames} />
       </Accordion>
-      <Accordion title={`5. 同じ材料が何行かに分かれている（${n(dupRows.length)}）`} summary="量を足して1行にまとめます（単位が同じものだけ）">
+      <Accordion id="dups" title={`5. 同じ材料が何行かに分かれている（${n(dupRows.length)}）`} summary="量を足して1行にまとめます（単位が同じものだけ）">
         <DupRows orgId={orgId} rows={dupRows} />
       </Accordion>
-      <Accordion title={`6. 材料の表記ゆれ（${n(groups.length, "組")}）`} summary="きび砂糖／キビ糖のような同じ材料を1つにまとめます">
+      <Accordion id="merge" title={`6. 材料の表記ゆれ（${n(groups.length, "組")}）`} summary="きび砂糖／キビ糖のような同じ材料を1つにまとめます">
         <MergeGroups orgId={orgId} groups={groups} usedIn={usedIn} />
       </Accordion>
-      <Accordion title={`7. ラベルの名前（${n(ings.list.filter((x) => !x.labelName?.trim()).length)}）`} summary="キビ糖→きび砂糖、薄力粉→小麦粉のように、品質表示に出す名前。AIが案を出し、最後に確かめます">
+      <Accordion id="label" title={`7. ラベルの名前（${n(ings.list.filter((x) => !x.labelName?.trim()).length)}）`} summary="キビ糖→きび砂糖、薄力粉→小麦粉のように、品質表示に出す名前。AIが案を出し、最後に確かめます">
         <LabelNames orgId={orgId} list={byUse(ings.list)} usedIn={usedIn} credits={org.credits} />
       </Accordion>
     </div>

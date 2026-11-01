@@ -1,5 +1,6 @@
 // レシート・納品書から仕入れ値を入れる：撮る → まとめて読み取る（1枚1クレジット）→ 明細ごとにお店の材料を確かめて反映。
 // 撮影と一覧は「写真から取り込み」と同じ部品（一覧はお店ごと・この画面専用にためる）。値段が変わると原価の計算し直しと値段の記録は材料のトリガが行う
+import { Link } from "react-router-dom";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { aiMatchCredits, CREDIT_COST, INVOICE_MAX_PHOTOS, SIZE_SEARCH_MAX, sizeSearchCredits } from "@shared/credits";
 import { PRICE_TAX_OPTIONS, yen } from "@shared/cost";
@@ -270,7 +271,14 @@ export function InvoicePhotosPage() {
   if (!canEdit) return <p className="py-10 text-center text-muted">仕入れ値の更新には編集の権限が必要です。</p>;
   return (
     <div className="space-y-4 pb-10">
-      <PageHead title="レシート・納品書から仕入れ値" back="/ingredients" />
+      <PageHead title="仕入れ" />
+      {inbox.length > 0 && (
+        <section className="space-y-2 rounded-2xl border border-clay bg-clay-soft p-4">
+          <p className="font-bold">AI経理から届いた明細：{inbox.length}枚（{inboxLines}行）</p>
+          <p className="text-sm text-ink-soft">AI経理で承認したレシートの明細です。読み込むと下に並ぶので、確かめてから反映してください（無料）。</p>
+          <button type="button" disabled={busy} onClick={loadInbox} className={`w-full ${ui.primary}`}>読み込む</button>
+        </section>
+      )}
       <p className="text-sm text-ink-soft">
         仕入れのレシート・納品書・請求書を撮ると、AIが明細を読んで、お店の材料と結びつけます。季節で変わる値段も、撮るだけで原価に反映できます。仕入れ明細ファイルの読み込みもできます。反映するのは確かめてからです。
       </p>
@@ -287,17 +295,10 @@ export function InvoicePhotosPage() {
           <input type="file" accept="image/*" multiple className="hidden" onChange={(e) => { tray.add(Array.from(e.target.files ?? []), "upload"); e.target.value = ""; }} />
         </label>
       </div>
-      {inbox.length > 0 && (
-        <section className="space-y-2 rounded-2xl border border-clay bg-clay-soft p-4">
-          <p className="font-bold">AI経理から届いた明細：{inbox.length}枚（{inboxLines}行）</p>
-          <p className="text-sm text-ink-soft">AI経理で承認したレシートの明細です。読み込むと下に並ぶので、確かめてから反映してください（無料）。</p>
-          <button type="button" disabled={busy} onClick={loadInbox} className={`w-full ${ui.primary}`}>読み込む</button>
-        </section>
-      )}
       <section className={`${ui.card} space-y-2`}>
         <p className="font-bold">仕入れ明細ファイルを読み込む（無料）</p>
         <p className="text-sm text-ink-soft">
-          経理アプリ「<a href={KEIRI_URL} target="_blank" rel="noreferrer" className="underline">AI経理</a>」を使っているお店は、レシートを撮った明細を「仕入れ明細ファイル」として書き出せます（設定の「AI経理と連携」でつなぐと、ファイルを渡さなくても自動で届きます）。それを読み込むと、撮り直さずに仕入れ値を入れられます（同じ形の CSV なら、ほかのアプリや手で作ったものでも読めます）。
+          経理アプリ「<a href={KEIRI_URL} target="_blank" rel="noreferrer" className="underline">AI経理</a>」を使っているお店は、レシートを撮った明細を「仕入れ明細ファイル」として書き出せます（設定の「<Link to="/settings#keiri" className="underline">AI経理と連携</Link>」でつなぐと、ファイルを渡さなくても自動で届きます）。それを読み込むと、撮り直さずに仕入れ値を入れられます（同じ形の CSV なら、ほかのアプリや手で作ったものでも読めます）。
         </p>
         <label className={`block cursor-pointer text-center ${ui.secondary} ${busy ? "pointer-events-none opacity-50" : ""}`}>
           ファイルを選ぶ（.csv）

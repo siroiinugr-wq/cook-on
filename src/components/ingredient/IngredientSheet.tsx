@@ -1,5 +1,6 @@
 // 材料の登録・編集。仕入れ値を変えると、使っているレシピの原価が自動で計算し直され、目標を超えたらお知らせが出る
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { ALLERGENS, type AllergenId } from "@shared/allergens";
 import { fromExTax, PRICE_TAX_OPTIONS, toExTax, unitCostPerGram, yen } from "@shared/cost";
 import type { Ingredient } from "@shared/types";
@@ -26,7 +27,7 @@ const PIECE: Unit[] = ["個", "枚", "本"];
 const LIQUID: Unit[] = ["ml", "l", "大さじ", "小さじ", "カップ"];
 type Hist = { from: { price: number | null; qty: number; unit: string }; to: { price: number | null; qty: number; unit: string }; at: unknown };
 
-export function IngredientSheet({ orgId, uid, ing, usedIn, onClose }: { orgId: string; uid: string; ing: Ingredient | null; usedIn: number; onClose: () => void }) {
+export function IngredientSheet({ orgId, uid, ing, usedIn, usedBy = [], onClose }: { orgId: string; uid: string; ing: Ingredient | null; usedIn: number; usedBy?: { id: string; name: string }[]; onClose: () => void }) {
   const [d, setD] = useState<Omit<Ingredient, "id">>(ing ?? { name: "", purchasePrice: null, purchaseQty: 1, purchaseUnit: "kg", allergens: [], globalRef: null });
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
@@ -173,7 +174,17 @@ export function IngredientSheet({ orgId, uid, ing, usedIn, onClose }: { orgId: s
             </ul>
           </Accordion>
         )}
-        {ing && usedIn > 0 && <p className="text-xs text-muted">{usedIn}件のレシピで使っています。値段を変えると、その原価も自動で計算し直します。</p>}
+        {ing && usedIn > 0 && (
+          <div className="space-y-1">
+            <p className="text-xs text-muted">{usedIn}件のレシピで使っています。値段を変えると、その原価も自動で計算し直します。</p>
+            {usedBy.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {usedBy.slice(0, 12).map((r) => <Link key={r.id} to={`/recipes/${r.id}`} className={`${ui.chip} text-clay-strong`}>{r.name}</Link>)}
+                {usedBy.length > 12 && <span className="text-xs text-muted">ほか{usedBy.length - 12}件</span>}
+              </div>
+            )}
+          </div>
+        )}
         {err && <p className="text-sm text-ng">{err}</p>}
         <button disabled={busy || !d.name.trim()} onClick={save} className={`w-full ${ui.primary}`}>{busy ? "保存しています…" : "保存する"}</button>
         {ing && <button onClick={remove} className={`w-full ${ui.quiet} text-ng`}>この材料を消す</button>}

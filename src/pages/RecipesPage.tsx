@@ -29,7 +29,10 @@ export function RecipesPage() {
   return (
     <div className="space-y-4">
       <PageHead title="レシピ" right={canEdit && (
-        <Link to="/recipes/new" className={`${ui.primary} flex items-center gap-1 py-2`}><Icon name="plus" className="h-4 w-4" />新しく作る</Link>
+        <div className="flex gap-1.5">
+          <Link to="/import" className={`${ui.secondary} flex items-center gap-1 py-2`} aria-label="取り込む"><Icon name="upload" className="h-4 w-4" /><span className="hidden sm:inline">取り込む</span></Link>
+          <Link to="/recipes/new" className={`${ui.primary} flex items-center gap-1 py-2`}><Icon name="plus" className="h-4 w-4" />新しく作る</Link>
+        </div>
       )} />
       <AlertList orgId={orgId} canEdit={canEdit} />
       {canEdit && <TidyBanner list={list} />}

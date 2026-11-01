@@ -1,6 +1,6 @@
 // クレジット：残り・何に何クレジット使うか・使った記録（通帳）・まとめ買い（決済をつなぐまでは準備中）
 import { useState } from "react";
-import { ACTION_LABEL, AI_MATCH_BATCH, LABEL_NAME_BATCH, CREDIT_COST, CREDIT_PACKS, IMPORT_CHUNK_CHARS, PRICE_SEARCH_BATCH, SIZE_SEARCH_BATCH, type CreditAction } from "@shared/credits";
+import { ACTION_LABEL, CREDIT_COST, CREDIT_PACKS, type CreditAction } from "@shared/credits";
 import { useOrgCtx } from "../contexts/OrgContext";
 import { useCol } from "../hooks/useData";
 import { call, toDate } from "../lib/store";
@@ -8,22 +8,10 @@ import { PageHead } from "../components/common/Layout";
 import { Icon } from "../components/common/Icon";
 import { creditText } from "../components/common/CreditBadge";
 import { ui } from "../components/common/ui";
+import { CREDIT_PER } from "../lib/creditPer";
 
 interface Entry { kind: string; action?: CreditAction; amount: number; status: string; refunded?: number; createdAt: unknown }
 
-const PER: Record<CreditAction, string> = {
-  aiMatch: `${AI_MATCH_BATCH}件ごと`,
-  importChunk: `${IMPORT_CHUNK_CHARS.toLocaleString()}文字ごと`,
-  importPhoto: "写真1枚",
-  invoicePhoto: "レシート1枚",
-  priceCompare: "1材料",
-  priceSearch: `${PRICE_SEARCH_BATCH}品ごと（参考価格がある品は0）`,
-  sizeSearch: `${SIZE_SEARCH_BATCH}品ごと（ほかのお店が調べた品は0）`,
-  productGuess: "1商品",
-  productPhoto: "写真1枚",
-  aiSuggest: "1回",
-  labelName: `${LABEL_NAME_BATCH}件ごと`,
-};
 
 export function CreditsPage() {
   const { orgId, org, isAdmin } = useOrgCtx();
@@ -53,7 +41,7 @@ export function CreditsPage() {
         <h2 className="text-sm font-bold">クレジットを使う機能</h2>
         <ul className="divide-y divide-line text-sm">
           {(Object.keys(CREDIT_COST) as CreditAction[]).map((a) => (
-            <li key={a} className="flex items-center justify-between py-2"><span>{ACTION_LABEL[a]}<span className="ml-1 text-xs text-muted">（{PER[a]}）</span></span><b>{CREDIT_COST[a]}</b></li>
+            <li key={a} className="flex items-center justify-between py-2"><span>{ACTION_LABEL[a]}<span className="ml-1 text-xs text-muted">（{CREDIT_PER[a]}）</span></span><b>{CREDIT_COST[a]}</b></li>
           ))}
         </ul>
         <p className="text-xs text-muted">うまくいかなかったときは、クレジットは使われません（自動で戻ります）。</p>
