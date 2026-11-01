@@ -23,6 +23,8 @@ export interface Ingredient {
   /** 1ml あたりの g（液体。無ければ 1） */
   gramsPerMl?: number | null;
   allergens: AllergenId[];
+  /** お店がアレルゲンを確かめたら true。取り込みで作った材料は無い（ラベルで「未確認」と出す） */
+  allergensConfirmed?: boolean;
   /** ラベルに出す名前（無ければ name）。既製品は「チョコレート（砂糖、カカオマス…）」のように中身まで書ける */
   labelName?: string;
   /** 添加物なら true（ラベルで「／」のあとに並べる） */
@@ -76,7 +78,11 @@ export interface CostCache {
 export interface Recipe {
   id: string;
   name: string;
+  /** 分類（大きな分け方：焼菓子・ケーキ・料理・ドリンク） */
   category: string;
+  /** 種類（分類の中の分け方：パウンドケーキ・クッキー・和食）。前からあるレシピには無い */
+  subcategory?: string;
+  /** タグ（自由なラベル：定番・ギフト・冬限定） */
   tags: string[];
   items: RecipeItem[];
   steps: RecipeStep[];
@@ -86,6 +92,8 @@ export interface Recipe {
   /** 目標原価率（0〜1）。無ければ店舗の既定 */
   targetCostRate: number | null;
   memo?: string;
+  /** レシピの写真・イラスト（Storage のパス。先頭が一覧と詳細の表紙） */
+  photos?: string[];
   /** ラベルの名称・保存方法・期限など（無ければラベル画面の既定） */
   labelInfo?: Partial<LabelInfo>;
   /** 包装（1個あたり。袋・脱酸素剤・包装セット）。前からあるレシピには無い */
@@ -100,6 +108,14 @@ export interface Recipe {
   version: number;
   updatedAt?: unknown;
   updatedBy?: string;
+}
+
+/** よく使う工程 organizations/{orgId}/stepTemplates/{id}（1つ以上の工程をまとめて呼び出せる） */
+export interface StepTemplate {
+  id: string;
+  name: string;
+  steps: string[];
+  updatedAt?: unknown;
 }
 
 /** 包装資材 organizations/{orgId}/packaging/{id}：purchasePrice 円で purchaseQty 枚（個・本）を買う */

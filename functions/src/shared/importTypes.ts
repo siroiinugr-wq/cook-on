@@ -26,6 +26,8 @@ export interface ParsedItem {
 export interface ParsedRecipe {
   name: string;
   category: string;
+  /** 種類（パウンドケーキ・クッキーなど）。前の取り込みには無い */
+  subcategory?: string;
   pieces: number | null;
   items: ParsedItem[];
   steps: string[];

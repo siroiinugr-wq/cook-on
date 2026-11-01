@@ -8,6 +8,7 @@ export function StoreSection({ orgId, org, canManage }: { orgId: string; org: Or
   const [name, setName] = useState(org.name);
   const [rate, setRate] = useState(String(Math.round(org.settings.targetCostRate * 1000) / 10));
   const [maker, setMaker] = useState(org.settings.manufacturer);
+  const [address, setAddress] = useState(org.settings.manufacturerAddress);
   const [rec, setRec] = useState(org.settings.includeRecommendedAllergens);
   const [share, setShare] = useState(org.settings.shareProducts === true);
   const [msg, setMsg] = useState("");
@@ -15,16 +16,18 @@ export function StoreSection({ orgId, org, canManage }: { orgId: string; org: Or
     setName(org.name);
     setRate(String(Math.round(org.settings.targetCostRate * 1000) / 10));
     setMaker(org.settings.manufacturer);
+    setAddress(org.settings.manufacturerAddress);
     setRec(org.settings.includeRecommendedAllergens);
     setShare(org.settings.shareProducts === true);
-  }, [org.name, org.settings.targetCostRate, org.settings.manufacturer, org.settings.includeRecommendedAllergens, org.settings.shareProducts]);
+  }, [org.name, org.settings.targetCostRate, org.settings.manufacturer, org.settings.manufacturerAddress, org.settings.includeRecommendedAllergens, org.settings.shareProducts]);
 
   async function save() {
     const r = Number(rate) / 100;
     if (!name.trim()) return setMsg("店舗名を入れてください。");
     if (!(r > 0 && r < 1)) return setMsg("原価率は1〜99%で入れてください。");
+    if (!maker.trim() || !address.trim()) return setMsg("ラベルの製造者は、名前と住所の両方を入れてください（食品表示に必要です）。");
     try {
-      await saveDoc(`organizations/${orgId}`, { name: name.trim().slice(0, 40), settings: { ...org.settings, targetCostRate: r, manufacturer: maker.trim(), includeRecommendedAllergens: rec, shareProducts: share || (org.settings.shareProducts === null ? null : false) } });
+      await saveDoc(`organizations/${orgId}`, { name: name.trim().slice(0, 40), settings: { ...org.settings, targetCostRate: r, manufacturer: maker.trim(), manufacturerAddress: address.trim(), includeRecommendedAllergens: rec, shareProducts: share || (org.settings.shareProducts === null ? null : false) } });
       setMsg("保存しました。");
     } catch {
       setMsg("保存できませんでした。");
@@ -38,8 +41,11 @@ export function StoreSection({ orgId, org, canManage }: { orgId: string; org: Or
         <label className="block space-y-1"><span className={ui.label}>店舗名</span><input className={ui.input} value={name} maxLength={40} onChange={(e) => setName(e.target.value)} /></label>
         <label className="block space-y-1"><span className={ui.label}>目標の原価率（レシピで決めていないときに使う）</span>
           <span className="flex items-center gap-2"><input className={`${ui.input} w-24`} inputMode="decimal" value={rate} onChange={(e) => setRate(e.target.value.replace(/[^\d.]/g, ""))} />%</span></label>
-        <label className="block space-y-1"><span className={ui.label}>ラベルの製造者（名前と住所）</span>
-          <textarea className={`${ui.input} h-16`} value={maker} maxLength={200} onChange={(e) => setMaker(e.target.value)} /></label>
+        <label className="block space-y-1"><span className={ui.label}>ラベルの製造者の名前（必須）</span>
+          <input className={ui.input} value={maker} maxLength={60} placeholder="例：株式会社イム" onChange={(e) => setMaker(e.target.value)} /></label>
+        <label className="block space-y-1"><span className={ui.label}>製造者の住所（必須・食品表示に必要です）</span>
+          <input className={ui.input} value={address} maxLength={140} placeholder="例：山口県岩国市〇〇町1-2-3" onChange={(e) => setAddress(e.target.value)} />
+          {!address.trim() && <span className="block text-xs text-warn-strong">住所が入るまで、ラベルは印刷できません。</span>}</label>
         <label className="flex items-start gap-2 text-sm">
           <input type="checkbox" className="mt-1 h-5 w-5 accent-clay" checked={rec} onChange={(e) => setRec(e.target.checked)} />
           <span>ラベルに推奨20品目のアレルゲン（アーモンド・大豆など）も書く<span className="block text-xs text-muted">義務の8品目は必ず書きます。推奨品目も書くのがおすすめです。</span></span>

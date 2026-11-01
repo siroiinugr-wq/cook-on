@@ -60,7 +60,7 @@ export function PackSetSheet({ orgId, uid, set, materials, usedIn, onClose }: Pr
   }
 
   return (
-    <Sheet title={set ? "包装セットを直す" : "包装セットを作る"} onClose={onClose}>
+    <Sheet title={set ? "包装セットを編集" : "包装セットを作る"} onClose={onClose}>
       <div className="space-y-4">
         <label className="block space-y-1"><span className={ui.label}>セットの名前</span>
           <input className={ui.input} value={name} maxLength={60} placeholder="焼き菓子の個包装（10cm袋）" onChange={(e) => setName(e.target.value)} /></label>

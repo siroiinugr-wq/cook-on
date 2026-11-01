@@ -3,7 +3,9 @@
 // - 共有マスターに結びついた行 → 同じ共有マスターを使う店舗の材料があればそれ、無ければ作る（仕入れ値は空）
 // - 結びつかなかった行 → 名前で新しい材料を作る（同じ名前は1つにまとめる）
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
+import { suggestAllergens } from "../shared/allergenGuess";
 import type { ParsedRecipe } from "../shared/importTypes";
+import { guessPieces } from "../shared/tidy";
 import { toMatchKey } from "../shared/matchKey";
 import { deriveRecipe, sanitizeRecipe } from "../shared/recipe";
 import type { Ingredient } from "../shared/types";
@@ -31,7 +33,8 @@ export async function saveImportedRecipes(orgId: string, uid: string, recipes: P
       purchasePrice: null,
       purchaseQty: 1,
       purchaseUnit: "kg",
-      allergens: gl?.allergens ?? [],
+      // 共有の材料のアレルゲンに、名前からの推定を足す（お店が確かめるまでは「未確認」のまま）
+      allergens: suggestAllergens([], `${name} ${gl?.name ?? ""}`, gl?.allergens ?? []),
       globalRef: gl ? gl.id : null,
     };
     newIngs.push(ing);
@@ -57,8 +60,8 @@ export async function saveImportedRecipes(orgId: string, uid: string, recipes: P
       return { ingredientId: id, name: ing?.name ?? it.raw, qty: it.qty, unit: it.unit, ...(it.raw && it.raw !== ing?.name ? { note: `元の表記：${it.raw}` } : {}) };
     });
     return sanitizeRecipe({
-      name: r.name, category: r.category, tags: ["取り込み"], items,
-      steps: r.steps.map((text) => ({ text })), yield: { pieces: r.pieces ?? 1 },
+      name: r.name, category: r.category, subcategory: r.subcategory ?? "", tags: ["取り込み"], items,
+      steps: r.steps.map((text) => ({ text })), yield: { pieces: r.pieces ?? guessPieces([r.name, r.notes, ...r.steps]) ?? 1 },
       sellingPrice: null, targetCostRate: null, memo: r.notes,
     });
   }).filter((x) => typeof x !== "string");

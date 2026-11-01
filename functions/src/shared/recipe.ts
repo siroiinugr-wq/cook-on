@@ -7,10 +7,12 @@ import { calcPackaging, EMPTY_PACK, packagingRefs, sanitizePackLines, type PackC
 import type { Ingredient, Recipe, RecipeItem, RecipeStep } from "./types";
 import { isUnit } from "./units";
 
-export const RECIPE_LIMITS = { name: 60, items: 80, steps: 40, stepText: 400, tags: 15, tag: 20, memo: 1000 } as const;
+export const RECIPE_LIMITS = { name: 60, items: 80, steps: 40, stepText: 400, tags: 15, tag: 20, memo: 1000, photos: 6 } as const;
 
 export type RecipeInput = Pick<Recipe, "name" | "category" | "tags" | "items" | "steps" | "yield" | "sellingPrice" | "targetCostRate"> & {
   memo?: string;
+  subcategory?: string;
+  photos?: string[];
   labelInfo?: Recipe["labelInfo"];
   packaging?: Recipe["packaging"];
 };
@@ -45,6 +47,7 @@ export function sanitizeRecipe(raw: unknown): RecipeInput | string {
   return {
     name,
     category: str(r.category, 30),
+    subcategory: str(r.subcategory, 30),
     tags: [...new Set((Array.isArray(r.tags) ? r.tags : []).map((t) => str(t, RECIPE_LIMITS.tag)).filter(Boolean))].slice(0, RECIPE_LIMITS.tags),
     items,
     steps,
@@ -52,6 +55,7 @@ export function sanitizeRecipe(raw: unknown): RecipeInput | string {
     sellingPrice: price !== null && price > 0 ? price : null,
     targetCostRate: target !== null && target > 0 && target < 1 ? target : null,
     memo: str(r.memo, RECIPE_LIMITS.memo),
+    photos: (Array.isArray(r.photos) ? r.photos : []).filter((p): p is string => typeof p === "string" && p.length > 0 && (p.length <= 300 || (p.startsWith("data:image/") && p.length <= 400_000))).slice(0, RECIPE_LIMITS.photos),
     packaging: sanitizePackLines(r.packaging),
     ...(r.labelInfo && typeof r.labelInfo === "object" ? { labelInfo: r.labelInfo as Recipe["labelInfo"] } : {}),
   };

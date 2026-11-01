@@ -22,7 +22,16 @@ const ING: Ingredient[] = [
   { id: "coffee", name: "コーヒー豆", purchasePrice: 3200, purchaseQty: 1, purchaseUnit: "kg", allergens: [], globalRef: "base_coffee_beans" },
   { id: "milk", name: "牛乳", purchasePrice: 260, purchaseQty: 1000, purchaseUnit: "ml", gramsPerMl: 1.03, allergens: ["milk"], globalRef: "base_milk" },
   { id: "vanilla", name: "バニラビーンズ", purchasePrice: null, purchaseQty: 1, purchaseUnit: "本", allergens: [], globalRef: "base_vanillabean" },
+].map((i) => ({ ...i, allergensConfirmed: i.id !== "vanilla" }) as Ingredient);
+
+// 取り込んだばかりのような材料（データの整理を試せるように。アレルゲンは空・未確認、仕入れ値なし）
+const IMPORTED: Ingredient[] = [
+  { id: "kibi1", name: "きび砂糖", purchasePrice: null, purchaseQty: 1, purchaseUnit: "kg", allergens: [], globalRef: null },
+  { id: "kibi2", name: "キビ糖", purchasePrice: null, purchaseQty: 1, purchaseUnit: "kg", allergens: [], globalRef: null },
+  { id: "fbutter", name: "発酵バター", purchasePrice: null, purchaseQty: 1, purchaseUnit: "kg", allergens: [], globalRef: null },
+  { id: "sansho", name: "山椒", purchasePrice: null, purchaseQty: 1, purchaseUnit: "kg", allergens: [], globalRef: null },
 ];
+ING.push(...IMPORTED);
 
 const PACK: PackagingMaterial[] = [
   { id: "bag10", name: "10cm袋（透明・脱気）", purchasePrice: 1500, purchaseQty: 100, unit: "枚", priceTax: 0.1, supplier: "包材のデモ商店" },
@@ -75,6 +84,19 @@ const RECIPES: (RecipeInput & { id: string })[] = [
     items: [{ ingredientId: "coffee", name: "コーヒー豆", qty: 18, unit: "g" }, { ingredientId: "milk", name: "牛乳", qty: 200, unit: "ml" }],
     steps: [{ text: "エスプレッソを抽出する" }, { text: "牛乳をスチームして注ぐ" }],
   },
+  {
+    id: "imported1", name: "名前のないレシピ", category: "焼き菓子", tags: ["取り込み"], sellingPrice: null, targetCostRate: null,
+    yield: { pieces: 1, gramsPerPiece: null }, memo: "約24枚分",
+    items: [
+      { ingredientId: "fbutter", name: "発酵バター", qty: 200, unit: "g" },
+      { ingredientId: "kibi2", name: "キビ糖", qty: 80, unit: "g" },
+      { ingredientId: "kibi1", name: "きび砂糖", qty: 20, unit: "g" },
+      { ingredientId: "flour", name: "薄力粉", qty: 300, unit: "g" },
+      { ingredientId: "sansho", name: "山椒", qty: 2, unit: "g" },
+      { ingredientId: "sansho", name: "山椒", qty: 1, unit: "g", note: "仕上げ" },
+    ],
+    steps: [{ text: "バターと砂糖をすり混ぜる" }, { text: "粉と山椒を加えてまとめ、冷やして型で抜く" }, { text: "170℃で15分焼く" }],
+  },
 ];
 
 // デモの共有の材料に付ける成分と参考価格（値はデモ用。本番は成分表と総務省の小売物価統計から取り込む）
@@ -88,7 +110,7 @@ const DEMO_GLOBAL_EXTRA: Record<string, Record<string, unknown>> = {
 export function seedDemo(): [string, Record<string, unknown>][] {
   const ingById = new Map(ING.map((i) => [i.id, i]));
   const out: [string, Record<string, unknown>][] = [
-    [O, { name: "デモ菓子店", plan: "free", credits: WELCOME_CREDITS, ownerUid: "demo-user", settings: { targetCostRate: 0.3, manufacturer: "デモ菓子店　山口県岩国市〇〇町1-2-3", includeRecommendedAllergens: true }, createdAt: at }],
+    [O, { name: "デモ菓子店", plan: "free", credits: WELCOME_CREDITS, ownerUid: "demo-user", settings: { targetCostRate: 0.3, manufacturer: "デモ菓子店", manufacturerAddress: "山口県岩国市〇〇町1-2-3", includeRecommendedAllergens: true }, createdAt: at }],
     [`${O}/members/demo-user`, { uid: "demo-user", role: "owner", email: "demo@example.com", displayName: "デモ" }],
     [`${O}/public/branding`, { ...DEFAULT_BRANDING }],
     [`${O}/creditLedger/welcome`, { kind: "welcome", amount: WELCOME_CREDITS, status: "done", createdAt: at }],

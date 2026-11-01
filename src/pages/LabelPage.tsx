@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { calcCost } from "@shared/cost";
-import { buildLabel, expiryDate, LABEL_PAPERS, type LabelInfo, type LabelLine } from "@shared/label";
+import { buildLabel, expiryDate, LABEL_PAPERS, labelMissing, type LabelInfo, type LabelLine } from "@shared/label";
 import { useOrgCtx } from "../contexts/OrgContext";
 import { useIngredients } from "../hooks/useIngredients";
 import { useRecipe } from "../hooks/useRecipe";
@@ -35,23 +35,29 @@ export function LabelPage() {
     setInfo({
       productName: recipe.category || "菓子", storage: "直射日光・高温多湿を避けて保存してください", expiryDays: 7, expiryKind: "賞味期限",
       manufacturer: org.settings.manufacturer, ...recipe.labelInfo,
+      manufacturerAddress: recipe.labelInfo?.manufacturerAddress || org.settings.manufacturerAddress,
     });
-  }, [recipe, info, org.settings.manufacturer]);
+  }, [recipe, info, org.settings.manufacturer, org.settings.manufacturerAddress]);
 
   const built = useMemo(() => {
     if (!recipe) return null;
     const grams = calcCost(recipe.items, ings.byId).lines.map((l) => l.grams);
     const unlinked: string[] = [];
+    // アレルゲンをお店が確かめていない材料（取り込みで作った材料など）。確かめるまで印刷させない
+    const unconfirmed = new Set<string>();
     const lines: LabelLine[] = recipe.items.map((it, i) => {
       const ing = it.ingredientId ? ings.byId.get(it.ingredientId) : undefined;
       if (!ing) unlinked.push(it.name);
+      else if (ing.allergensConfirmed !== true) unconfirmed.add(ing.name);
       return { name: ing?.labelName || ing?.name || it.name, grams: grams[i], allergens: ing?.allergens ?? [], isAdditive: ing?.isAdditive };
     });
-    return { ...buildLabel(lines, { pieces: recipe.yield.pieces, gramsPerPiece: recipe.yield.gramsPerPiece, includeRecommended: org.settings.includeRecommendedAllergens }), unlinked };
+    return { ...buildLabel(lines, { pieces: recipe.yield.pieces, gramsPerPiece: recipe.yield.gramsPerPiece, includeRecommended: org.settings.includeRecommendedAllergens }), unlinked, unconfirmed: [...unconfirmed] };
   }, [recipe, ings.byId, org.settings.includeRecommendedAllergens]);
 
   if (loading || !info || !built) return <p className="p-10 text-center text-muted">{loading ? "読み込み中…" : "レシピが見つかりません。"}</p>;
   const set = (p: Partial<LabelInfo>) => setInfo({ ...info, ...p });
+  const missing = labelMissing(info);
+  const blocked = missing.length > 0 || built.unconfirmed.length > 0 || built.unlinked.length > 0;
   const data: LabelData = { ...info, ingredientsText: text ?? built.ingredientsText, contentText: built.contentText, expiry: expiryDate(new Date(`${made}T00:00:00+09:00`), info.expiryDays) };
 
   async function remember() {
@@ -75,9 +81,19 @@ export function LabelPage() {
 
       <div className="no-print space-y-4">
         <div className="flex justify-center rounded-2xl bg-sand p-4"><LabelSheet d={data} w={paper.w} h={paper.h} /></div>
+        {built.unconfirmed.length > 0 && (
+          <div className="space-y-1 rounded-xl bg-ng/10 p-3 text-sm text-ng">
+            <p className="font-bold">アレルゲンをまだ確かめていない材料があります。確かめるまで印刷できません。</p>
+            <p>{built.unconfirmed.join("、")}</p>
+            {canEdit && <Link to="/tidy" className="underline">データの整理で、アレルゲンをまとめて確かめる</Link>}
+          </div>
+        )}
+        {missing.length > 0 && (
+          <p className="rounded-xl bg-ng/10 p-3 text-sm text-ng">ラベルに必要な項目が空です：{missing.join("・")}。下の欄か、設定の「お店」で入れてください。</p>
+        )}
         {(built.unlinked.length > 0 || built.unknownWeight.length > 0) && (
           <ul className="space-y-1 rounded-xl bg-warn-soft p-3 text-sm text-warn-strong">
-            {built.unlinked.length > 0 && <li>材料の一覧と結びついていないもの（アレルゲンが分かりません）：{built.unlinked.join("、")}</li>}
+            {built.unlinked.length > 0 && <li>材料の一覧と結びついていないもの（アレルゲンが分からないので印刷できません。レシピの編集で材料を選んでください）：{built.unlinked.join("、")}</li>}
             {built.unknownWeight.length > 0 && <li>重さが分からず、並びが正しくないかもしれないもの：{built.unknownWeight.join("、")}</li>}
           </ul>
         )}
@@ -94,8 +110,11 @@ export function LabelPage() {
             {text !== null && <button className="text-xs text-muted underline" onClick={() => setText(null)}>自動の文に戻す</button>}
           </label>
           <label className="block space-y-1"><span className={ui.label}>保存方法</span><input className={input} value={info.storage} onChange={(e) => set({ storage: e.target.value })} /></label>
-          <label className="block space-y-1"><span className={ui.label}>製造者</span><input className={input} value={info.manufacturer} onChange={(e) => set({ manufacturer: e.target.value })} /></label>
-          {canEdit && <button className="text-sm text-clay-strong underline" onClick={remember}>名称・期限・保存方法をこのレシピに覚える</button>}
+          <div className="grid grid-cols-2 gap-2">
+            <label className="space-y-1"><span className={ui.label}>製造者の名前</span><input className={input} value={info.manufacturer} onChange={(e) => set({ manufacturer: e.target.value })} /></label>
+            <label className="space-y-1"><span className={ui.label}>製造者の住所（必須）</span><input className={input} value={info.manufacturerAddress ?? ""} placeholder="都道府県から" onChange={(e) => set({ manufacturerAddress: e.target.value })} /></label>
+          </div>
+          {canEdit && <button className="text-sm text-clay-strong underline" onClick={remember}>名称・期限・保存方法・製造者をこのレシピに覚える</button>}
           {msg && <p className="text-sm text-ink-soft">{msg}</p>}
         </section>
         <section className={`${ui.card} space-y-2`}>
@@ -104,7 +123,7 @@ export function LabelPage() {
               {LABEL_PAPERS.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select></label>
           <label className="flex items-center gap-2 text-sm">枚数<input className={`${input} w-20`} type="number" min={1} max={200} value={copies} onChange={(e) => setCopies(Math.max(1, Math.min(200, Number(e.target.value) || 1)))} /></label>
-          <button className={`w-full ${ui.primary} flex items-center justify-center gap-2`} onClick={() => window.print()}><Icon name="printer" />印刷する</button>
+          <button disabled={blocked} className={`w-full ${ui.primary} flex items-center justify-center gap-2`} onClick={() => window.print()}><Icon name="printer" />{blocked ? "上の赤い項目を済ませると印刷できます" : "印刷する"}</button>
           <p className="text-xs text-muted">印刷の画面で「余白なし」「倍率100%」を選んでください。PDFに保存もできます。</p>
         </section>
         <p className="text-xs leading-relaxed text-muted">

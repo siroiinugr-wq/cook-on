@@ -5,7 +5,7 @@ service firebase.storage {
     function editor(orgId) { return member(orgId) && request.auth.token.orgs[orgId] in ['owner', 'admin', 'editor']; }
     function admin(orgId)  { return member(orgId) && request.auth.token.orgs[orgId] in ['owner', 'admin']; }
 
-    // 工程の写真
+    // レシピの写真・イラストと工程の写真
     match /orgs/{orgId}/recipes/{recipeId}/{file} {
       allow read: if member(orgId);
       allow create: if editor(orgId) && request.resource.size < 10 * 1024 * 1024 && request.resource.contentType.matches('image/.*');

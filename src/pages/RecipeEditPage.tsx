@@ -1,12 +1,16 @@
 // レシピを作る・直す。新しく作るときはひな形を選んでから（白紙のフォームを最初に見せない）
 // 保存は saveRecipe（Functions）だけ。前の版は自動で履歴に残る
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { calcCost, costRate, yen } from "@shared/cost";
 import { calcPackaging } from "@shared/packaging";
-import { RECIPE_TEMPLATES, type RecipeInput } from "@shared/recipe";
+import type { RecipeInput } from "@shared/recipe";
 import { toMatchKey } from "@shared/matchKey";
-import type { Ingredient } from "@shared/types";
+import type { Ingredient, Recipe } from "@shared/types";
+import { guessPieces, needsPieces } from "@shared/tidy";
+import { useCol } from "../hooks/useData";
+import { RecipePhotos } from "../components/recipe/edit/RecipePhotos";
+import { NewRecipeStart } from "../components/recipe/edit/NewRecipeStart";
 import { useOrgCtx } from "../contexts/OrgContext";
 import { useIngredients } from "../hooks/useIngredients";
 import { usePackaging } from "../hooks/usePackaging";
@@ -36,6 +40,15 @@ export function RecipeEditPage() {
   const ings = useIngredients(orgId);
   const pack = usePackaging(orgId);
   const nav = useNavigate();
+  // 今までに使った分類とタグ（押すだけで入れられるように）
+  const all = useCol<Recipe>(`organizations/${orgId}/recipes`);
+  const usedCats = useMemo(() => countSort(all.list.map((r) => r.category)), [all.list]);
+  const subsByCat = useMemo(() => {
+    const m = new Map<string, string[]>();
+    for (const c of new Set(all.list.map((r) => r.category))) m.set(c, countSort(all.list.filter((r) => r.category === c).map((r) => r.subcategory ?? "")));
+    return m;
+  }, [all.list]);
+  const usedTags = useMemo(() => countSort(all.list.flatMap((r) => r.tags ?? [])), [all.list]);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [rows, setRows] = useState<Row[]>([]);
   const [tagText, setTagText] = useState("");
@@ -55,23 +68,14 @@ export function RecipeEditPage() {
     if (id && recipe && !draft && !ings.loading) start(recipe);
   }, [id, recipe, draft, ings.loading]);
 
-  if (!canEdit) return <p className="py-10 text-center text-muted">レシピを直す権限がありません。</p>;
+  if (!canEdit) return <p className="py-10 text-center text-muted">レシピを編集する権限がありません。</p>;
   if (id && (loading || !draft)) return <p className="py-10 text-center text-muted">{loading || ings.loading ? "読み込み中…" : "レシピが見つかりません。"}</p>;
 
   if (!draft) {
     return (
       <div className="space-y-4">
         <PageHead title="新しいレシピ" back="/" />
-        <p className="text-sm text-ink-soft">近いものを選ぶと、材料と作り方が入った状態から始められます。</p>
-        <div className="grid gap-2">
-          {RECIPE_TEMPLATES.map((t) => (
-            <button key={t.id} className={`${ui.card} text-left`} onClick={() => start(t.recipe)}>
-              <p className="font-bold">{t.label}</p>
-              <p className="text-xs text-muted">{t.recipe.items.map((i) => i.name).filter(Boolean).join("・") || "空のレシピ"}</p>
-            </button>
-          ))}
-        </div>
-        <Link to="/import" className={`${ui.secondary} block text-center`}>今までのレシピをファイルから取り込む</Link>
+        <NewRecipeStart recipes={all.list.filter((r) => !(r as { archived?: boolean }).archived)} onStart={start} />
       </div>
     );
   }
@@ -99,18 +103,34 @@ export function RecipeEditPage() {
     }
   }
 
+  const tagList = tagText.split(/[、,，\s#＃]+/).map((t) => t.trim()).filter(Boolean);
+  const toggleTag = (t: string) => setTagText((tagList.includes(t) ? tagList.filter((x) => x !== t) : [...tagList, t]).join("、"));
+  const piecesHint = pieces === 1 ? guessPieces([d.name, d.memo ?? "", ...d.steps.map((x) => x.text)]) : null;
   const field = (label: string, el: ReactNode, cls = "") => <label className={`block space-y-1 ${cls}`}><span className={ui.label}>{label}</span>{el}</label>;
   return (
     <div className="space-y-5 pb-24">
-      <PageHead title={id ? "レシピを直す" : "新しいレシピ"} back={id ? `/recipes/${id}` : "/"} />
+      <PageHead title={id ? "レシピを編集" : "新しいレシピ"} back={id ? `/recipes/${id}` : "/"} />
       <section className="space-y-3">
         {field("レシピ名", <input className={ui.input} value={d.name} maxLength={60} onChange={(e) => set({ name: e.target.value })} />)}
-        <div className="grid grid-cols-2 gap-2">
-          {field("分類", <input className={ui.input} value={d.category} placeholder="焼き菓子" onChange={(e) => set({ category: e.target.value })} />)}
-          {field("タグ（、で区切る）", <input className={ui.input} value={tagText} placeholder="定番、ギフト" onChange={(e) => setTagText(e.target.value)} />)}
+        <RecipePhotos photos={d.photos ?? []} set={(photos) => set({ photos })} photoDir={photoDir} />
+        <div className="space-y-1">
+          {field("分類（焼菓子・料理・ドリンクなど）", <input className={ui.input} value={d.category} placeholder="焼菓子" onChange={(e) => set({ category: e.target.value })} />)}
+          <Chips items={usedCats} on={(c) => c === d.category} onTap={(c) => set({ category: c === d.category ? "" : c, subcategory: c === d.category ? d.subcategory : "" })} />
+        </div>
+        <div className="space-y-1">
+          {field("種類（パウンドケーキ・クッキー・和食など）", <input className={ui.input} value={d.subcategory ?? ""} placeholder="クッキー" onChange={(e) => set({ subcategory: e.target.value })} />)}
+          <Chips items={subsByCat.get(d.category) ?? []} on={(c) => c === d.subcategory} onTap={(c) => set({ subcategory: c === d.subcategory ? "" : c })} />
+        </div>
+        <div className="space-y-1">
+          {field("タグ（定番・ギフトなど自由に。、で区切る）", <input className={ui.input} value={tagText} placeholder="定番、ギフト" onChange={(e) => setTagText(e.target.value)} />)}
+          <Chips items={usedTags} on={(t) => tagList.includes(t)} onTap={toggleTag} prefix="#" />
         </div>
         <div className="grid grid-cols-2 gap-2">
-          {field("1ロットで何個", <input className={ui.input} inputMode="numeric" value={d.yield.pieces} onChange={(e) => set({ yield: { ...d.yield, pieces: Number(e.target.value.replace(/\D/g, "")) || 1 } })} />)}
+          <div className="space-y-1">
+            {field("1ロットで何個できる？", <input className={ui.input} inputMode="numeric" value={d.yield.pieces} onChange={(e) => set({ yield: { ...d.yield, pieces: Number(e.target.value.replace(/\D/g, "")) || 1 } })} />)}
+            {piecesHint && <button className="text-xs text-clay-strong underline" onClick={() => set({ yield: { ...d.yield, pieces: piecesHint } })}>メモや工程に「{piecesHint}個分」とあります。入れる</button>}
+            {needsPieces({ ...d, yield: { pieces } }, cost.lines.reduce((t, l) => t + (l.grams ?? 0), 0)) && !piecesHint && <p className="text-xs text-warn-strong">材料が多いのに1個のままです。何個分か入れてください。</p>}
+          </div>
           {field("1個の重さ g（ラベル用・任意）", <input className={ui.input} inputMode="decimal" value={d.yield.gramsPerPiece ?? ""} onChange={(e) => set({ yield: { ...d.yield, gramsPerPiece: numOrNull(e.target.value) } })} />)}
         </div>
         <div className="grid grid-cols-2 gap-2">
@@ -130,7 +150,7 @@ export function RecipeEditPage() {
       </section>
       <section className="space-y-2">
         <h2 className="font-bold">作り方</h2>
-        <StepsEditor steps={d.steps} set={(steps) => set({ steps })} photoDir={photoDir} />
+        <StepsEditor steps={d.steps} set={(steps) => set({ steps })} photoDir={photoDir} orgId={orgId} uid={uid} />
       </section>
       {field("メモ（お店の中だけ）", <textarea className={`${ui.input} h-20`} value={d.memo ?? ""} onChange={(e) => set({ memo: e.target.value })} />)}
       {id && field("何を変えたか（履歴に残ります・任意）", <input className={ui.input} value={note} maxLength={100} placeholder="例：砂糖を10g減らした" onChange={(e) => setNote(e.target.value)} />)}
@@ -145,6 +165,26 @@ export function RecipeEditPage() {
         </div>
         {err && <p className="mx-auto mt-1 max-w-3xl text-sm text-ng">{err}</p>}
       </div>
+    </div>
+  );
+}
+
+/** 多く使っている順に（同じ数なら五十音順）。空は除く */
+function countSort(xs: string[]): string[] {
+  const m = new Map<string, number>();
+  for (const x of xs) if (x?.trim()) m.set(x.trim(), (m.get(x.trim()) ?? 0) + 1);
+  return [...m.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "ja")).map(([k]) => k).slice(0, 30);
+}
+
+/** 今までに使ったもの。押すと入る・もう一度押すと外れる */
+function Chips({ items, on, onTap, prefix = "" }: { items: string[]; on: (x: string) => boolean; onTap: (x: string) => void; prefix?: string }) {
+  if (!items.length) return null;
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {items.map((x) => (
+        <button key={x} type="button" onClick={() => onTap(x)}
+          className={`rounded-full border px-2.5 py-1 text-xs ${on(x) ? "border-clay bg-clay-soft font-bold text-clay-strong" : "border-line text-muted"}`}>{prefix}{x}</button>
+      ))}
     </div>
   );
 }

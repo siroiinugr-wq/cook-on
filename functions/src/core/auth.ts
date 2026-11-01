@@ -78,7 +78,7 @@ export const createOrganization = onCall({ region: REGION }, async (req) => {
     plan: "free",
     credits: WELCOME_CREDITS,
     ownerUid: uid,
-    settings: { targetCostRate: target, manufacturer: name, includeRecommendedAllergens: true },
+    settings: { targetCostRate: target, manufacturer: name, manufacturerAddress: "", includeRecommendedAllergens: true },
     createdAt: FieldValue.serverTimestamp(),
   });
   batch.set(orgRef.collection("members").doc(uid), {

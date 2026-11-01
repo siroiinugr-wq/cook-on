@@ -18,7 +18,7 @@ service cloud.firestore {
     function validIngredient() {
       let d = request.resource.data;
       return d.keys().hasOnly(['name', 'purchasePrice', 'purchaseQty', 'purchaseUnit', 'gramsPerPiece', 'gramsPerMl',
-                               'allergens', 'labelName', 'isAdditive', 'globalRef', 'supplier', 'memo', 'photoPath', 'priceTax',
+                               'allergens', 'allergensConfirmed', 'labelName', 'isAdditive', 'globalRef', 'supplier', 'memo', 'photoPath', 'priceTax',
                                'updatedAt', 'createdAt', 'createdBy'])
         && str(d.name, 60) && d.name.size() > 0
         && numOrNull(d.purchasePrice)
@@ -26,6 +26,7 @@ service cloud.firestore {
         && d.purchaseUnit in ['g', 'kg', 'ml', 'l', '個', '枚', '本', '大さじ', '小さじ', 'カップ']
         && numOrNull(d.get('gramsPerPiece', null)) && numOrNull(d.get('gramsPerMl', null))
         && d.allergens is list && d.allergens.size() <= 28
+        && d.get('allergensConfirmed', false) is bool
         && str(d.get('labelName', ''), 300) && str(d.get('supplier', ''), 60) && str(d.get('memo', ''), 300)
         && (d.get('photoPath', null) == null || str(d.photoPath, 300))
         && d.get('priceTax', 0) in [0, 0.08, 0.1];
@@ -89,6 +90,16 @@ service cloud.firestore {
       match /packagingSets/{id} {
         allow read: if isMember(orgId);
         allow create, update: if canEdit(orgId) && validPackagingSet();
+        allow delete: if canEdit(orgId);
+      }
+
+      // よく使う工程（1つ以上の工程に名前を付けて保存し、レシピの編集ですぐ呼び出す）
+      match /stepTemplates/{id} {
+        allow read: if isMember(orgId);
+        allow create, update: if canEdit(orgId)
+          && request.resource.data.keys().hasOnly(['name', 'steps', 'updatedAt', 'createdAt', 'createdBy'])
+          && str(request.resource.data.name, 40) && request.resource.data.name.size() > 0
+          && request.resource.data.steps is list && request.resource.data.steps.size() > 0 && request.resource.data.steps.size() <= 20;
         allow delete: if canEdit(orgId);
       }
 

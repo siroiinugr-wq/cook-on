@@ -1,7 +1,9 @@
 // レシピの詳細：倍率 → 材料と原価 → 作り方。作業モード・ラベル・履歴・AI相談はここから
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { allergenName } from "@shared/allergens";
-import { scaleFactor } from "@shared/cost";
+import { calcCost, scaleFactor } from "@shared/cost";
+import { needsPieces } from "@shared/tidy";
+import { usePhotoUrl } from "../lib/photos";
 import { useOrgCtx } from "../contexts/OrgContext";
 import { useIngredients } from "../hooks/useIngredients";
 import { usePackaging } from "../hooks/usePackaging";
@@ -35,6 +37,8 @@ export function RecipeDetailPage() {
   const pieces = recipe.yield.pieces || 1;
   const factor = scaleFactor(mode, pieces);
   const q = window.location.search;
+  const totalGrams = calcCost(recipe.items, ings.byId).lines.reduce((t, l) => t + (l.grams ?? 0), 0);
+  const noPieces = needsPieces(recipe, totalGrams);
 
   async function toggleArchive() {
     const ok = await confirm(archived
@@ -47,9 +51,11 @@ export function RecipeDetailPage() {
 
   return (
     <div className="space-y-4">
-      <PageHead title={recipe.name} back="/" right={canEdit && <Link to={`/recipes/${recipe.id}/edit`} className={`${ui.secondary} py-2 text-sm`}>直す</Link>} />
+      <PageHead title={recipe.name} back="/" right={canEdit && <Link to={`/recipes/${recipe.id}/edit`} className={`${ui.secondary} py-2 text-sm`}>編集</Link>} />
+      {(recipe.photos?.length ?? 0) > 0 && <PhotoStrip paths={recipe.photos!} />}
       <div className="flex flex-wrap gap-1.5 text-xs">
         {recipe.category && <span className={ui.chip}>{recipe.category}</span>}
+        {recipe.subcategory && <span className={ui.chip}>{recipe.subcategory}</span>}
         {recipe.tags.map((t) => <span key={t} className={ui.chip}>#{t}</span>)}
         <span className="text-muted">第{recipe.version}版</span>
       </div>
@@ -59,6 +65,12 @@ export function RecipeDetailPage() {
         <Link to={`/recipes/${recipe.id}/label${q}`} className={`${ui.secondary} flex items-center justify-center gap-1.5`}><Icon name="printer" />ラベルを作る</Link>
       </div>
 
+      {noPieces && (
+        <p className="rounded-xl bg-warn-soft p-3 text-sm text-warn-strong">
+          材料が合計{Math.round(totalGrams)}gあるのに「1ロット＝1個」になっています。何個分のレシピかを入れると、1個あたりの原価が正しく出ます。
+          {canEdit && <> <Link to={`/recipes/${recipe.id}/edit`} className="underline">編集で入れる</Link></>}
+        </p>
+      )}
       <CostPanel recipe={recipe} byId={ings.byId} pack={pack.ctx} defaultTarget={org.settings.targetCostRate} />
 
       <ScaleControl mode={mode} set={setMode} pieces={pieces} />
@@ -74,7 +86,10 @@ export function RecipeDetailPage() {
           <p className="text-sm font-bold">作り方</p>
           <ol className="space-y-2">
             {recipe.steps.map((s, i) => (
-              <li key={i} className="flex gap-2 text-sm"><span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-clay-soft text-xs font-bold text-clay-strong">{i + 1}</span><span className="pt-0.5">{s.text}</span></li>
+              <li key={i} className="flex gap-2 text-sm">
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-clay-soft text-xs font-bold text-clay-strong">{i + 1}</span>
+                <span className="min-w-0 flex-1 space-y-1.5 pt-0.5"><span className="block">{s.text}</span>{s.photoPath && <StepPhoto path={s.photoPath} />}</span>
+              </li>
             ))}
           </ol>
         </section>
@@ -92,4 +107,23 @@ export function RecipeDetailPage() {
       {canEdit && <button className={ui.quiet} onClick={toggleArchive}>{archived ? "一覧に戻す" : "このレシピをしまう"}</button>}
     </div>
   );
+}
+
+/** レシピの写真・イラスト（横に並べ、押すと大きく） */
+function PhotoStrip({ paths }: { paths: string[] }) {
+  return (
+    <div className="-mx-4 flex snap-x gap-2 overflow-x-auto px-4">
+      {paths.map((p) => <Photo key={p.slice(-40)} path={p} className={paths.length === 1 ? "aspect-[4/3] w-full" : "aspect-[4/3] w-4/5 shrink-0 snap-start"} />)}
+    </div>
+  );
+}
+
+function StepPhoto({ path }: { path: string }) {
+  return <Photo path={path} className="aspect-[4/3] w-full max-w-xs" />;
+}
+
+function Photo({ path, className }: { path: string; className: string }) {
+  const url = usePhotoUrl(path);
+  if (!url) return <span className={`block rounded-xl bg-sand ${className}`} />;
+  return <a href={url} target="_blank" rel="noreferrer" className={`block overflow-hidden rounded-xl bg-sand ${className}`}><img src={url} alt="" className="h-full w-full object-cover" /></a>;
 }

@@ -54,7 +54,7 @@ export function CostPanel({ recipe, byId, pack, defaultTarget }: { recipe: Recip
             <span className="ml-2 text-xs text-muted">持ち帰り {yen(withTax(price, TAX_RATES.takeout))}／店内 {yen(withTax(price, TAX_RATES.eatIn))}（税込）</span>
           </p>
         ) : <p className="text-xs text-muted">材料の仕入れ値を入れると計算できます。</p>}
-        <p className="text-[11px] text-muted">10円単位で切り上げています。{lines.length ? "包装は入っています。" : "包装は入っていません（レシピを直すと付けられます）。"}人件費は入っていません。</p>
+        <p className="text-[11px] text-muted">10円単位で切り上げています。{lines.length ? "包装は入っています。" : "包装は入っていません（レシピの編集で付けられます）。"}人件費は入っていません。</p>
       </div>
     </section>
   );

@@ -37,6 +37,9 @@ export function IngredientsPage() {
           仕入れ値が入っていない材料が{missing.length}件あります。{onlyMissing ? "（すべて表示に戻す）" : "押すとその材料だけ出します。"}
         </button>
       )}
+      {canEdit && list.some((i) => i.allergensConfirmed !== true) && (
+        <Link to="/tidy" className="block rounded-xl bg-warn-soft p-3 text-sm text-warn-strong">アレルゲンを確かめていない材料が{list.filter((i) => i.allergensConfirmed !== true).length}件あります。データの整理でまとめて確かめる →</Link>
+      )}
       <input className={ui.input} placeholder="材料名で探す" value={q} onChange={(e) => setQ(e.target.value)} />
       {loading ? <p className="py-8 text-center text-muted">読み込み中…</p> : !list.length ? (
         <div className={`${ui.card} space-y-2 text-center text-sm`}>
@@ -53,7 +56,7 @@ export function IngredientsPage() {
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-medium">{i.name}</p>
                     <p className="truncate text-xs text-muted">
-                      {i.allergens.length ? i.allergens.map(allergenName).join("・") : "アレルゲンなし"}
+                      {i.allergensConfirmed !== true ? <span className="text-warn-strong">アレルゲン未確認{i.allergens.length ? `（候補：${i.allergens.map(allergenName).join("・")}）` : ""}</span> : i.allergens.length ? i.allergens.map(allergenName).join("・") : "アレルゲンなし"}
                       {usedIn.get(i.id) ? `／レシピ${usedIn.get(i.id)}件` : ""}
                     </p>
                   </div>

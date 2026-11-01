@@ -20,7 +20,20 @@ export interface LabelInfo {
   /** 製造日から何日で期限か */
   expiryDays: number;
   expiryKind: "消費期限" | "賞味期限";
+  /** 製造者の名前 */
   manufacturer: string;
+  /** 製造者の住所（食品表示に必要。空ならラベルを印刷させない） */
+  manufacturerAddress?: string;
+}
+
+/** 印刷の前に足りない項目（空なら印刷してよい） */
+export function labelMissing(info: LabelInfo): string[] {
+  const out: string[] = [];
+  if (!info.productName.trim()) out.push("名称");
+  if (!info.manufacturer.trim()) out.push("製造者の名前");
+  if (!(info.manufacturerAddress ?? "").trim()) out.push("製造者の住所");
+  if (!(info.expiryDays > 0)) out.push("期限（製造日から何日）");
+  return out;
 }
 
 export interface LabelResult {

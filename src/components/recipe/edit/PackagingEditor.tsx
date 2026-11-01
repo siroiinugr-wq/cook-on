@@ -61,7 +61,7 @@ export function PackagingEditor({ lines, set, materials, sets, ctx }: Props) {
       )}
       <div className="flex items-center justify-between text-xs text-muted">
         <span>1個あたりの包装 <b className="text-sm text-ink">{yen(c.perPiece)}</b></span>
-        <Link to="/packaging" className="underline">資材・セットを直す</Link>
+        <Link to="/packaging" className="underline">資材・セットを編集</Link>
       </div>
     </div>
   );
