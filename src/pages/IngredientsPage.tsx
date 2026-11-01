@@ -1,7 +1,7 @@
 // 材料の一覧（仕入れ値・アレルゲン）。単価が無い材料を上に出して、原価の抜けを埋めやすくする
 import { RefBadge } from "../components/ingredient/RefBadge";
 import { useEffect, useMemo, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { MaterialTabs } from "../components/nav/MaterialTabs";
 import { allergenName } from "@shared/allergens";
 import { unitCostPerGram, yen } from "@shared/cost";
@@ -33,10 +33,21 @@ export function IngredientsPage() {
   // ほかの画面（レシピの材料の行など）から「?open=材料のid」で来たら、その材料を開く
   const [params, setParams] = useSearchParams();
   const openId = params.get("open");
+  // レシピから来たときは、保存・閉じたらそのレシピに戻る（自分のアプリの中のレシピの画面だけ）
+  const [from, setFrom] = useState<string | null>(null);
+  const nav = useNavigate();
+  const close = () => {
+    setEdit(null);
+    if (from) { setFrom(null); nav(from); }
+  };
   useEffect(() => {
     if (!openId || loading) return;
     const hit = list.find((i) => i.id === openId);
-    if (hit && canEdit) setEdit(hit);
+    if (hit && canEdit) {
+      setEdit(hit);
+      const f = params.get("from");
+      setFrom(f && /^\/recipes\/[^/]+$/.test(f) ? f : null);
+    }
     setParams({}, { replace: true });
   }, [openId, loading, list, setParams, canEdit]);
   const unconfirmed = list.filter((i) => i.allergensConfirmed !== true).length;
@@ -92,7 +103,7 @@ export function IngredientsPage() {
           })}
         </ul>
       )}
-      {edit && <IngredientSheet orgId={orgId} uid={uid} ing={edit === "new" ? null : edit} usedIn={edit === "new" ? 0 : usedIn.get(edit.id) ?? 0} usedBy={edit === "new" ? [] : usedBy.get(edit.id) ?? []} onClose={() => setEdit(null)} />}
+      {edit && <IngredientSheet orgId={orgId} uid={uid} ing={edit === "new" ? null : edit} usedIn={edit === "new" ? 0 : usedIn.get(edit.id) ?? 0} usedBy={edit === "new" ? [] : usedBy.get(edit.id) ?? []} onClose={close} />}
     </div>
   );
 }

@@ -15,7 +15,7 @@
 ## 構成
 画面（`src/`）
 - `pages/` 1画面1ファイル：Recipes（一覧）・RecipeDetail・RecipeEdit・WorkMode（作業モード）・Label（食品表示）・Ingredients・Products（既製品）・Import／ImportPreview・Credits・Settings・Login／VerifyEmail／Onboarding／Invite・Todo（やること・AI）
-- **動線**（2026-11-01）：下の入口は5つ「レシピ `/`｜材料 `/ingredients`（上のタブ `components/nav/MaterialTabs` で包装資材・既製品）｜仕入れ `/ingredients/invoices`｜やること `/todo`｜設定」。どの入口が光るかは `Layout.tsx` の `tabOf`。バッジとやることの一覧は `hooks/useTodo.ts` の1か所（値上がり・AI経理から届いた明細・アレルゲン未確認・仕入れ値なし・製造者の住所）。`/todo` は「いまやること」と「AIでできること」（単価の言い方は `lib/creditPer.ts`、クレジットの画面と共通）。ほかの画面から目的の場所へ直接とぶ：`/tidy#link|allergen|price|pieces|names|dups|merge|label`・`/settings#store|keiri|brand|members|stores`（`Accordion` の `id`、`hooks/useHashScroll.ts`）、`/ingredients?open=材料id` で材料の編集を開く（レシピの材料の行から）。材料の編集には使っているレシピへのリンク。新しい画面を足したら、どの入口の中かを `tabOf` に書き、`/todo` か設定から行けるようにする
+- **動線**（2026-11-01）：下の入口は5つ「レシピ `/`｜材料 `/ingredients`（上のタブ `components/nav/MaterialTabs` で包装資材・既製品）｜仕入れ `/ingredients/invoices`｜やること `/todo`｜設定」。どの入口が光るかは `Layout.tsx` の `tabOf`。バッジとやることの一覧は `hooks/useTodo.ts` の1か所（値上がり・AI経理から届いた明細・アレルゲン未確認・仕入れ値なし・製造者の住所）。`/todo` は「いまやること」と「AIでできること」（単価の言い方は `lib/creditPer.ts`、クレジットの画面と共通）。ほかの画面から目的の場所へ直接とぶ：`/tidy#link|allergen|price|pieces|names|dups|merge|label`・`/settings#store|keiri|brand|members|stores`（`Accordion` の `id`、`hooks/useHashScroll.ts`）、`/ingredients?open=材料id&from=/recipes/…` で材料の編集を開き、保存・閉じたら from のレシピへ戻る（レシピの材料の行から）。材料の編集には使っているレシピへのリンク。新しい画面を足したら、どの入口の中かを `tabOf` に書き、`/todo` か設定から行けるようにする
 - `components/recipe` 原価・倍率・履歴・AI相談、`recipe/edit` 材料行と工程の編集、`label` ラベル1枚と印刷CSS、`import` 取り込みプレビュー、`ingredient` 材料と既製品、`settings`
 - `contexts/OrgContext.tsx` いまの店舗・役割（`useOrgCtx()`）
 - `lib/store.ts` Firestore と Functions の入口（画面は firebase を直接触らない）。デモは `lib/demo*.ts`（同じパス・同じ関数名で手元のデータとにせのAIが動く）
