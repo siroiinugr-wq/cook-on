@@ -150,7 +150,7 @@ export function RecipeEditPage() {
       </section>
       <section className="space-y-2">
         <h2 className="font-bold">作り方</h2>
-        <StepsEditor steps={d.steps} set={(steps) => set({ steps })} photoDir={photoDir} orgId={orgId} uid={uid} />
+        <StepsEditor steps={d.steps} set={(steps) => set({ steps })} photoDir={photoDir} orgId={orgId} uid={uid} recipeId={id ?? null} />
       </section>
       {field("メモ（お店の中だけ）", <textarea className={`${ui.input} h-20`} value={d.memo ?? ""} onChange={(e) => set({ memo: e.target.value })} />)}
       {id && field("何を変えたか（履歴に残ります・任意）", <input className={ui.input} value={note} maxLength={100} placeholder="例：砂糖を10g減らした" onChange={(e) => setNote(e.target.value)} />)}

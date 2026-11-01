@@ -64,7 +64,7 @@ aiRequests/{orgId}_{requestId}             受付票（Functions だけ。AIの�
 - 材料の別名 `aliases`（キビ糖・きび糖など、最大20）：店舗の名寄せ（`loadOrgMatchData` の tenantIndex）と取り込みの保存で、この名前も同じ材料に結ぶ。表記ゆれでまとめると、消した側の名前が残した材料の別名に入る
 - ラベルの名前（`labelName`＝品質表示の一般的名称）：データの整理の「7. ラベルの名前」で `suggestLabelNames`（`ai/labelNames.ts`、`LABEL_NAME_BATCH`＝20件で1クレジット）が案を出し、人が直して確定する（サーバーは保存しない）
 - レシピの分類は2段：`category`（焼菓子・料理・ドリンク）と `subcategory`（種類：パウンドケーキ・クッキー）。タグは自由なラベル。新しいレシピは分類から似たレシピをコピーして始められる
-- よく使う工程：`stepTemplates/{id}`（名前＋工程の配列。画面から書ける）。レシピの写真・イラストは `photos`（最大6枚、先頭が表紙。Storage は工程の写真と同じ `orgs/{orgId}/recipes/{recipeId}/`）
+- よく使う工程：`stepTemplates/{id}`（名前＋工程の配列＋`photoPaths`。画面から書ける。写真の Storage は `orgs/{orgId}/recipes/_steps/`）。レシピの工程は入れた元を `templateId`・`templateStep` で覚え、よく使う工程を編集すると使っているレシピに反映するか選べる。工程に写真を付けると、同じ文の工程（`stepKey` で比べる）がある他のレシピにも付けるか選べる。判定は `shared/steps.ts`、反映は `syncSteps`（`recipes/steps.ts`、AIなし・無料・前の版は履歴に残る）。レシピの写真・イラストは `photos`（最大6枚、先頭が表紙。Storage は工程の写真と同じ `orgs/{orgId}/recipes/{recipeId}/`）
 - 食品表示は「重い順・添加物は／のあと・アレルゲンは最後に一括」まで自動。複合原材料の細かい決まりは対象外で、画面に「お店で確かめて」と出す
 
 ## よく使うコマンド

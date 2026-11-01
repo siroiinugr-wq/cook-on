@@ -3,7 +3,9 @@ import { sortAllergens } from "@shared/allergens";
 import { buildIndex, toMatchKey } from "@shared/matchKey";
 import { sanitizeRecipe } from "@shared/recipe";
 import { resolveLocal } from "@shared/resolveLocal";
+import { applyStepPhoto, applyTemplate } from "@shared/steps";
 import { mergeDuplicateItems } from "@shared/tidy";
+import type { StepTemplate } from "@shared/types";
 import { demoGet, demoListDocs, demoWrite } from "./demo";
 import { DEMO_ORG } from "./demoData";
 import { demoIngredientMap, demoWriteRecipe } from "./demoFunctions";
@@ -57,6 +59,22 @@ export function demoTidyCall(name: string, d: Data): unknown | undefined {
     }
     for (const id of dropIds) demoWrite(`${O}/ingredients/${id}`, null);
     return { recipes, removed: dropIds.length };
+  }
+  if (name === "syncSteps") {
+    const t = d.templateId ? demoGet(`${O}/stepTemplates/${d.templateId}`) as unknown as StepTemplate | null : null;
+    if (d.templateId && !t) throw new Error("よく使う工程が見つかりません。");
+    let done = 0;
+    for (const id of (d.recipeIds as string[]) ?? []) {
+      const cur = demoGet(`${O}/recipes/${id}`);
+      const input = cur ? sanitizeRecipe(cur) : null;
+      if (!input || typeof input === "string") continue;
+      const r = t ? applyTemplate(input.steps, { ...t, id: String(d.templateId) }) : applyStepPhoto(input.steps, String(d.stepText), String(d.photoPath));
+      if (!r.changed) continue;
+      input.steps = r.steps;
+      demoWriteRecipe(id, input, t ? `よく使う工程「${t.name}」を反映` : "同じ工程に写真を付けた");
+      done++;
+    }
+    return { done, failed: [] };
   }
   if (name === "relinkIngredients") {
     const ingredients = [...demoIngredientMap().values()];

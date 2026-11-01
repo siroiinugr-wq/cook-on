@@ -54,6 +54,9 @@ export interface RecipeStep {
   text: string;
   /** Storage のパス orgs/{orgId}/recipes/{recipeId}/{file} */
   photoPath?: string | null;
+  /** よく使う工程から入れたとき、その id と何番目の工程か（よく使う工程を直したら、ここを手がかりに反映する） */
+  templateId?: string;
+  templateStep?: number;
 }
 
 /** 仕上がり：1ロットで何個できるか */
@@ -117,6 +120,8 @@ export interface StepTemplate {
   id: string;
   name: string;
   steps: string[];
+  /** 工程ごとの写真（steps と同じ並び。無いところは ""）。Storage は orgs/{orgId}/recipes/_steps/ */
+  photoPaths?: string[];
   updatedAt?: unknown;
 }
 
