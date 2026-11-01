@@ -71,6 +71,8 @@ export const receivePurchaseLines = onRequest({ region: REGION, invoker: "public
   // レシートごとに1件。同じレシートは上書き（AI経理で直して承認し直したとき）
   const byRef = new Map<string, PurchaseLine[]>();
   for (const l of lines) byRef.set(l.ref || "_", [...(byRef.get(l.ref || "_") ?? []), l]);
+  // まとめて書ける数の上限（Firestore の1回 500件）より少なく
+  if (byRef.size > 400) { res.status(413).json({ error: "1回に送れるのは400枚までです" }); return; }
   const batch = db.batch();
   for (const [ref, ls] of byRef) {
     const doc = ref === "_" ? inbox.doc() : inbox.doc(`keiri_${hashOf(ref).slice(0, 32)}`);

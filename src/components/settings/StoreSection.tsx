@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import type { Org } from "../../hooks/useOrg";
 import { saveDoc } from "../../lib/store";
 import { ui } from "../common/ui";
+import { numText } from "../../lib/num";
 
 export function StoreSection({ orgId, org, canManage }: { orgId: string; org: Org; canManage: boolean }) {
   const [name, setName] = useState(org.name);
@@ -42,7 +43,7 @@ export function StoreSection({ orgId, org, canManage }: { orgId: string; org: Or
       <fieldset disabled={!canManage} className="space-y-3">
         <label className="block space-y-1"><span className={ui.label}>店舗名</span><input className={ui.input} value={name} maxLength={40} onChange={(e) => setName(e.target.value)} /></label>
         <label className="block space-y-1"><span className={ui.label}>目標の原価率（レシピで決めていないときに使う）</span>
-          <span className="flex items-center gap-2"><input className={`${ui.input} w-24`} inputMode="decimal" value={rate} onChange={(e) => setRate(e.target.value.replace(/[^\d.]/g, ""))} />%</span></label>
+          <span className="flex items-center gap-2"><input className={`${ui.input} w-24`} inputMode="decimal" value={rate} onChange={(e) => setRate(numText(e.target.value))} />%</span></label>
         <label className="block space-y-1"><span className={ui.label}>ラベルの製造者の名前（必須）</span>
           <input className={ui.input} value={maker} maxLength={60} placeholder="例：株式会社イム" onChange={(e) => setMaker(e.target.value)} /></label>
         <label className="block space-y-1"><span className={ui.label}>製造者の住所（必須・食品表示に必要です）</span>

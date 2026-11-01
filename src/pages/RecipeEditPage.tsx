@@ -22,6 +22,7 @@ import { RateBadge } from "../components/recipe/RateBadge";
 import { ItemsEditor, rowKey, type Row } from "../components/recipe/edit/ItemsEditor";
 import { PackagingEditor } from "../components/recipe/edit/PackagingEditor";
 import { StepsEditor } from "../components/recipe/edit/StepsEditor";
+import { numText } from "../lib/num";
 
 type Draft = Omit<RecipeInput, "items">;
 
@@ -87,7 +88,7 @@ export function RecipeEditPage() {
   const packCost = calcPackaging(d.packaging, pack.ctx);
   const per = cost.total / pieces + packCost.perPiece;
   const missing = cost.missing + packCost.missing;
-  const numOrNull = (v: string) => (v.trim() === "" ? null : Number(v.replace(/[^\d.]/g, "")) || null);
+  const numOrNull = (v: string) => (v.trim() === "" ? null : Number(numText(v)) || null);
 
   async function save() {
     setBusy(true);

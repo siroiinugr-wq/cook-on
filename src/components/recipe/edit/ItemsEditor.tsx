@@ -13,6 +13,7 @@ import { Icon } from "../../common/Icon";
 import { useCreditAction } from "../../common/useCreditAction";
 import { ui } from "../../common/ui";
 import { IngredientPicker } from "./IngredientPicker";
+import { numText } from "../../../lib/num";
 
 export type Row = RecipeItem & { _k: string };
 export const rowKey = () => Math.random().toString(36).slice(2, 10);
@@ -101,7 +102,7 @@ export function ItemsEditor({ rows, set, own, orgId, uid, credits }: Props) {
             <div className="flex gap-1.5">
               <input className="min-w-0 flex-1 rounded-lg border border-line-strong px-2 py-1.5" placeholder="材料名" value={r.name} onChange={(e) => rename(r._k, e.target.value)} />
               <input className="w-16 rounded-lg border border-line-strong px-2 py-1.5 text-right" inputMode="decimal" placeholder="量" disabled={r.unit === "適量"}
-                value={r.qty ?? ""} onChange={(e) => patch(r._k, { qty: e.target.value === "" ? null : Number(e.target.value.replace(/[^\d.]/g, "")) })} />
+                value={r.qty ?? ""} onChange={(e) => patch(r._k, { qty: e.target.value === "" ? null : Number(numText(e.target.value)) })} />
               <select className="w-[4.5rem] rounded-lg border border-line-strong px-1 py-1.5" value={r.unit} onChange={(e) => patch(r._k, { unit: e.target.value as Unit, ...(e.target.value === "適量" ? { qty: null } : {}) })}>
                 {UNITS.map((u) => <option key={u}>{u}</option>)}
               </select>

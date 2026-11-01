@@ -23,6 +23,7 @@ import { useCreditAction } from "../components/common/useCreditAction";
 import { ui } from "../components/common/ui";
 import { CameraShooter } from "../components/import/CameraShooter";
 import { CaptureTray } from "../components/import/CaptureTray";
+import { numText } from "../lib/num";
 
 /** tried＝AIで探した（見つからなかった行をもう一度クレジットで探さない） */
 type Row = InvoiceLine & { use: boolean; target: string; tried?: boolean };
@@ -284,9 +285,9 @@ export function InvoicePhotosPage() {
                     </select>
                   </div>
                   <div className="flex flex-wrap items-center gap-1.5">
-                    <input className={`${input} w-24`} inputMode="decimal" value={r.price} onChange={(e) => set(k, { price: Number(e.target.value.replace(/[^\d.]/g, "")) || 0 })} />
+                    <input className={`${input} w-24`} inputMode="decimal" value={r.price} onChange={(e) => set(k, { price: Number(numText(e.target.value)) || 0 })} />
                     <span className="text-sm">円で</span>
-                    <input className={`${input} w-16`} inputMode="decimal" value={r.qty} onChange={(e) => set(k, { qty: Number(e.target.value.replace(/[^\d.]/g, "")) || 0 })} />
+                    <input className={`${input} w-16`} inputMode="decimal" value={r.qty} onChange={(e) => set(k, { qty: Number(numText(e.target.value)) || 0 })} />
                     <select className={input} value={r.unit} onChange={(e) => set(k, { unit: e.target.value as Unit })}>{INVOICE_UNITS.map((u) => <option key={u}>{u}</option>)}</select>
                     <select className={input} value={r.tax} onChange={(e) => set(k, { tax: Number(e.target.value) })}>{PRICE_TAX_OPTIONS.map((o) => <option key={o.rate} value={o.rate}>{o.label}</option>)}</select>
                   </div>

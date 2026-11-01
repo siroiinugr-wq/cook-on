@@ -17,6 +17,7 @@ import { Sheet } from "../common/Sheet";
 import { useCreditAction } from "../common/useCreditAction";
 import { ui } from "../common/ui";
 import { PackagePhotos, type PackageShots } from "./PackagePhotos";
+import { numText } from "../../lib/num";
 
 interface Guess { maker?: string; productName?: string; ingredientsText: string; allergens: AllergenId[]; nutrition?: Record<string, number>; confidence: number; note: string }
 
@@ -128,7 +129,7 @@ export function ProductForm({ onClose, onDone }: { onClose: () => void; onDone: 
           <div className="grid grid-cols-3 gap-2">
             {NUTRITION_KEYS.map((k) => (
               <label key={k} className="space-y-0.5"><span className="text-[11px] text-muted">{NUTRIENT_LABELS[k]}（{k === "kcal" ? "kcal" : "g"}）</span>
-                <input className={ui.input} inputMode="decimal" value={nutrition[k] ?? ""} onChange={(e) => setNutrition({ ...nutrition, [k]: e.target.value.replace(/[^\d.]/g, "") })} /></label>
+                <input className={ui.input} inputMode="decimal" value={nutrition[k] ?? ""} onChange={(e) => setNutrition({ ...nutrition, [k]: numText(e.target.value) })} /></label>
             ))}
           </div>
         </div>
