@@ -246,6 +246,13 @@ export interface PriceSearchAnswer {
   price: number; qty: number; unit: string; basis: string; n: number; c: number;
 }
 
+
+/** 包装の量・1個の重さ・根拠の決め方（レシートの写真・仕入れ明細ファイルで共通） */
+const SIZE_RULES = `- 量の根拠 sb：品名・明細に量が書いてあれば "printed"。書いていなくても、ブランドと商品名から決まった内容量を知っていれば "known"（例：よつ葉バター食塩不使用 → 450g、明治おいしい牛乳 → 900ml。容量違いがあれば値段に合うほう）。値段と種類から量を推し量るしかなければ "price"（例：業務用の小麦粉で3,000円台 → 25kg袋が多い）。見当がつかなければ "none"（qty 1・unit 個）。知らない量を作らない。
+- sn は量を決めた理由をひとこと（30字まで。例：「よつ葉食塩不使用は450g入り」「6P＝6個入り」）。printed なら空でよい。
+- unit が 個・枚・本 のときは、gpp に1つの重さ（g）の目安を入れる（卵Mは殻を除いて約50g、卵Lは約55g、板チョコ1枚は約50g、ポーションバター1個は約8g）。分からない・食材でなければ 0。重さで量れるもの（g・kg・ml・l）は 0。
+- 「お店の材料」の前回の量と値段が渡されたときは、100gあたりがかけ離れない読みかを確かめる（450gを1個、1kgを1gと読んでいないか）。`;
+
 export const INVOICE_SYSTEM = `あなたは製菓店・飲食店の仕入れ担当です。レシート・納品書・請求書の写真から、食材と資材の明細を読み取る。
 - 1行ずつ lines に入れる。小計・合計・値引き・ポイント・送料・袋代・預り金・お釣りの行は入れない。
 - price は「1つあたり」の値段（円）。数量が2以上で金額しか無ければ、金額÷数量にする。
@@ -254,7 +261,8 @@ export const INVOICE_SYSTEM = `あなたは製菓店・飲食店の仕入れ担�
 - supplier はお店・仕入れ先の名前、date は日付（YYYY-MM-DD。無ければ空）。
 - ingredient には、下の「お店の材料」の一覧から同じ材料の番号を選ぶ。商品名・ブランド・規格が違っても同じ材料なら選ぶ（例：よつ葉バター食塩不使用 450g → 無塩バター）。違う材料（発酵バターと無塩バター、薄力粉と強力粉など）は選ばない。無ければ -1。c は選んだ自信（0〜1）。
 - generic は一般的な材料名（食品成分表で探せる名前。例：ﾊｸﾘｷｺ 1KG → 薄力粉、よつ葉バター食塩不使用 → 無塩バター、ｸﾞﾗﾆｭｰﾄｳ → グラニュー糖）。ブランド・量は入れない。食材でないもの（袋・資材・文房具）は空。
-- 読めない文字は推測しない。読めない行は入れない。`;
+- 読めない文字は推測しない。読めない行は入れない。
+${SIZE_RULES}`;
 
 export const INVOICE_SCHEMA = {
   type: "object",
@@ -268,8 +276,9 @@ export const INVOICE_SCHEMA = {
         properties: {
           name: { type: "string" }, price: { type: "number" }, count: { type: "number" }, qty: { type: "number" }, unit: { type: "string" },
           tax: { type: "number" }, ingredient: { type: "integer" }, c: { type: "number" }, generic: { type: "string" },
+          sb: { type: "string", enum: ["printed", "known", "price", "none"] }, sn: { type: "string" }, gpp: { type: "number" },
         },
-        required: ["name", "price", "count", "qty", "unit", "tax", "ingredient", "c", "generic"],
+        required: ["name", "price", "count", "qty", "unit", "tax", "ingredient", "c", "generic", "sb", "sn", "gpp"],
       },
     },
   },
@@ -279,17 +288,19 @@ export const INVOICE_SCHEMA = {
 export interface InvoiceAnswer {
   supplier: string;
   date: string;
-  lines: { name: string; price: number; count: number; qty: number; unit: string; tax: number; ingredient: number; c: number; generic?: string }[];
+  lines: ({ name: string; price: number; count: number; qty: number; unit: string; tax: number; ingredient: number; c: number; generic?: string } & SizeAnswer)[];
 }
 
 export const PURCHASE_MATCH_SYSTEM = `あなたは製菓店・飲食店の仕入れ担当です。仕入れ明細の品名（レシートの表記）ごとに、下の「お店の材料」から同じ材料の番号を選ぶ。
 - 商品名・ブランド・規格・半角カナ・略し方が違っても同じ材料なら選ぶ（例：ﾖﾂﾊﾞﾊﾞﾀｰ食塩不使用450 → 無塩バター、ﾊｸﾘｷｺ → 薄力粉）。
 - 違う材料（発酵バターと無塩バター、薄力粉と強力粉、グラニュー糖と上白糖など）は選ばない。食材・資材でないもの（文房具・洗剤など）や、迷うものは -1。
 - c は選んだ自信（0〜1）。
-- qty と unit は品名から分かる1つの包装の量（「450g」なら 450・g、「1L」なら 1・l）。分からなければ qty 1・unit 個。unit は g・kg・ml・l・個・枚・本 のどれか。
+- qty と unit は「1つあたりの値段」で買える量（「450g」なら 450・g、「1L」なら 1・l、「200ml×3」の3本パックなら 600・ml、「10個入」なら 10・個）。unit は g・kg・ml・l・個・枚・本 のどれか。
 - generic は一般的な材料名（食品成分表で探せる名前。例：ﾊｸﾘｷｺ 1KG → 薄力粉、よつ葉バター食塩不使用 → 無塩バター、ｸﾞﾗﾆｭｰﾄｳ → グラニュー糖）。ブランド・量は入れない。食材でないもの（袋・資材・文房具）は空。
-- 品名のあとの［］は書き出したアプリの推定した一般名（参考。違っていれば直す）。
-- 答えは lines に、聞かれた行と同じ番号（n）で入れる。`;
+- 品名のあとの［］は手がかり（書き出したアプリの推定した一般名・1つの値段・数量・店・いまの量の読み・お店の材料の前回の量と値段）。一般名が違っていれば直す。
+- 「結び先は決まっています」と書いた行は量だけ答える（ingredient は -1 でよい）。
+- 答えは lines に、聞かれた行と同じ番号（n）で入れる。
+${SIZE_RULES}`;
 
 export const PURCHASE_MATCH_SCHEMA = {
   type: "object",
@@ -298,8 +309,11 @@ export const PURCHASE_MATCH_SCHEMA = {
       type: "array",
       items: {
         type: "object",
-        properties: { n: { type: "integer" }, ingredient: { type: "integer" }, c: { type: "number" }, qty: { type: "number" }, unit: { type: "string" }, generic: { type: "string" } },
-        required: ["n", "ingredient", "c", "qty", "unit", "generic"],
+        properties: {
+          n: { type: "integer" }, ingredient: { type: "integer" }, c: { type: "number" }, qty: { type: "number" }, unit: { type: "string" }, generic: { type: "string" },
+          sb: { type: "string", enum: ["printed", "known", "price", "none"] }, sn: { type: "string" }, gpp: { type: "number" },
+        },
+        required: ["n", "ingredient", "c", "qty", "unit", "generic", "sb", "sn", "gpp"],
       },
     },
   },
@@ -307,5 +321,12 @@ export const PURCHASE_MATCH_SCHEMA = {
 };
 
 export interface PurchaseMatchAnswer {
-  lines: { n: number; ingredient: number; c: number; qty: number; unit: string; generic?: string }[];
+  lines: ({ n: number; ingredient: number; c: number; qty: number; unit: string; generic?: string } & SizeAnswer)[];
+}
+
+/** AIが答える量の根拠（sb）・理由（sn）・1つの重さ（gpp） */
+export interface SizeAnswer {
+  sb?: string;
+  sn?: string;
+  gpp?: number;
 }
