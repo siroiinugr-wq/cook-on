@@ -12,6 +12,8 @@ export interface OrgSettings {
   includeRecommendedAllergens: boolean;
   /** 読み取った既製品を、みんなの既製品データベースにも入れるか（null＝まだ聞いていない。初めて登録するときに1回だけ聞く） */
   shareProducts: boolean | null;
+  /** 確かめた材料の情報（呼び方・アレルゲン・仕入れ値）を共有の材料への提案として出すか（運営が精査して採用したものだけ共有に入る） */
+  shareIngredients: boolean;
 }
 
 export interface Org {
@@ -38,6 +40,7 @@ export function useOrg(orgId: string) {
       manufacturerAddress: s.manufacturerAddress ?? "",
       includeRecommendedAllergens: s.includeRecommendedAllergens !== false,
       shareProducts: typeof s.shareProducts === "boolean" ? s.shareProducts : null,
+      shareIngredients: s.shareIngredients === true,
     },
   };
   return { org, loading };

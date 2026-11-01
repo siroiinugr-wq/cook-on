@@ -7,7 +7,7 @@ import type { GlobalIngredient } from "@shared/types";
 import type { Unit } from "@shared/units";
 import { useDoc } from "../../hooks/useData";
 
-const SOURCE: Record<GlobalIngredient["source"], string> = { mext: "食品成分表", base: "COOK ON の基本の材料", ugc: "お店どうしで確かめた既製品" };
+const SOURCE: Record<GlobalIngredient["source"], string> = { mext: "食品成分表", base: "COOK ON の基本の材料", ugc: "お店どうしで確かめた既製品", shop: "お店の提案を運営が確かめた材料" };
 const SHOWN = ["kcal", "protein", "fat", "carbohydrate", "salt"];
 
 export function GlobalInfo({ globalRef, onApply }: { globalRef: string; onApply?: (p: { price: number; qty: number; unit: Unit }) => void }) {

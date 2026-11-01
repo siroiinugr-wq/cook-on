@@ -18,7 +18,7 @@ service cloud.firestore {
     function validIngredient() {
       let d = request.resource.data;
       return d.keys().hasOnly(['name', 'purchasePrice', 'purchaseQty', 'purchaseUnit', 'gramsPerPiece', 'gramsPerMl',
-                               'allergens', 'allergensConfirmed', 'aliases', 'labelName', 'isAdditive', 'globalRef', 'supplier', 'memo', 'photoPath', 'priceTax',
+                               'allergens', 'allergensConfirmed', 'aliases', 'labelName', 'isAdditive', 'globalRef', 'supplier', 'memo', 'photoPath', 'priceTax', 'priceSource',
                                'updatedAt', 'createdAt', 'createdBy'])
         && str(d.name, 60) && d.name.size() > 0
         && numOrNull(d.purchasePrice)
@@ -30,7 +30,8 @@ service cloud.firestore {
         && d.get('aliases', []) is list && d.get('aliases', []).size() <= 20
         && str(d.get('labelName', ''), 300) && str(d.get('supplier', ''), 60) && str(d.get('memo', ''), 300)
         && (d.get('photoPath', null) == null || str(d.photoPath, 300))
-        && d.get('priceTax', 0) in [0, 0.08, 0.1];
+        && d.get('priceTax', 0) in [0, 0.08, 0.1]
+        && d.get('priceSource', null) in [null, 'ref'];
     }
 
     // 包装資材（袋・脱酸素剤など）。値段は税抜。priceTax は入れたときの形（材料と同じ 0・0.08・0.1）
@@ -135,6 +136,9 @@ service cloud.firestore {
     }
 
     match /globalIngredients/{id} { allow read: if signedIn(); allow write: if false; }
+    // 共有の材料への提案（書くのは Functions だけ）。読めるのは運営（operators/{uid} を Firebase コンソールで作る）
+    match /globalSuggestions/{id} { allow read: if signedIn() && exists(/databases/$(database)/documents/operators/$(request.auth.uid)); allow write: if false; }
+    match /operators/{uid}        { allow read: if signedIn() && request.auth.uid == uid; allow write: if false; }
     match /ugcProducts/{id}       { allow read: if signedIn(); allow write: if false; }
     // 独自ドメイン → 店舗ID。ログイン前に読む。書くのは運営（コンソール）だけ
     match /tenantDomains/{host}   { allow read: if true; allow write: if false; }

@@ -39,7 +39,9 @@ export const GLOBAL_SEED: SeedIngredient[] = [
   s("maple", "メープルシロップ", "砂糖類", ["メイプルシロップ", "メープル"]),
   s("trehalose", "トレハロース", "砂糖類", []),
   // 乳・卵・油脂
-  s("butter_unsalted", "無塩バター", "乳類", ["食塩不使用バター", "バター（無塩）", "発酵バター", "よつ葉無塩"], ["milk"]),
+  s("butter_unsalted", "無塩バター", "乳類", ["食塩不使用バター", "バター（無塩）", "よつ葉無塩"], ["milk"]),
+  // 発酵バターは値段も風味も違うので、無塩バターの別名にしない（2026-11-01 MASA）
+  s("butter_fermented", "発酵バター", "乳類", ["醗酵バター", "発酵バター（無塩）", "発酵バター（食塩不使用）", "カルピスバター"], ["milk"]),
   s("butter_salted", "有塩バター", "乳類", ["バター（有塩）", "加塩バター"], ["milk"]),
   s("milk", "牛乳", "乳類", ["ミルク", "成分無調整牛乳"], ["milk"]),
   s("cream", "生クリーム", "乳類", ["生クリーム（乳脂肪）", "フレッシュクリーム", "クリーム（乳脂肪）", "動物性生クリーム", "35%生クリーム", "47%生クリーム"], ["milk"]),
@@ -94,7 +96,7 @@ export const SEED_MEXT_HINTS: Record<string, string[]> = {
   base_komeko: ["米粉"], base_shiratamako: ["白玉粉"], base_kokoa: ["ピュアココア"], base_matcha: ["抹茶"],
   base_granulated: ["グラニュー糖"], base_joohakuto: ["上白糖"], base_funto: ["粉糖"], base_kurozato: ["黒砂糖"],
   base_hachimitsu: ["はちみつ"], base_mizuame: ["水あめ"], base_maple: ["メープルシロップ"],
-  base_butter_unsalted: ["食塩不使用バター"], base_butter_salted: ["有塩バター"], base_milk: ["普通牛乳"],
+  base_butter_unsalted: ["食塩不使用バター"], base_butter_salted: ["有塩バター"], base_butter_fermented: ["発酵バター"], base_milk: ["普通牛乳"],
   base_cream: ["クリーム", "乳脂肪"], base_whip_plant: ["ホイップクリーム", "植物性脂肪"],
   base_creamcheese: ["ナチュラルチーズ", "クリーム"], base_mascarpone: ["マスカルポーネ"], base_yogurt: ["ヨーグルト", "全脂無糖"],
   base_skimmilk: ["脱脂粉乳"], base_egg: ["鶏卵", "全卵", "生"], base_eggyolk: ["鶏卵", "卵黄", "生"], base_eggwhite: ["鶏卵", "卵白", "生"],

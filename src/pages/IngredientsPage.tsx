@@ -1,4 +1,5 @@
 // 材料の一覧（仕入れ値・アレルゲン）。単価が無い材料を上に出して、原価の抜けを埋めやすくする
+import { RefBadge } from "../components/ingredient/RefBadge";
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { allergenName } from "@shared/allergens";
@@ -63,7 +64,7 @@ export function IngredientsPage() {
                   </div>
                   <div className="shrink-0 text-right text-sm">
                     {i.purchasePrice === null ? <span className="text-warn-strong">仕入れ値なし</span> : <>
-                      <p>{yen(i.purchasePrice)}<span className="text-xs text-muted">/{i.purchaseQty}{i.purchaseUnit}</span></p>
+                      <p>{i.priceSource === "ref" && <RefBadge className="mr-1" />}{yen(i.purchasePrice)}<span className="text-xs text-muted">/{i.purchaseQty}{i.purchaseUnit}</span></p>
                       <p className="text-xs text-muted">{perG === null ? "gに換算できない" : `1kg ${yen(perG * 1000)}`}</p>
                     </>}
                   </div>
