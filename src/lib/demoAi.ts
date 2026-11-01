@@ -2,12 +2,14 @@
 // クレジットは本番と同じように引かれる（押す前の表示 → 残高が減る → 通帳に残る、を試せるように）。
 import { aiMatchCredits, splitForImport } from "@shared/credits";
 import type { ImportDoc, ItemMatch, ParsedRecipe } from "@shared/importTypes";
-import { buildIndex, toMatchKey } from "@shared/matchKey";
+import { buildIndex, rankCandidates, toMatchKey } from "@shared/matchKey";
+import { sizeFromName } from "@shared/invoice";
 import { NO_MATCH, resolveLocal } from "@shared/resolveLocal";
 import { parseUnit, type Unit } from "@shared/units";
 import { demoGet, demoListDocs, demoWrite } from "./demo";
 import { DEMO_ORG } from "./demoData";
 import { demoIngredientMap, demoWithCredits, demoWriteRecipe } from "./demoFunctions";
+import { demoInvoiceLines } from "./demoShare";
 
 type Data = Record<string, unknown>;
 const O = `organizations/${DEMO_ORG}`;
@@ -97,6 +99,34 @@ export async function demoAiCall<T>(name: string, d: Data): Promise<T> {
         demoWrite(`${O}/imports/${id}`, { ...doc, createdAt: new Date().toISOString() });
         return { result: { importId: id, recipes: recipes.length, failedChunks: [] } as T };
       });
+    }
+    case "readInvoices": {
+      const paths = d.paths as string[];
+      return demoWithCredits("invoicePhoto", paths.length, async () => {
+        const lines = demoInvoiceLines(paths, [...demoIngredientMap().values()]);
+        return { result: { lines, read: paths.length, photos: paths.length } as T };
+      });
+    }
+    case "matchPurchaseLines": {
+      // デモのAIは「いちばん似た名前」を選ぶだけ。一般名は書き出したアプリの推定（hints）か品名から量を除いたもの
+      const names = d.names as string[];
+      const hints = (d.hints as string[] | undefined) ?? [];
+      const index = buildIndex([...demoIngredientMap().values()].map((i) => ({ id: i.id, name: i.name, aliases: i.aliases ?? [] })));
+      const gIndex = matchInput().globalIndex;
+      return demoWithCredits("aiMatch", aiMatchCredits(names.length), async () => ({
+        result: {
+          matches: names.map((n, k) => {
+            const generic = hints[k] || n.replace(/[\d.]+\s*(kg|g|ml|l|個|枚|本)/gi, "").trim();
+            const c = rankCandidates(generic, index, 1)[0];
+            const g = c && c.score >= 0.5 ? null : rankCandidates(generic, gIndex, 1)[0];
+            const size = sizeFromName(n);
+            return {
+              ingredientId: c && c.score >= 0.5 ? c.id : null, confidence: c ? Math.min(0.9, c.score + 0.2) : 0, qty: size?.qty ?? 0, unit: size?.unit ?? "個",
+              generic, global: g && g.score >= 0.4 ? { id: g.id, name: g.name, confidence: Math.min(0.9, g.score + 0.2) } : null,
+            };
+          }),
+        } as T,
+      }));
     }
     case "parseImportPhotos": {
       // デモでは写真を読めないので、写真の枚数ぶんのクレジットで見本のレシピを1件返す

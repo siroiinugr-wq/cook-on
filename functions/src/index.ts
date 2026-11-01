@@ -14,6 +14,7 @@ export { saveRecipe, restoreRecipeVersion, archiveRecipe } from "./recipes/save"
 export { onIngredientWritten } from "./recipes/costAlert";
 export { tidyRecipes, mergeIngredients, relinkIngredients, confirmLinks } from "./recipes/tidy";
 export { syncSteps } from "./recipes/steps";
+export { matchPurchaseLines, readInvoices } from "./ai/invoices";
 export { onIngredientShared, estimateRefPrices, reviewSuggestion } from "./global/suggestions";
 export { onPackagingWritten, onPackagingSetWritten } from "./recipes/packagingAlert";
 export { submitUgcProduct, onUgcVoteWritten } from "./ugc/products";

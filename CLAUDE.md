@@ -59,6 +59,9 @@ aiRequests/{orgId}_{requestId}             受付票（Functions だけ。AIの�
 - **共有の材料に結ぶ**（データの整理の最初のカード、`relinkIngredients`・`confirmLinks`、`shared/link.ts`）：名前の完全一致・覚えた別名だけはその場で結ぶ（無料）。似た名前は候補を出して人が選ぶ。「AIで探す」は決まらない分を AI が候補から選ぶ（`aiMatch`、20件で1クレジット）が、結ぶのはやはり人が確かめてから。以前の別名で違う材料に結びついたもの（`misLinked`）は「結び先の見直し」に出る。発酵バターは無塩バターと別の材料（`base_butter_fermented`）
 - **参考価格の自動入力**：結んだとき・取り込んだとき、仕入れ値が空なら共有の参考価格（税抜に直す）を入れて `priceSource: "ref"` の印を付ける。材料一覧・レシピの原価・材料の編集に「参考価格」と出る。お店が値段を入れ直すと印は消える（`IngredientSheet`・`PriceFill`）
 - **共有の材料への提案と運営の精査**（`global/suggestions.ts`、画面 `/admin/suggestions`）：設定 `shareIngredients` がオンのお店で、アレルゲンを確かめた材料が変わると `onIngredientShared` が `globalSuggestions/{orgId}_{ingredientId}` を作る（新しい呼び方・アレルゲンの違い・自分の仕入れ値・共有に無い材料。判定は `shared/suggest.ts`）。運営が `reviewSuggestion` で採用した分だけ globalIngredients に入る（新しい材料は `shop_*`、値段は税込に直して `refPrice`、出典は「COOK ON のお店の仕入れ値」）。`estimateRefPrices` は参考価格の無い共有の材料（base・shop・ugc）に AI の推定値段を提案として作る（運営の費用、お店のクレジットは使わない、原価は aiRequests）。運営は `operators/{uid}`（Firebase コンソールで作る）。お店の名前・仕入れ先は精査画面以外に出さない
+- **レシート・納品書から仕入れ値**（`/ingredients/invoices`、`pages/InvoicePhotosPage.tsx`）：撮影は写真から取り込みと同じ部品（一覧のためる場所は `{orgId}:invoice`）、写真の置き場も同じ `orgs/{orgId}/imports/{batchId}/`。`readInvoices`（`ai/invoices.ts`、1枚1クレジット `invoicePhoto`、1回20枚まで）が明細を読み、お店の材料の一覧も渡して AI に結び先を選ばせる（番号で返させ、無い番号は捨てる）。サーバーは保存しない。画面で人が確かめて `invoicePatch`（`shared/invoice.ts`：税抜に直す・参考価格の印を消す・レシートの表記を別名に覚える）で材料に書く。読んだ明細は端末（localStorage）に残す。値段の記録と原価の計算し直しは `onIngredientWritten`
+- **仕入れ明細ファイル（AI経理との連携）**：同じ画面で CSV を読み込める（無料）。形は `shared/purchaseLines.ts`（AI経理＝別のアプリにも同じファイルがあり、そちらの「仕入れ明細を書き出す」が作る。**変えるときは両方を同じに直す**）。つながりはファイルだけで、相手のデータベースは見ない。`fromPurchaseLines`（`shared/invoice.ts`）が同じ品名は一番新しい値段だけにし、名前・別名・一般的な名前で結ぶ。決まらない行は「AIで探す」`matchPurchaseLines`（`ai/invoices.ts`、20行で1クレジット `aiMatch`、包装の量も読む）。反映は写真と同じ `invoicePatch`
+- **品名からAIが判断**（写真もファイルも）：AIが一般名（`generic`：ﾊｸﾘｷｺ→薄力粉）も返し、お店に無い材料は `attachGlobals`（`ai/invoices.ts`、`resolveNames`）で共有の材料（成分表の成分・アレルゲン・参考価格）を探す。画面は「新しく登録：薄力粉（成分表・アレルゲンつき）」を選んでおき、`globalRef` 付きで作る。各行に100gあたりの税抜の値段と前との差（`per100`）
 - 仕入れ値は税抜で持つ（`purchasePrice`）。税込で入れたら `priceTax`（0・0.08・0.1）に印を残し、`toExTax`/`fromExTax`（`shared/cost.ts`）で直す
 - 既製品はパッケージの裏を撮ると `readProductPhoto`（`ai/productPhoto.ts`、1クレジット）が下書きし、裏の写真は読んだら消す。表の写真はAIに渡さず、登録のときに上げて商品の画像にする（`ugc/{orgId}/{draftId}/front.jpg`）。登録するとお店の材料に入り、`settings.shareProducts` がオンならみんなの一覧（ugcProducts）にも入る（null＝初回に1回だけ聞く）
 - 材料の写真は `orgs/{orgId}/ingredients/`（`photoPath`）
@@ -72,6 +75,12 @@ aiRequests/{orgId}_{requestId}             受付票（Functions だけ。AIの�
 
 ## よく使うコマンド
 Mac で触る前に必ず `git pull`。
+
+**本番に出すのはこの1本だけ**（取り込み→組み立て→ルール・索引・Storage・関数・画面をまとめて出す）。MASA への案内もこれだけを書く：
+```
+cd ~/cook-on && npm run release
+```
+個別に出したいとき：
 
 ```
 cd ~/cook-on && git pull && npm run build && firebase deploy --only hosting --project cook-on-plaz
