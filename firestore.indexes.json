@@ -10,6 +10,9 @@
       { "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" } ] }
   ],
   "fieldOverrides": [
+    { "collectionGroup": "ingredients", "fieldPath": "globalRef", "indexes": [
+      { "order": "ASCENDING", "queryScope": "COLLECTION" }, { "order": "DESCENDING", "queryScope": "COLLECTION" },
+      { "order": "ASCENDING", "queryScope": "COLLECTION_GROUP" } ] },
     { "collectionGroup": "members", "fieldPath": "uid", "indexes": [
       { "order": "ASCENDING", "queryScope": "COLLECTION_GROUP" } ] }
   ]

@@ -35,6 +35,8 @@ export interface Ingredient {
   globalRef?: string | null;
   /** "ref"＝仕入れ値が空だったので共有の材料の参考価格を入れた（画面に「参考価格」と出す）。お店が値段を直すと消える */
   priceSource?: "ref" | null;
+  /** 参考価格をAIがネット（Google 検索）で調べて入れたとき：何を想定したか・見たページ・検索の候補（画面に出すのが利用の条件） */
+  refWeb?: { note: string; sources: { uri: string; title: string }[]; searchHtml: string } | null;
   supplier?: string;
   /** 写真（Storage のパス orgs/{orgId}/ingredients/… か、既製品から写した ugc/…） */
   photoPath?: string | null;

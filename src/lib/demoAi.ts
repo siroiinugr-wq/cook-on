@@ -1,6 +1,6 @@
 // デモモードの「にせのAI」。本番の Gemini の代わりに、決まった手順で同じ形の答えを返す。
 // クレジットは本番と同じように引かれる（押す前の表示 → 残高が減る → 通帳に残る、を試せるように）。
-import { aiMatchCredits, sizeSearchCredits, splitForImport } from "@shared/credits";
+import { aiMatchCredits, priceSearchCredits, sizeSearchCredits, splitForImport } from "@shared/credits";
 import type { ImportDoc, ItemMatch, ParsedRecipe } from "@shared/importTypes";
 import { buildIndex, rankCandidates, toMatchKey } from "@shared/matchKey";
 import { sizeFromName } from "@shared/invoice";
@@ -139,6 +139,27 @@ export async function demoAiCall<T>(name: string, d: Data): Promise<T> {
           }),
         } as T,
       }));
+    }
+    case "fillPricesFromWeb": {
+      // デモのネット検索：材料名から決まった目安を入れる（本物は Google 検索つきのAIがお店のページを見て調べる）
+      const empty = [...demoIngredientMap().values()].filter((i) => i.purchasePrice === null);
+      const web: Record<string, { price: number; qty: number; unit: string; note: string }> = {
+        きび砂糖: { price: 486, qty: 1, unit: "kg", note: "製菓用・1kg袋・3店・税込486円" }, キビ糖: { price: 486, qty: 1, unit: "kg", note: "製菓用・1kg袋・3店・税込486円" },
+        発酵バター: { price: 1280, qty: 450, unit: "g", note: "製菓用・450g・4店・税込1,280円" }, バニラビーンズ: { price: 980, qty: 5, unit: "本", note: "マダガスカル産・5本・3店・税込980円" },
+      };
+      const todo = empty.slice(0, 20);
+      return demoWithCredits("priceSearch", priceSearchCredits(todo.length), async () => {
+        let filled = 0;
+        for (const i of todo) {
+          const w = web[i.name];
+          if (!w) continue;
+          const path = `${O}/ingredients/${i.id}`;
+          demoWrite(path, { ...demoGet(path), purchasePrice: Math.round((w.price / 1.08) * 10) / 10, priceTax: 0, purchaseQty: w.qty, purchaseUnit: w.unit, priceSource: "ref",
+            refWeb: { note: w.note, sources: [{ uri: "https://example.com/price", title: "example.com（デモ）" }], searchHtml: "<div style='font:12px sans-serif;padding:6px'>Google 検索の候補（デモ）</div>" } });
+          filled++;
+        }
+        return { result: { free: 0, filled, tried: todo.length, left: empty.length - todo.length } as T };
+      });
     }
     case "searchPackSizes": {
       // デモのネット検索：知っている商品だけ見つかる（本物は Google 検索つきのAIが商品のページを探す）

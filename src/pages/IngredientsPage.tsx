@@ -38,6 +38,9 @@ export function IngredientsPage() {
           仕入れ値が入っていない材料が{missing.length}件あります。{onlyMissing ? "（すべて表示に戻す）" : "押すとその材料だけ出します。"}
         </button>
       )}
+      {canEdit && missing.length > 0 && (
+        <Link to="/tidy" className="block text-sm text-clay-strong underline">仕入れ値が空の材料に、参考価格やネットの値段（AIが調べる）をまとめて入れる →</Link>
+      )}
       {canEdit && list.some((i) => i.allergensConfirmed !== true) && (
         <Link to="/tidy" className="block rounded-xl bg-warn-soft p-3 text-sm text-warn-strong">アレルゲンを確かめていない材料が{list.filter((i) => i.allergensConfirmed !== true).length}件あります。データの整理でまとめて確かめる →</Link>
       )}

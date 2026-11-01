@@ -7,6 +7,7 @@ import { ALLERGENS, type AllergenId } from "@shared/allergens";
 import { CREDIT_COST } from "@shared/credits";
 import { NUTRIENT_LABELS } from "@shared/mext";
 import { NUTRITION_KEYS } from "@shared/ugc";
+import type { Ingredient } from "@shared/types";
 import { useOrgCtx } from "../../contexts/OrgContext";
 import { createIngredient } from "../../lib/ingredientLink";
 import { uploadUgcPhoto } from "../../lib/photos";
@@ -21,10 +22,11 @@ import { numText } from "../../lib/num";
 
 interface Guess { maker?: string; productName?: string; ingredientsText: string; allergens: AllergenId[]; nutrition?: Record<string, number>; confidence: number; note: string }
 
-export function ProductForm({ onClose, onDone }: { onClose: () => void; onDone: (msg: string) => void }) {
+/** from を渡すと、そのお店の材料を既製品にする（新しい材料は作らず、原材料・アレルゲン・写真をその材料に入れる） */
+export function ProductForm({ onClose, onDone, from }: { onClose: () => void; onDone: (msg: string) => void; from?: Ingredient }) {
   const { orgId, uid, org, isAdmin } = useOrgCtx();
   const [maker, setMaker] = useState("");
-  const [productName, setProductName] = useState("");
+  const [productName, setProductName] = useState(from?.name ?? "");
   const [text, setText] = useState("");
   const [allergens, setAllergens] = useState<AllergenId[]>([]);
   const [nutrition, setNutrition] = useState<Record<string, string>>({});
@@ -88,8 +90,16 @@ export function ProductForm({ onClose, onDone }: { onClose: () => void; onDone: 
       const n = Object.fromEntries(NUTRITION_KEYS.flatMap((k) => (nutrition[k]?.trim() && Number.isFinite(Number(nutrition[k])) ? [[k, Number(nutrition[k])]] : [])));
       let existed = false;
       if (share) existed = (await call<{ existed: boolean }>("submitUgcProduct", { orgId, maker, productName, ingredientsText: text, allergens, nutrition: n, photoPath })).existed;
-      await createIngredient(orgId, uid, { name: productName.trim(), labelName: `${productName.trim()}（${text.trim()}）`.slice(0, 300), allergens, photoPath });
-      onDone(`「${productName.trim()}」をお店の材料に加えました。${share ? (existed ? "みんなの一覧には同じ商品がもうありました。" : "みんなの一覧にも登録しました。") : ""}仕入れ値は「材料」の画面で入れてください。`);
+      const labelName = `${productName.trim()}（${text.trim()}）`.slice(0, 300);
+      const shared = share ? (existed ? "みんなの一覧には同じ商品がもうありました。" : "みんなの一覧にも登録しました。") : "";
+      if (from) {
+        // 材料はそのまま（名前・仕入れ値・使っているレシピも）。ラベルの名前・アレルゲン（確認済み）・写真を既製品の表示に合わせる
+        await saveDoc(`organizations/${orgId}/ingredients/${from.id}`, { labelName, allergens, allergensConfirmed: true, photoPath: photoPath ?? from.photoPath ?? null });
+        onDone(`「${from.name}」を既製品の表示（原材料・アレルゲン）にしました。${shared}`);
+      } else {
+        await createIngredient(orgId, uid, { name: productName.trim(), labelName, allergens, photoPath });
+        onDone(`「${productName.trim()}」をお店の材料に加えました。${shared}仕入れ値は「材料」の画面で入れてください。`);
+      }
       onClose();
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
@@ -98,7 +108,7 @@ export function ProductForm({ onClose, onDone }: { onClose: () => void; onDone: 
   }
 
   return (
-    <Sheet title="既製品を登録" onClose={onClose}>
+    <Sheet title={from ? `「${from.name}」を既製品として登録` : "既製品を登録"} onClose={onClose}>
       <div className="space-y-3">
         <PackagePhotos shots={shots} onChange={setShots} />
         <button disabled={busy || !shots.back} onClick={readBack} className={`w-full ${ui.primary} text-sm`}>

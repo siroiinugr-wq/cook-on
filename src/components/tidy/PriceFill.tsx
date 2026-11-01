@@ -6,7 +6,12 @@ import { PRICE_TAX_OPTIONS, toExTax, yen } from "@shared/cost";
 import { ESTAT_CREDIT, refPriceExTax } from "@shared/refPrice";
 import type { GlobalIngredient, Ingredient } from "@shared/types";
 import { UNITS, type Unit } from "@shared/units";
-import { getOnce, saveDoc } from "../../lib/store";
+import { call, getOnce, newRequestId, saveDoc } from "../../lib/store";
+import { priceSearchCredits } from "@shared/credits";
+import { useOrgCtx } from "../../contexts/OrgContext";
+import { CostTag } from "../common/CreditBadge";
+import { useCreditAction } from "../common/useCreditAction";
+import { ui } from "../common/ui";
 import { numText } from "../../lib/num";
 
 const PAGE = 20;
@@ -16,6 +21,10 @@ export function PriceFill({ orgId, list, usedIn }: { orgId: string; list: Ingred
   const page = list.slice(0, PAGE);
   const [refs, setRefs] = useState<Record<string, GlobalIngredient | null>>({});
   const [bulk, setBulk] = useState("");
+  const { org } = useOrgCtx();
+  const run = useCreditAction(org.credits);
+  const [webMsg, setWebMsg] = useState("");
+  const [busy, setBusy] = useState(false);
 
   // 共有の材料に結びついていれば、参考価格を読む
   const keys = page.map((i) => i.globalRef ?? "").join(",");
@@ -29,6 +38,26 @@ export function PriceFill({ orgId, list, usedIn }: { orgId: string; list: Ingred
   }, [keys]);
 
   if (!list.length) return <p className="text-sm text-muted">すべての材料に仕入れ値が入っています。</p>;
+  const emptyN = list.filter((i) => i.purchasePrice === null).length;
+
+  // 仕入れ値が空の材料を、共有の参考価格（無料）→ 残りは Google 検索つきのAIで1品ずつ（出典つき）入れる
+  async function fillFromWeb() {
+    setBusy(true);
+    setWebMsg("");
+    try {
+      const r = await run({
+        title: "仕入れ値をネットで調べて入れる", credits: priceSearchCredits(emptyN),
+        detail: `仕入れ値が空の材料（${emptyN}件）に、共有の参考価格があれば入れ（無料）、無いものはAIが Google 検索でネットの販売価格を調べて目安を入れます（1回20件まで）。どれも「参考価格」と出し、お店の仕入れ値に直すと消えます。参考価格で入った分と、調べられなかった分のクレジットは戻ります。`,
+        exec: () => call<{ free: number; filled: number; tried: number; left: number }>("fillPricesFromWeb", { orgId, requestId: newRequestId() }),
+      });
+      if (!r) return;
+      setWebMsg(`${r.free ? `共有の参考価格で${r.free}件、` : ""}ネットで調べて${r.filled}件に目安を入れました${r.tried > r.filled ? `（${r.tried - r.filled}件は見つかりませんでした）` : ""}。${r.left ? `残り${r.left}件は、もう一度押すと調べます。` : ""}`);
+    } catch (e) {
+      setWebMsg(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
   const withRef = page.filter((i) => i.purchasePrice === null && i.globalRef && refs[i.globalRef]?.refPrice);
 
   async function applyAllRefs() {
@@ -42,6 +71,14 @@ export function PriceFill({ orgId, list, usedIn }: { orgId: string; list: Ingred
   return (
     <div className="space-y-3">
       <Link to="/ingredients/invoices" className="block text-sm text-clay-strong underline">レシート・納品書を撮って、まとめて入れる（AI・1枚1クレジット）→</Link>
+      {emptyN > 0 && (
+        <div className="space-y-1">
+          <button disabled={busy} onClick={fillFromWeb} className={`w-full ${ui.secondary}`}>
+            {busy ? "調べています…" : `仕入れ値が空の${emptyN}件をAIがネットで調べて入れる`}{!busy && <CostTag credits={priceSearchCredits(emptyN)} />}
+          </button>
+          {webMsg && <p className="text-xs text-ink-soft">{webMsg}</p>}
+        </div>
+      )}
       <p className="text-xs text-muted">使っているレシピが多い順です。入れると、使っているレシピの原価がすぐ計算し直されます。</p>
       {withRef.length > 0 && (
         <div className="space-y-1 rounded-xl bg-sand p-3 text-sm">
