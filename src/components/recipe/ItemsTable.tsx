@@ -1,6 +1,6 @@
 // 材料の表：分量（倍率をかけた値）・g・原価。原価に入らなかった行は理由を出す
 import { RefBadge } from "../ingredient/RefBadge";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { calcCost, yen, type MissingReason } from "@shared/cost";
 import type { Ingredient, RecipeItem } from "@shared/types";
 import { formatQty } from "@shared/units";
@@ -13,6 +13,9 @@ export const MISSING_TEXT: Record<MissingReason, string> = {
 
 export function ItemsTable({ items, byId, factor }: { items: RecipeItem[]; byId: Map<string, Ingredient>; factor: number }) {
   const c = calcCost(items, byId, factor);
+  // 材料を開いて保存・閉じたら、このレシピに戻る（from）
+  const back = encodeURIComponent(useLocation().pathname);
+  const open = (id: string) => `/ingredients?open=${id}&from=${back}`;
   return (
     <div className="overflow-hidden rounded-2xl border border-line bg-paper">
       <table className="w-full text-sm">
@@ -26,9 +29,9 @@ export function ItemsTable({ items, byId, factor }: { items: RecipeItem[]; byId:
             return (
               <tr key={i} className="border-t border-line align-top">
                 <td className="px-3 py-2">
-                  {it.ingredientId ? <Link to={`/ingredients?open=${it.ingredientId}`} className="block underline decoration-line-strong underline-offset-2">{it.name}</Link> : <span className="block">{it.name}</span>}
+                  {it.ingredientId ? <Link to={open(it.ingredientId)} className="block underline decoration-line-strong underline-offset-2">{it.name}</Link> : <span className="block">{it.name}</span>}
                   {it.note && <span className="block text-xs text-muted">{it.note}</span>}
-                  {l.missing && <Link to={it.ingredientId ? `/ingredients?open=${it.ingredientId}` : "/tidy#link"} className="block text-xs text-warn-strong underline">{MISSING_TEXT[l.missing]}</Link>}
+                  {l.missing && <Link to={it.ingredientId ? open(it.ingredientId) : "/tidy#link"} className="block text-xs text-warn-strong underline">{MISSING_TEXT[l.missing]}</Link>}
                 </td>
                 <td className="whitespace-nowrap px-2 py-2 text-right">
                   {it.unit === "適量" ? "適量" : `${formatQty(qty)}${it.unit}`}
