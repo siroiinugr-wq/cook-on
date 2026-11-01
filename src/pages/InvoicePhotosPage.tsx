@@ -1,9 +1,9 @@
 // レシート・納品書から仕入れ値を入れる：撮る → まとめて読み取る（1枚1クレジット）→ 明細ごとにお店の材料を確かめて反映。
 // 撮影と一覧は「写真から取り込み」と同じ部品（一覧はお店ごと・この画面専用にためる）。値段が変わると原価の計算し直しと値段の記録は材料のトリガが行う
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { aiMatchCredits, CREDIT_COST, INVOICE_MAX_PHOTOS } from "@shared/credits";
+import { aiMatchCredits, CREDIT_COST, INVOICE_MAX_PHOTOS, SIZE_SEARCH_MAX, sizeSearchCredits } from "@shared/credits";
 import { PRICE_TAX_OPTIONS, yen } from "@shared/cost";
-import { fromPurchaseLines, invoicePatch, INVOICE_UNITS, isPieceUnit, per100, SIZE_LABEL, sizeDoubt, sizeHint, type InvoiceLine } from "@shared/invoice";
+import { fromPurchaseLines, invoicePatch, INVOICE_UNITS, isPieceUnit, needsWebSize, per100, SIZE_LABEL, sizeDoubt, sizeHint, type InvoiceLine } from "@shared/invoice";
 import type { Ingredient } from "@shared/types";
 import { suggestAllergens } from "@shared/allergenGuess";
 import type { GlobalIngredient } from "@shared/types";
@@ -25,9 +25,10 @@ import { ui } from "../components/common/ui";
 import { CameraShooter } from "../components/import/CameraShooter";
 import { CaptureTray } from "../components/import/CaptureTray";
 import { numText } from "../lib/num";
+import { WebSources } from "../components/common/WebSources";
 
-/** tried＝AIで探した（見つからなかった行をもう一度クレジットで探さない）、sizeTried＝AIで量を確かめた */
-type Row = InvoiceLine & { use: boolean; target: string; tried?: boolean; sizeTried?: boolean };
+/** tried＝AIで探した（見つからなかった行をもう一度クレジットで探さない）、sizeTried＝AIで量を確かめた、webTried＝ネットで確かめた */
+type Row = InvoiceLine & { use: boolean; target: string; tried?: boolean; sizeTried?: boolean; webTried?: boolean };
 const NEW = "__new__";
 /** 読んだ明細を画面の行にする。お店の材料に無くても、共有の材料（成分表つき）が見つかれば「新しく登録」を選んでおく */
 const toRow = (l: InvoiceLine, min: number): Row => {
@@ -191,6 +192,44 @@ export function InvoicePhotosPage() {
     }
   }
 
+  // AIでも量を決めきれなかった行（値段からの推定・分からない・量が怪しい）を、Google 検索つきのAIで1品ずつ確かめる。
+  // ほかのお店が前に調べた商品は共有の表から無料で入る。まずは「AIで判断する」を済ませた行だけ（安いほうを先に）
+  const web = rows.map((r, k) => ({ r, k }))
+    .filter(({ r }) => r.sizeTried && !r.webTried && (r.target || r.global) && needsWebSize(r, byId.get(r.target)))
+    .slice(0, SIZE_SEARCH_MAX);
+  async function webSize() {
+    setErr("");
+    setMsg("");
+    setBusy(true);
+    try {
+      const lines = web.map(({ r }) => ({ name: r.raw, generic: r.generic ?? "", price: r.price, tax: r.tax, clue: sizeHint(r, byId.get(r.target)) }));
+      type Res = Pick<InvoiceLine, "qty" | "unit" | "gramsPerPiece" | "sizeNote" | "sizeSources" | "sizeSearchHtml"> & { found: boolean; shared: boolean };
+      const res = await run({
+        title: "量をネットで確かめる", credits: sizeSearchCredits(lines.length),
+        detail: `${lines.length}品の内容量を、AIが Google 検索で商品のページを探して確かめます。ほかのお店が前に調べた商品はクレジットを使いません（使わなかった分は戻ります）。`,
+        exec: () => call<{ results: Res[]; searched: number }>("searchPackSizes", { orgId, lines, requestId: newRequestId() }),
+      });
+      if (!res) return;
+      const at = new Map(web.map(({ k }, j) => [k, res.results[j]]));
+      setRows(rows.map((r, k) => {
+        const m = at.get(k);
+        if (!m) return r;
+        if (!m.found) return { ...r, webTried: true };
+        return {
+          ...r, webTried: true, qty: m.qty, unit: m.unit, size: "web", sizeNote: m.sizeNote, sizeSources: m.sizeSources, sizeSearchHtml: m.sizeSearchHtml,
+          gramsPerPiece: isPieceUnit(m.unit) ? (m.gramsPerPiece ?? r.gramsPerPiece ?? null) : null,
+        };
+      }));
+      const found = res.results.filter((m) => m.found).length;
+      const shared = res.results.filter((m) => m.shared).length;
+      setMsg(`${lines.length}品のうち${found}品の量をネットで確かめました${shared ? `（${shared}品はほかのお店が調べた結果で、クレジットは使っていません）` : ""}。見つからなかった品は、袋の表示を見て量を直してください。`);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function apply() {
     setBusy(true);
     setErr("");
@@ -285,6 +324,11 @@ export function InvoicePhotosPage() {
               AIで判断する：{[looseN && `結び先が無い${looseN}行`, sizeN && `量を確かめる${sizeN}行`].filter(Boolean).join("・")}<CostTag credits={aiMatchCredits(todo.length)} />
             </button>
           )}
+          {web.length > 0 && !busy && (
+            <button onClick={webSize} className={`w-full ${ui.secondary}`}>
+              量が決まらない{web.length}品をネットで確かめる<CostTag credits={sizeSearchCredits(web.length)} />
+            </button>
+          )}
           <ul className="space-y-2">
             {rows.map((r, k) => {
               const ing = byId.get(r.target);
@@ -345,7 +389,7 @@ function Per100Line({ r, ing, doubt }: { r: Row; ing?: Ingredient; doubt: string
   const now = per100(r.price, r.tax, r.qty, r.unit, r.gramsPerPiece ?? ing?.gramsPerPiece);
   const before = ing && ing.purchasePrice !== null ? per100(ing.purchasePrice, 0, ing.purchaseQty, ing.purchaseUnit, ing.gramsPerPiece) : null;
   const diff = now !== null && before ? Math.round(((now - before) / before) * 100) : null;
-  const guess = r.size === "known" || r.size === "price";
+  const guess = r.size === "known" || r.size === "price" || r.size === "web";
   return (
     <div className="space-y-0.5 text-xs">
       {(now !== null || r.generic) && (
@@ -355,8 +399,9 @@ function Per100Line({ r, ing, doubt }: { r: Row; ing?: Ingredient; doubt: string
           {r.generic && <span className="text-muted">{now !== null ? "　" : ""}AIの判断：{r.generic}</span>}
         </p>
       )}
-      {guess && <p><span className="rounded bg-warn-soft px-1.5 py-0.5 text-warn-strong">{SIZE_LABEL[r.size!]}</span>{r.sizeNote && <span className="text-muted">　{r.sizeNote}</span>}</p>}
-      {doubt && <p className="text-ng">量を確かめてください：{doubt}{r.sizeTried ? "" : "（「AIで判断する」で確かめられます）"}</p>}
+      {guess && <p><span className={`rounded px-1.5 py-0.5 ${r.size === "web" ? "bg-ok-soft text-ok" : "bg-warn-soft text-warn-strong"}`}>{SIZE_LABEL[r.size!]}</span>{r.sizeNote && <span className="text-muted">　{r.sizeNote}</span>}</p>}
+      {r.size === "web" && <WebSources sources={r.sizeSources} searchHtml={r.sizeSearchHtml} />}
+      {doubt && <p className="text-ng">量を確かめてください：{doubt}{!r.sizeTried ? "（「AIで判断する」で確かめられます）" : !r.webTried ? "（「ネットで確かめる」で調べられます）" : ""}</p>}
     </div>
   );
 }

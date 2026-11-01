@@ -18,6 +18,8 @@ export const CREDIT_COST = {
   labelName: 1,
   /** レシート・納品書の写真から仕入れ値を読む：1枚ごと */
   invoicePhoto: 1,
+  /** 仕入れ明細の包装の量を Google 検索つきのAIで確かめる：SIZE_SEARCH_BATCH 品ごと（共有の表で分かった品は数えない） */
+  sizeSearch: 1,
   /** 原価ダウン・新作の提案（1回の質問） */
   aiSuggest: 2,
 } as const;
@@ -32,12 +34,21 @@ export const ACTION_LABEL: Record<CreditAction | "purchase" | "grant" | "welcome
   aiSuggest: "AIに相談",
   labelName: "ラベルの名前をAIで提案",
   invoicePhoto: "レシート・納品書から仕入れ値を読む",
+  sizeSearch: "仕入れ品の量をネットで確かめる",
   purchase: "購入",
   grant: "付与",
   welcome: "はじめてのプレゼント",
 };
 
 export const AI_MATCH_BATCH = 20;
+/** 量をネットで確かめる：1クレジットで何品まで（1品ずつ検索する） */
+export const SIZE_SEARCH_BATCH = 5;
+/** 量をネットで確かめる：1回に頼める品数 */
+export const SIZE_SEARCH_MAX = 20;
+
+export function sizeSearchCredits(n: number): number {
+  return Math.ceil(Math.min(n, SIZE_SEARCH_MAX) / SIZE_SEARCH_BATCH) * CREDIT_COST.sizeSearch;
+}
 /** ラベルの名前の案：1クレジットで何件まで */
 export const LABEL_NAME_BATCH = 20;
 /** ラベルの名前の案：1回に頼める件数 */
