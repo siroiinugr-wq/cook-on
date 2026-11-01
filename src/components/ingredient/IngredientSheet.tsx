@@ -12,6 +12,7 @@ import { Accordion } from "../common/Accordion";
 import { useConfirm } from "../common/ConfirmDialog";
 import { Sheet } from "../common/Sheet";
 import { ui } from "../common/ui";
+import { RefBadge } from "./RefBadge";
 import { GlobalInfo } from "./GlobalInfo";
 import { PhotoThumb } from "./PhotoThumb";
 
@@ -34,7 +35,7 @@ export function IngredientSheet({ orgId, uid, ing, usedIn, onClose }: { orgId: s
   const setPrice = (text: string, rate = tax) => {
     setPriceText(text);
     const n = num(text);
-    set({ purchasePrice: n === null ? null : toExTax(n, rate), priceTax: rate });
+    set({ purchasePrice: n === null ? null : toExTax(n, rate), priceTax: rate, priceSource: null });
   };
   const perG = unitCostPerGram(d);
   const toggle = (a: AllergenId) => set({ allergens: d.allergens.includes(a) ? d.allergens.filter((x) => x !== a) : [...d.allergens, a] });
@@ -48,7 +49,7 @@ export function IngredientSheet({ orgId, uid, ing, usedIn, onClose }: { orgId: s
         gramsPerPiece: d.gramsPerPiece ?? null, gramsPerMl: d.gramsPerMl ?? null, allergens: d.allergens, allergensConfirmed: true,
         aliases: (d.aliases ?? []).filter((a) => a.trim() && a.trim() !== d.name.trim()).slice(0, 20),
         labelName: d.labelName?.trim() ?? "", isAdditive: !!d.isAdditive, supplier: d.supplier?.trim() ?? "", globalRef: d.globalRef ?? null,
-        photoPath: d.photoPath ?? null,
+        photoPath: d.photoPath ?? null, priceSource: d.purchasePrice === null ? null : d.priceSource ?? null,
       };
       if (ing) await saveDoc(`organizations/${orgId}/ingredients/${ing.id}`, data);
       else await createIngredient(orgId, uid, data);
@@ -106,13 +107,14 @@ export function IngredientSheet({ orgId, uid, ing, usedIn, onClose }: { orgId: s
           <div className="flex items-center gap-1.5">
             <input className={`${input} w-28`} inputMode="decimal" placeholder="未入力" value={priceText} onChange={(e) => setPrice(e.target.value)} />
             <span className="shrink-0 text-sm">円で</span>
-            <input className={`${input} w-20`} inputMode="decimal" value={d.purchaseQty} onChange={(e) => set({ purchaseQty: num(e.target.value) ?? 1 })} />
-            <select className={`${input} w-24`} value={d.purchaseUnit} onChange={(e) => set({ purchaseUnit: e.target.value as Unit })}>{BUY_UNITS.map((u) => <option key={u}>{u}</option>)}</select>
+            <input className={`${input} w-20`} inputMode="decimal" value={d.purchaseQty} onChange={(e) => set({ purchaseQty: num(e.target.value) ?? 1, priceSource: null })} />
+            <select className={`${input} w-24`} value={d.purchaseUnit} onChange={(e) => set({ purchaseUnit: e.target.value as Unit, priceSource: null })}>{BUY_UNITS.map((u) => <option key={u}>{u}</option>)}</select>
           </div>
           {tax > 0 && d.purchasePrice !== null && <p className="text-xs text-muted">税抜 {yen(d.purchasePrice)} で原価を計算します。</p>}
+        {d.priceSource === "ref" && d.purchasePrice !== null && <p className="text-xs text-warn-strong"><RefBadge /> 共有の材料の参考価格を入れています。お店の仕入れ値に直すと、この印は消えます。</p>}
           <p className="text-xs text-muted">{perG !== null ? `1gあたり ${yen(perG)}（税抜）／1kgあたり ${yen(perG * 1000)}` : "1gあたりの値段を出すには、仕入れ値と量を入れてください。"}</p>
         </div>
-        {d.globalRef && <GlobalInfo globalRef={d.globalRef} onApply={(p) => { setPriceText(String(p.price)); set({ purchasePrice: p.price, priceTax: 0, purchaseQty: p.qty, purchaseUnit: p.unit }); }} />}
+        {d.globalRef && <GlobalInfo globalRef={d.globalRef} onApply={(p) => { setPriceText(String(p.price)); set({ purchasePrice: p.price, priceTax: 0, purchaseQty: p.qty, purchaseUnit: p.unit, priceSource: "ref" }); }} />}
         <div className="grid grid-cols-2 gap-2">
           <label className="space-y-1"><span className={ui.label}>1個・1枚・1本の重さ g{PIECE.includes(d.purchaseUnit) ? "（必要）" : ""}</span>
             <input className={input} inputMode="decimal" value={d.gramsPerPiece ?? ""} onChange={(e) => set({ gramsPerPiece: num(e.target.value) })} /></label>

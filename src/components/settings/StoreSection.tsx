@@ -11,6 +11,7 @@ export function StoreSection({ orgId, org, canManage }: { orgId: string; org: Or
   const [address, setAddress] = useState(org.settings.manufacturerAddress);
   const [rec, setRec] = useState(org.settings.includeRecommendedAllergens);
   const [share, setShare] = useState(org.settings.shareProducts === true);
+  const [shareIng, setShareIng] = useState(org.settings.shareIngredients);
   const [msg, setMsg] = useState("");
   useEffect(() => {
     setName(org.name);
@@ -19,7 +20,8 @@ export function StoreSection({ orgId, org, canManage }: { orgId: string; org: Or
     setAddress(org.settings.manufacturerAddress);
     setRec(org.settings.includeRecommendedAllergens);
     setShare(org.settings.shareProducts === true);
-  }, [org.name, org.settings.targetCostRate, org.settings.manufacturer, org.settings.manufacturerAddress, org.settings.includeRecommendedAllergens, org.settings.shareProducts]);
+    setShareIng(org.settings.shareIngredients);
+  }, [org.name, org.settings.targetCostRate, org.settings.manufacturer, org.settings.manufacturerAddress, org.settings.includeRecommendedAllergens, org.settings.shareProducts, org.settings.shareIngredients]);
 
   async function save() {
     const r = Number(rate) / 100;
@@ -27,7 +29,7 @@ export function StoreSection({ orgId, org, canManage }: { orgId: string; org: Or
     if (!(r > 0 && r < 1)) return setMsg("原価率は1〜99%で入れてください。");
     if (!maker.trim() || !address.trim()) return setMsg("ラベルの製造者は、名前と住所の両方を入れてください（食品表示に必要です）。");
     try {
-      await saveDoc(`organizations/${orgId}`, { name: name.trim().slice(0, 40), settings: { ...org.settings, targetCostRate: r, manufacturer: maker.trim(), manufacturerAddress: address.trim(), includeRecommendedAllergens: rec, shareProducts: share || (org.settings.shareProducts === null ? null : false) } });
+      await saveDoc(`organizations/${orgId}`, { name: name.trim().slice(0, 40), settings: { ...org.settings, targetCostRate: r, manufacturer: maker.trim(), manufacturerAddress: address.trim(), includeRecommendedAllergens: rec, shareProducts: share || (org.settings.shareProducts === null ? null : false), shareIngredients: shareIng } });
       setMsg("保存しました。");
     } catch {
       setMsg("保存できませんでした。");
@@ -53,6 +55,10 @@ export function StoreSection({ orgId, org, canManage }: { orgId: string; org: Or
         <label className="flex items-start gap-2 text-sm">
           <input type="checkbox" className="mt-1 h-5 w-5 accent-clay" checked={share} onChange={(e) => setShare(e.target.checked)} />
           <span>登録した既製品を、みんなの既製品データベースにも入れる<span className="block text-xs text-muted">ほかのお店の確認が集まると、どのお店でも材料の候補に出ます。お店の名前は出ません。外すと、お店の材料にだけ入ります。</span></span>
+        </label>
+        <label className="flex items-start gap-2 text-sm">
+          <input type="checkbox" className="mt-1 h-5 w-5 accent-clay" checked={shareIng} onChange={(e) => setShareIng(e.target.checked)} />
+          <span>確かめた材料の情報を、共有の材料づくりに提案する<span className="block text-xs text-muted">アレルゲンを確かめた材料の呼び方・アレルゲン・仕入れ値を、COOK ON の運営に提案します。運営が確かめたものだけが共有の材料に入り、仕入れ値はほかのお店に「参考価格」（目安）として出ます。お店の名前と仕入れ先は出ません。</span></span>
         </label>
         {canManage && <button onClick={save} className={`w-full ${ui.primary}`}>保存する</button>}
       </fieldset>

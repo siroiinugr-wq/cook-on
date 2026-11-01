@@ -33,6 +33,8 @@ export interface Ingredient {
   isAdditive?: boolean;
   /** 共有マスターとの紐付け（globalIngredients / ugcProducts の id） */
   globalRef?: string | null;
+  /** "ref"＝仕入れ値が空だったので共有の材料の参考価格を入れた（画面に「参考価格」と出す）。お店が値段を直すと消える */
+  priceSource?: "ref" | null;
   supplier?: string;
   /** 写真（Storage のパス orgs/{orgId}/ingredients/… か、既製品から写した ugc/…） */
   photoPath?: string | null;
@@ -176,8 +178,8 @@ export interface GlobalIngredient {
   allergens: AllergenId[];
   /** 100g あたりの成分（kcal, protein, fat, carbohydrate, salt）。無ければ空 */
   nutrition?: Record<string, number>;
-  /** mext＝食品成分表、ugc＝昇格した既製品、base＝運営が用意した基本の材料（shared/globalSeed.ts） */
-  source: "mext" | "ugc" | "base";
+  /** mext＝食品成分表、ugc＝昇格した既製品、base＝運営が用意した基本の材料（shared/globalSeed.ts）、shop＝お店の提案を運営が採用したもの */
+  source: "mext" | "ugc" | "base" | "shop";
   /** 文科省の食品番号（mext のとき。base も成分表の食品に結んだら入る） */
   mextCode?: string;
   /** ugc のとき：元の既製品 */
@@ -216,3 +218,34 @@ export interface Branding {
 }
 
 export const DEFAULT_BRANDING: Branding = { appName: "COOK ON", logoUrl: null, primaryColor: "#d97757" };
+
+/**
+ * 共有の材料への提案 globalSuggestions/{id}。運営が精査画面（/admin/suggestions）で採用・却下する。
+ * - お店から（source "shop"、id は {orgId}_{ingredientId}）：設定 shareIngredients がオンのお店が、アレルゲンを確かめた材料
+ * - AIの推定（source "ai"、id は ai_{globalId}）：参考価格が無い共有の材料の値段の目安
+ * 書くのは Functions だけ。お店の名前は運営だけが見る（共有の材料には出さない）
+ */
+export interface GlobalSuggestion {
+  id: string;
+  source: "shop" | "ai";
+  kind: "new" | "update";
+  status: "pending" | "accepted" | "rejected";
+  orgId: string | null;
+  orgName: string;
+  ingredientId: string | null;
+  /** update のとき：結びついている共有の材料 */
+  globalId: string | null;
+  globalName: string;
+  name: string;
+  /** 共有の材料にまだ無い呼び方 */
+  aliases: string[];
+  /** お店が確かめたアレルゲン（全部）。共有と違うときだけ入る（同じなら null） */
+  allergens: AllergenId[] | null;
+  labelName: string;
+  /** 値段（税抜・円）。AIの推定は note に理由 */
+  price: { price: number; qty: number; unit: Unit; supplier?: string } | null;
+  note: string;
+  /** 同じ中身を何度も出さないための印 */
+  sig: string;
+  updatedAt?: unknown;
+}

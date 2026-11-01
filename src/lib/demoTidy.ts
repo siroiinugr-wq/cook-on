@@ -5,10 +5,12 @@ import { sanitizeRecipe } from "@shared/recipe";
 import { resolveLocal } from "@shared/resolveLocal";
 import { applyStepPhoto, applyTemplate } from "@shared/steps";
 import { mergeDuplicateItems } from "@shared/tidy";
-import type { StepTemplate } from "@shared/types";
+import { linkPatch, misLinked, refPricePatch } from "@shared/link";
+import { AI_MATCH_BATCH } from "@shared/credits";
+import type { GlobalIngredient, Ingredient, StepTemplate } from "@shared/types";
 import { demoGet, demoListDocs, demoWrite } from "./demo";
 import { DEMO_ORG } from "./demoData";
-import { demoIngredientMap, demoWriteRecipe } from "./demoFunctions";
+import { demoIngredientMap, demoWithCredits, demoWriteRecipe } from "./demoFunctions";
 
 type Data = Record<string, unknown>;
 const O = `organizations/${DEMO_ORG}`;
@@ -76,24 +78,72 @@ export function demoTidyCall(name: string, d: Data): unknown | undefined {
     }
     return { done, failed: [] };
   }
-  if (name === "relinkIngredients") {
-    const ingredients = [...demoIngredientMap().values()];
-    const globals = demoListDocs("globalIngredients").map((x) => ({ id: x.id, name: String(x.data.name), aliases: (x.data.aliases as string[]) ?? [], allergens: (x.data.allergens as string[]) ?? [] }));
-    const loose = ingredients.filter((i) => !i.globalRef);
-    const { results } = resolveLocal({
-      ingredients, tenantIndex: [], aliases: new Map(), globalIndex: buildIndex(globals), globalById: new Map(globals.map((g) => [g.id, g])),
-    }, loose.map((i) => i.name), false);
+  if (name === "relinkIngredients" || name === "confirmLinks") return demoRelink(name, d);
+  return undefined;
+}
+
+type Glob = GlobalIngredient & { id: string };
+const globals = (): Glob[] => demoListDocs("globalIngredients").map((x) => ({ ...(x.data as unknown as GlobalIngredient), id: x.id }));
+
+/** 本番の relinkIngredients・confirmLinks と同じ：確かなものは結び、迷うものは候補。AIはデモでは一番上の候補を選ぶ */
+function demoRelink(name: string, d: Data): unknown {
+  const gl = globals();
+  const byId = new Map(gl.map((g) => [g.id, g]));
+  const ings = [...demoIngredientMap().values()];
+  const link = (ing: Ingredient, g: Glob) => {
+    const p = `${O}/ingredients/${ing.id}`;
+    const patch = linkPatch(ing, g);
+    demoWrite(p, { ...demoGet(p)!, ...patch });
+    return patch.priceSource === "ref";
+  };
+  if (name === "confirmLinks") {
     let linked = 0;
-    for (const ing of loose) {
-      const m = results.get(toMatchKey(ing.name));
-      const gl = m && m.kind === "global" && m.id && m.confidence >= 0.9 ? globals.find((g) => g.id === m.id) : undefined;
-      if (!gl) continue;
-      const allergens = sortAllergens([...ing.allergens, ...gl.allergens]);
-      const p = `${O}/ingredients/${ing.id}`;
-      demoWrite(p, { ...demoGet(p)!, globalRef: gl.id, allergens, ...(allergens.length !== ing.allergens.length ? { allergensConfirmed: false } : {}) });
+    let priced = 0;
+    for (const l of (d.links as { ingredientId: string; globalId: string }[]) ?? []) {
+      const ing = ings.find((i) => i.id === l.ingredientId);
+      const g = byId.get(l.globalId);
+      if (!ing || !g) continue;
+      if (link(ing, g)) priced++;
       linked++;
     }
-    return { linked, checked: loose.length, globals: globals.length };
+    return { linked, priced };
   }
-  return undefined;
+  const useAi = d.useAi === true;
+  const loose = ings.filter((i) => !i.globalRef);
+  const { results, pending } = resolveLocal({
+    ingredients: ings, tenantIndex: [], aliases: new Map(), globalIndex: buildIndex(gl), globalById: new Map(gl.map((g) => [g.id, g])),
+  }, loose.map((i) => i.name), useAi);
+  let linked = 0;
+  let priced = 0;
+  const rest: Ingredient[] = [];
+  for (const ing of loose) {
+    const m = results.get(toMatchKey(ing.name));
+    const g = m && m.kind === "global" && m.via === "exact" && m.id ? byId.get(m.id) : undefined;
+    if (!g) { rest.push(ing); continue; }
+    if (link(ing, g)) priced++;
+    linked++;
+  }
+  for (const ing of demoIngredientMap().values()) {
+    const g = ing.globalRef ? byId.get(ing.globalRef) : undefined;
+    const p = refPricePatch(ing, g);
+    if (!p.priceSource) continue;
+    demoWrite(`${O}/ingredients/${ing.id}`, { ...demoGet(`${O}/ingredients/${ing.id}`)!, ...p });
+    priced++;
+  }
+  // AIを使うときは、決まらなかった分が pending に入る（候補だけ持っている）
+  for (const pd of pending) if (!results.has(pd.key)) results.set(pd.key, { kind: "none", id: null, name: null, confidence: 0, via: "none", candidates: pd.candidates });
+  const suggestions = (ai: boolean) => rest.map((ing) => {
+    const m = results.get(toMatchKey(ing.name));
+    const top = m?.candidates?.[0];
+    const pick = m && m.kind === "global" && m.id ? { id: m.id, name: m.name ?? "", confidence: m.confidence, via: m.via }
+      : ai && top ? { id: top.id, name: top.name, confidence: 0.7, via: "ai" } : null;
+    return { ingredientId: ing.id, name: ing.name, pick, candidates: (m?.candidates ?? []).slice(0, 8) };
+  }).filter((x) => x.pick || x.candidates.length);
+  const relinks = misLinked([...demoIngredientMap().values()], buildIndex(gl)).map(({ ing, to }) => ({
+    ingredientId: ing.id, name: ing.name, pick: { id: to.id, name: to.name, confidence: 1, via: "exact" },
+    candidates: [{ id: to.id, name: to.name }, { id: ing.globalRef!, name: byId.get(ing.globalRef!)?.name ?? "" }], current: byId.get(ing.globalRef!)?.name ?? "",
+  }));
+  const base = { linked, priced, checked: loose.length, globals: gl.length };
+  if (!useAi || !pending.length) return { ...base, suggestions: [...relinks, ...suggestions(false)], aiUsed: 0 };
+  return demoWithCredits("aiMatch", Math.ceil(pending.length / AI_MATCH_BATCH), async () => ({ result: { ...base, suggestions: [...relinks, ...suggestions(true)], aiUsed: 1 } }));
 }

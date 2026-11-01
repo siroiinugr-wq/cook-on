@@ -1,4 +1,5 @@
 // 材料の表：分量（倍率をかけた値）・g・原価。原価に入らなかった行は理由を出す
+import { RefBadge } from "../ingredient/RefBadge";
 import { Link } from "react-router-dom";
 import { calcCost, yen, type MissingReason } from "@shared/cost";
 import type { Ingredient, RecipeItem } from "@shared/types";
@@ -33,7 +34,7 @@ export function ItemsTable({ items, byId, factor }: { items: RecipeItem[]; byId:
                   {it.unit === "適量" ? "適量" : `${formatQty(qty)}${it.unit}`}
                   {l.grams !== null && it.unit !== "g" && <span className="block text-xs text-muted">{formatQty(l.grams)}g</span>}
                 </td>
-                <td className="whitespace-nowrap px-3 py-2 text-right">{l.cost === null ? <span className="text-faint">—</span> : yen(l.cost)}</td>
+                <td className="whitespace-nowrap px-3 py-2 text-right">{l.cost === null ? <span className="text-faint">—</span> : yen(l.cost)}{l.cost !== null && it.ingredientId && byId.get(it.ingredientId)?.priceSource === "ref" && <RefBadge className="block w-fit ml-auto" />}</td>
               </tr>
             );
           })}

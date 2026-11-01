@@ -111,7 +111,11 @@ const DEMO_GLOBAL_EXTRA: Record<string, Record<string, unknown>> = {
 export function seedDemo(): [string, Record<string, unknown>][] {
   const ingById = new Map(ING.map((i) => [i.id, i]));
   const out: [string, Record<string, unknown>][] = [
-    [O, { name: "デモ菓子店", plan: "free", credits: WELCOME_CREDITS, ownerUid: "demo-user", settings: { targetCostRate: 0.3, manufacturer: "デモ菓子店", manufacturerAddress: "山口県岩国市〇〇町1-2-3", includeRecommendedAllergens: true }, createdAt: at }],
+    [O, { name: "デモ菓子店", plan: "free", credits: WELCOME_CREDITS, ownerUid: "demo-user", settings: { targetCostRate: 0.3, manufacturer: "デモ菓子店", manufacturerAddress: "山口県岩国市〇〇町1-2-3", includeRecommendedAllergens: true, shareIngredients: true }, createdAt: at }],
+    // デモの人は運営でもある（共有の材料の精査が見える）。本番は Firebase コンソールで operators/{uid} を作る
+    ["operators/demo-user", { note: "デモ" }],
+    ["globalSuggestions/other_ing1", { source: "shop", kind: "new", status: "pending", orgId: "other", orgName: "ほかのお店（見本）", ingredientId: "ing1", globalId: null, globalName: "", name: "ピスタチオペースト", aliases: ["ピスタチオペ"], allergens: [], labelName: "ピスタチオペースト", price: { price: 4200, qty: 1, unit: "kg", supplier: "製菓材料店" }, note: "", sig: "x", updatedAt: at }],
+    ["globalSuggestions/other_ing2", { source: "shop", kind: "update", status: "pending", orgId: "other", orgName: "ほかのお店（見本）", ingredientId: "ing2", globalId: "base_butter_unsalted", globalName: "無塩バター", name: "よつ葉バター 食塩不使用", aliases: ["よつ葉バター 食塩不使用"], allergens: null, labelName: "バター", price: { price: 1180, qty: 450, unit: "g" }, note: "", sig: "y", updatedAt: at }],
     [`${O}/members/demo-user`, { uid: "demo-user", role: "owner", email: "demo@example.com", displayName: "デモ" }],
     [`${O}/public/branding`, { ...DEFAULT_BRANDING }],
     [`${O}/creditLedger/welcome`, { kind: "welcome", amount: WELCOME_CREDITS, status: "done", createdAt: at }],

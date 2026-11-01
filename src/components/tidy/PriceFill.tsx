@@ -1,4 +1,5 @@
 // 仕入れ値の入力：仕入れ値が空の材料を、よく使う順にその場で入れる。共有の材料に参考価格があれば1押しで入る
+import { RefBadge } from "../ingredient/RefBadge";
 import { useEffect, useState } from "react";
 import { PRICE_TAX_OPTIONS, toExTax, yen } from "@shared/cost";
 import { ESTAT_CREDIT, refPriceExTax } from "@shared/refPrice";
@@ -26,12 +27,12 @@ export function PriceFill({ orgId, list, usedIn }: { orgId: string; list: Ingred
   }, [keys]);
 
   if (!list.length) return <p className="text-sm text-muted">すべての材料に仕入れ値が入っています。</p>;
-  const withRef = page.filter((i) => i.globalRef && refs[i.globalRef]?.refPrice);
+  const withRef = page.filter((i) => i.purchasePrice === null && i.globalRef && refs[i.globalRef]?.refPrice);
 
   async function applyAllRefs() {
     for (const i of withRef) {
       const rp = refs[i.globalRef!]!.refPrice!;
-      await saveDoc(`organizations/${orgId}/ingredients/${i.id}`, { purchasePrice: refPriceExTax(rp), priceTax: 0, purchaseQty: rp.qty, purchaseUnit: rp.unit });
+      await saveDoc(`organizations/${orgId}/ingredients/${i.id}`, { purchasePrice: refPriceExTax(rp), priceTax: 0, purchaseQty: rp.qty, purchaseUnit: rp.unit, priceSource: "ref" });
     }
     setBulk(`${withRef.length}件に参考価格（税抜）を入れました。お店の仕入れ値が分かったら直してください。`);
   }
@@ -63,10 +64,10 @@ function Row({ orgId, ing, uses, g }: { orgId: string; ing: Ingredient; uses: nu
   const [busy, setBusy] = useState(false);
   const rp = g?.refPrice;
 
-  async function save(p: { price: number; qty: number; unit: Unit; tax: number }) {
+  async function save(p: { price: number; qty: number; unit: Unit; tax: number; ref?: boolean }) {
     setBusy(true);
     try {
-      await saveDoc(`organizations/${orgId}/ingredients/${ing.id}`, { purchasePrice: toExTax(p.price, p.tax), priceTax: p.tax, purchaseQty: p.qty, purchaseUnit: p.unit });
+      await saveDoc(`organizations/${orgId}/ingredients/${ing.id}`, { purchasePrice: toExTax(p.price, p.tax), priceTax: p.tax, purchaseQty: p.qty, purchaseUnit: p.unit, priceSource: p.ref ? "ref" : null });
     } finally {
       setBusy(false);
     }
@@ -81,6 +82,9 @@ function Row({ orgId, ing, uses, g }: { orgId: string; ing: Ingredient; uses: nu
         <span className="min-w-0 flex-1 truncate font-medium">{ing.name}</span>
         <span className="shrink-0 text-xs text-muted">レシピ{uses}件</span>
       </div>
+      {ing.priceSource === "ref" && ing.purchasePrice !== null && (
+        <p className="text-xs text-muted"><RefBadge className="mr-1" />今は {yen(ing.purchasePrice)}（税抜）/{ing.purchaseQty}{ing.purchaseUnit}。お店の仕入れ値を入れると置き換わります。</p>
+      )}
       <div className="flex flex-wrap items-center gap-1.5">
         <input className={`${input} w-24`} inputMode="decimal" placeholder="値段" value={price} onChange={(e) => setPrice(e.target.value)} />
         <span className="text-sm">円で</span>
@@ -89,8 +93,8 @@ function Row({ orgId, ing, uses, g }: { orgId: string; ing: Ingredient; uses: nu
         <select className={input} value={tax} onChange={(e) => setTax(Number(e.target.value))}>{PRICE_TAX_OPTIONS.map((o) => <option key={o.rate} value={o.rate}>{o.label}</option>)}</select>
         <button disabled={busy || !(n > 0) || !(q > 0)} onClick={() => save({ price: n, qty: q, unit, tax })} className="rounded-lg bg-clay px-3 py-1.5 text-sm font-bold text-white disabled:bg-line-strong">保存</button>
       </div>
-      {rp && (
-        <button className="text-xs text-clay-strong underline" disabled={busy} onClick={() => save({ price: refPriceExTax(rp), qty: rp.qty, unit: rp.unit, tax: 0 })}>
+      {rp && ing.priceSource !== "ref" && (
+        <button className="text-xs text-clay-strong underline" disabled={busy} onClick={() => save({ price: refPriceExTax(rp), qty: rp.qty, unit: rp.unit, tax: 0, ref: true })}>
           参考価格 {yen(rp.price)}（税込）/{rp.qty}{rp.unit}・{rp.area} を入れる
         </button>
       )}

@@ -8,7 +8,8 @@ import type { ParsedRecipe } from "../shared/importTypes";
 import { guessPieces } from "../shared/tidy";
 import { toMatchKey } from "../shared/matchKey";
 import { deriveRecipe, sanitizeRecipe } from "../shared/recipe";
-import type { Ingredient } from "../shared/types";
+import type { GlobalIngredient, Ingredient } from "../shared/types";
+import { refPricePatch } from "../shared/link";
 import { globalIndex } from "../ai/globalIndex";
 import { rememberAliases } from "../ai/resolve";
 import { loadIngredientMap } from "./save";
@@ -65,6 +66,14 @@ export async function saveImportedRecipes(orgId: string, uid: string, recipes: P
       sellingPrice: null, targetCostRate: null, memo: r.notes,
     });
   }).filter((x) => typeof x !== "string");
+
+  // 共有の材料に参考価格があれば、仕入れ値が決まるまでの目安として入れる（「参考価格」の印付き）
+  const gIds = [...new Set(newIngs.map((i) => i.globalRef).filter((x): x is string => !!x))];
+  for (let i = 0; i < gIds.length; i += 300) {
+    const docs = await db.getAll(...gIds.slice(i, i + 300).map((id) => db.doc(`globalIngredients/${id}`)));
+    const byId = new Map(docs.filter((d) => d.exists).map((d) => [d.id, d.data() as GlobalIngredient]));
+    for (const ing of newIngs) if (ing.globalRef && byId.has(ing.globalRef)) Object.assign(ing, refPricePatch(ing, byId.get(ing.globalRef)));
+  }
 
   // Firestore の一括書き込みは500件まで。材料 → レシピの順に400件ずつ
   const writes: ((b: FirebaseFirestore.WriteBatch) => void)[] = [];
