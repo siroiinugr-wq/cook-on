@@ -9,6 +9,7 @@ import { getFirestore } from "firebase-admin/firestore";
 import { PRICE_SEARCH_BATCH, PRICE_SEARCH_MAX } from "../shared/credits";
 import { refPricePatch } from "../shared/link";
 import { refPriceExTax } from "../shared/refPrice";
+import { needsWebRefresh } from "../shared/offers";
 import type { GlobalIngredient, Ingredient } from "../shared/types";
 import { GEMINI_API_KEY, REGION } from "../ai/config";
 import { addUsage, type Usage } from "../ai/gemini";
@@ -47,11 +48,16 @@ export const fillPricesFromWeb = onCall({ region: REGION, timeoutSeconds: 300, s
   const requestId = requestIdOf(req.data?.requestId);
   const db = getFirestore();
   const col = db.collection(`organizations/${orgId}/ingredients`);
+  // includeRef：参考価格のままの材料（ネットで日付つきで調べた記録が無いもの）も、今のネットの値段に入れ替える
+  const includeRef = req.data?.includeRef === true;
   const empty = (await col.where("purchasePrice", "==", null).get()).docs.map((d) => ({ ...(d.data() as Ingredient), id: d.id }));
-  if (!empty.length) return { free: 0, filled: 0, tried: 0, left: 0 };
+  const refOnly = includeRef
+    ? (await col.where("priceSource", "==", "ref").get()).docs.map((d) => ({ ...(d.data() as Ingredient), id: d.id })).filter(needsWebRefresh)
+    : [];
+  if (!empty.length && !refOnly.length) return { free: 0, filled: 0, tried: 0, left: 0 };
 
   // (1) 共有の材料に参考価格があれば、それを入れる（無料）
-  const refs = [...new Set(empty.map((i) => i.globalRef).filter((x): x is string => !!x))];
+  const refs = [...new Set([...empty, ...refOnly].map((i) => i.globalRef).filter((x): x is string => !!x))];
   const globals = new Map((await Promise.all(refs.map((id) => db.doc(`globalIngredients/${id}`).get())))
     .filter((s) => s.exists).map((s) => [s.id, { ...(s.data() as GlobalIngredient), id: s.id }]));
   let free = 0;
@@ -60,7 +66,8 @@ export const fillPricesFromWeb = onCall({ region: REGION, timeoutSeconds: 300, s
     const p = i.globalRef ? refPricePatch(i, globals.get(i.globalRef)) : {};
     if (Object.keys(p).length) { await col.doc(i.id).update(p); free++; } else rest.push(i);
   }
-  // (2) 残りは Google 検索つきのAIで1品ずつ（食材でない・見つからないものは入れない）
+  // (2) 残りは Google 検索つきのAIで1品ずつ（食材でない・見つからないものは入れない）。参考価格のままのものはそのあと
+  rest.push(...refOnly);
   const todo = rest.slice(0, PRICE_SEARCH_MAX);
   if (!todo.length) return { free, filled: 0, tried: 0, left: 0 };
   const pending = await db.collection("globalSuggestions").where("source", "==", "ai").where("status", "==", "pending").get();
@@ -81,7 +88,7 @@ export const fillPricesFromWeb = onCall({ region: REGION, timeoutSeconds: 300, s
           if (!w) return;
           // 調べている間にお店が値段を入れていたら変えない
           const cur = await col.doc(i.id).get();
-          if (!cur.exists || cur.get("purchasePrice") !== null) return;
+          if (!cur.exists || (cur.get("purchasePrice") !== null && cur.get("priceSource") !== "ref")) return;
           const exPrice = refPriceExTax(w);
           await col.doc(i.id).update({
             purchasePrice: exPrice, priceTax: 0, purchaseQty: w.qty, purchaseUnit: w.unit, priceSource: "ref",

@@ -8,6 +8,7 @@ import type { GlobalIngredient, Ingredient } from "@shared/types";
 import { UNITS, type Unit } from "@shared/units";
 import { call, getOnce, newRequestId, saveDoc } from "../../lib/store";
 import { priceSearchCredits } from "@shared/credits";
+import { needsWebRefresh } from "@shared/offers";
 import { useOrgCtx } from "../../contexts/OrgContext";
 import { CostTag } from "../common/CreditBadge";
 import { useCreditAction } from "../common/useCreditAction";
@@ -39,16 +40,21 @@ export function PriceFill({ orgId, list, usedIn }: { orgId: string; list: Ingred
 
   if (!list.length) return <p className="text-sm text-muted">すべての材料に仕入れ値が入っています。</p>;
   const emptyN = list.filter((i) => i.purchasePrice === null).length;
+  // 参考価格のまま（ネットで日付つきで調べた記録が無い）の材料も、今のネットの値段に入れ替えられる
+  const refN = list.filter(needsWebRefresh).length;
 
   // 仕入れ値が空の材料を、共有の参考価格（無料）→ 残りは Google 検索つきのAIで1品ずつ（出典つき）入れる
-  async function fillFromWeb() {
+  async function fillFromWeb(includeRef = false) {
     setBusy(true);
     setWebMsg("");
     try {
+      const n = emptyN + (includeRef ? refN : 0);
       const r = await run({
-        title: "仕入れ値をネットで調べて入れる", credits: priceSearchCredits(emptyN),
-        detail: `仕入れ値が空の材料（${emptyN}件）に、共有の参考価格があれば入れ（無料）、無いものはAIが Google 検索でネットの販売価格を調べて目安を入れます（1回20件まで）。どれも「参考価格」と出し、お店の仕入れ値に直すと消えます。参考価格で入った分と、調べられなかった分のクレジットは戻ります。`,
-        exec: () => call<{ free: number; filled: number; tried: number; left: number }>("fillPricesFromWeb", { orgId, requestId: newRequestId() }),
+        title: includeRef ? "参考価格をネットの今の値段に入れ替える" : "仕入れ値をネットで調べて入れる", credits: priceSearchCredits(n),
+        detail: includeRef
+          ? `参考価格のままの材料（${refN}件）${emptyN ? `と仕入れ値が空の材料（${emptyN}件）` : ""}を、AIが Google 検索で今のネットの販売価格を調べて入れ替えます（1回20件まで）。調べた日時・値段・見たページは材料に残ります。調べられなかった分のクレジットは戻ります。`
+          : `仕入れ値が空の材料（${emptyN}件）に、共有の参考価格があれば入れ（無料）、無いものはAIが Google 検索でネットの販売価格を調べて目安を入れます（1回20件まで）。どれも「参考価格」と出し、お店の仕入れ値に直すと消えます。参考価格で入った分と、調べられなかった分のクレジットは戻ります。`,
+        exec: () => call<{ free: number; filled: number; tried: number; left: number }>("fillPricesFromWeb", { orgId, includeRef, requestId: newRequestId() }),
       });
       if (!r) return;
       setWebMsg(`${r.free ? `共有の参考価格で${r.free}件、` : ""}ネットで調べて${r.filled}件に目安を入れました${r.tried > r.filled ? `（${r.tried - r.filled}件は見つかりませんでした）` : ""}。${r.left ? `残り${r.left}件は、もう一度押すと調べます。` : ""}`);
@@ -73,12 +79,17 @@ export function PriceFill({ orgId, list, usedIn }: { orgId: string; list: Ingred
       <Link to="/ingredients/invoices" className="block text-sm text-clay-strong underline">レシート・納品書を撮って、まとめて入れる（AI・1枚1クレジット）→</Link>
       {emptyN > 0 && (
         <div className="space-y-1">
-          <button disabled={busy} onClick={fillFromWeb} className={`w-full ${ui.secondary}`}>
+          <button disabled={busy} onClick={() => fillFromWeb()} className={`w-full ${ui.secondary}`}>
             {busy ? "調べています…" : `仕入れ値が空の${emptyN}件をAIがネットで調べて入れる`}{!busy && <CostTag credits={priceSearchCredits(emptyN)} />}
           </button>
-          {webMsg && <p className="text-xs text-ink-soft">{webMsg}</p>}
         </div>
       )}
+      {refN > 0 && (
+        <button disabled={busy} onClick={() => fillFromWeb(true)} className={`w-full ${ui.secondary}`}>
+          {busy ? "調べています…" : `参考価格のままの${refN}件も、ネットの今の値段に入れ替える`}{!busy && <CostTag credits={priceSearchCredits(refN + emptyN)} />}
+        </button>
+      )}
+      {webMsg && <p className="text-xs text-ink-soft">{webMsg}</p>}
       <p className="text-xs text-muted">使っているレシピが多い順です。入れると、使っているレシピの原価がすぐ計算し直されます。</p>
       {withRef.length > 0 && (
         <div className="space-y-1 rounded-xl bg-sand p-3 text-sm">
