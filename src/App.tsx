@@ -6,6 +6,7 @@ import { useBranding } from "./hooks/useBranding";
 import { readInvite } from "./lib/invite";
 import { loadCurrentOrg, saveCurrentOrg } from "./lib/currentOrg";
 import { OrgProvider } from "./contexts/OrgContext";
+import { CreditToastProvider } from "./components/common/useCreditAction";
 import { Layout } from "./components/common/Layout";
 import { LoginPage } from "./pages/LoginPage";
 import { VerifyEmailPage } from "./pages/VerifyEmailPage";
@@ -52,7 +53,9 @@ export default function App() {
 
   return (
     <OrgProvider orgId={current} uid={s.user.uid} email={s.user.email} orgs={s.orgs} select={select}>
-      <Main orgId={current} onCreated={select} />
+      <CreditToastProvider>
+        <Main orgId={current} onCreated={select} />
+      </CreditToastProvider>
     </OrgProvider>
   );
 }
