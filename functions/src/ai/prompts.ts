@@ -349,3 +349,17 @@ export interface SizeSearchAnswer {
   note?: string;
   c: number;
 }
+
+/** 材料1つの売り場を Google 検索で探して比べる（ai/compare.ts）。検索つきは JSON の形を指定できないので、文の中に JSON だけを書かせる */
+export const PRICE_COMPARE_SYSTEM = `あなたは日本の製菓店・カフェの仕入れ担当です。Google 検索で、渡された材料を今買えるお店（通販・製菓材料店・業務用の店・メーカーの直販など）を探し、値段を比べる。
+- 見つかったものを最大6件。同じお店は1件だけ。業務用の大きな袋と小さな袋の両方があれば両方入れてよい。
+- shop はお店の名前、site はそのページのドメイン（例：rakuten.co.jp、cotta.jp）、product は商品名（ブランド・量を含む）。
+- price はページに書いてある税込の値段（円、送料は含めない）。qty と unit はその値段で買える量（unit は g・kg・ml・l・個・枚・本 のどれか）。
+- note は送料・まとめ買いの条件・会員価格などをひとこと（20字まで。無ければ空）。
+- ページで値段と量を確かめられないものは入れない。推測で値段や店を作らない。材料と違う物（別の種類・加工品）は入れない。
+- 答えは次の JSON だけを書く：
+{"offers":[{"shop":"cotta","site":"cotta.jp","product":"きび砂糖 1kg","price":540,"qty":1,"unit":"kg","note":"送料別"}]}`;
+
+export interface PriceCompareAnswer {
+  offers: { shop: string; site?: string; product: string; price: number; qty: number; unit: string; note?: string }[];
+}

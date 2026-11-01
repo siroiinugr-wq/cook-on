@@ -17,6 +17,8 @@ import { GlobalInfo } from "./GlobalInfo";
 import { PhotoThumb } from "./PhotoThumb";
 import { WebSources } from "../common/WebSources";
 import { ProductForm } from "./ProductForm";
+import { WebOfferList } from "./WebOfferList";
+import { offerPatch } from "@shared/offers";
 import { numText } from "../../lib/num";
 
 const BUY_UNITS = UNITS.filter((u) => u !== "適量");
@@ -127,6 +129,7 @@ export function IngredientSheet({ orgId, uid, ing, usedIn, onClose }: { orgId: s
         )}
           <p className="text-xs text-muted">{perG !== null ? `1gあたり ${yen(perG)}（税抜）／1kgあたり ${yen(perG * 1000)}` : "1gあたりの値段を出すには、仕入れ値と量を入れてください。"}</p>
         </div>
+        {ing && <WebOfferList ing={{ ...ing, ...d, id: ing.id }} onUse={(o) => { const p = offerPatch(o); setPriceText(String(o.price)); set(p); }} />}
         {d.globalRef && <GlobalInfo globalRef={d.globalRef} onApply={(p) => { setPriceText(String(p.price)); set({ purchasePrice: p.price, priceTax: 0, purchaseQty: p.qty, purchaseUnit: p.unit, priceSource: "ref" }); }} />}
         <div className="grid grid-cols-2 gap-2">
           <label className="space-y-1"><span className={ui.label}>1個・1枚・1本の重さ g{PIECE.includes(d.purchaseUnit) ? "（必要）" : ""}</span>
