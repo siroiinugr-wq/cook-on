@@ -4,8 +4,10 @@ import { useDoc } from "./useData";
 
 export interface OrgSettings {
   targetCostRate: number;
-  /** ラベルの「製造者」の欄 */
+  /** ラベルの「製造者」の名前 */
   manufacturer: string;
+  /** ラベルの製造者の住所（食品表示に必要。空ならラベルを印刷できない） */
+  manufacturerAddress: string;
   /** ラベルに推奨20品目のアレルゲンも書くか */
   includeRecommendedAllergens: boolean;
   /** 読み取った既製品を、みんなの既製品データベースにも入れるか（null＝まだ聞いていない。初めて登録するときに1回だけ聞く） */
@@ -33,6 +35,7 @@ export function useOrg(orgId: string) {
     settings: {
       targetCostRate: s.targetCostRate || DEFAULT_TARGET_RATE,
       manufacturer: s.manufacturer ?? data?.name ?? "",
+      manufacturerAddress: s.manufacturerAddress ?? "",
       includeRecommendedAllergens: s.includeRecommendedAllergens !== false,
       shareProducts: typeof s.shareProducts === "boolean" ? s.shareProducts : null,
     },

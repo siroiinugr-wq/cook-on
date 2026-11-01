@@ -4,10 +4,15 @@ import type { RecipeStep } from "@shared/types";
 import { uploadPhoto, usePhotoUrl } from "../../../lib/photos";
 import { Icon } from "../../common/Icon";
 import { ui } from "../../common/ui";
+import { PickTemplateSheet, SaveTemplateSheet } from "./StepTemplates";
 
-export function StepsEditor({ steps, set, photoDir }: { steps: RecipeStep[]; set: (s: RecipeStep[]) => void; photoDir: string }) {
+export function StepsEditor({ steps, set, photoDir, orgId, uid }: { steps: RecipeStep[]; set: (s: RecipeStep[]) => void; photoDir: string; orgId: string; uid: string }) {
   const [busy, setBusy] = useState(-1);
   const [err, setErr] = useState("");
+  const [picking, setPicking] = useState(false);
+  const [saving, setSaving] = useState<string[] | null>(null);
+  // 空の工程が1つだけなら、呼び出した工程で置き換える
+  const addSteps = (texts: string[]) => set([...steps.filter((s) => s.text.trim() || s.photoPath), ...texts.map((text) => ({ text }))]);
   const patch = (i: number, p: Partial<RecipeStep>) => set(steps.map((s, j) => (j === i ? { ...s, ...p } : s)));
   const move = (i: number, d: number) => {
     const next = [...steps];
@@ -41,18 +46,27 @@ export function StepsEditor({ steps, set, photoDir }: { steps: RecipeStep[]; set
             <textarea className="w-full rounded-lg border border-line-strong px-2 py-1.5 text-sm" rows={2} value={s.text} onChange={(e) => patch(i, { text: e.target.value })} placeholder="例：バターを室温に戻す" />
             <div className="flex items-center gap-2">
               {s.photoPath ? <Thumb path={s.photoPath} onRemove={() => patch(i, { photoPath: null })} /> : (
-                <label className="flex cursor-pointer items-center gap-1 text-xs text-muted">
-                  <Icon name="photo" className="h-4 w-4" />{busy === i ? "上げています…" : "写真をつける"}
+                <label className="flex cursor-pointer items-center gap-1 rounded-lg border border-line px-2 py-1 text-xs text-ink-soft">
+                  <Icon name="camera" className="h-4 w-4" />{busy === i ? "上げています…" : "写真・イラストを付ける"}
                   <input type="file" accept="image/*" className="hidden" onChange={(e) => addPhoto(i, e.target.files?.[0])} />
                 </label>
               )}
+              {s.text.trim() && <button className="text-xs text-clay-strong underline" onClick={() => setSaving([s.text])}>よく使う工程に保存</button>}
               <button className="ml-auto text-faint" aria-label="この工程を消す" onClick={() => set(steps.filter((_, j) => j !== i))}><Icon name="trash" className="h-4 w-4" /></button>
             </div>
           </div>
         </div>
       ))}
       {err && <p className="text-sm text-ng">{err}</p>}
-      <button className={`${ui.secondary} w-full py-2 text-sm`} onClick={() => set([...steps, { text: "" }])}>＋ 工程を足す</button>
+      <div className="grid grid-cols-2 gap-2">
+        <button className={`${ui.secondary} py-2 text-sm`} onClick={() => set([...steps, { text: "" }])}>＋ 工程を足す</button>
+        <button className={`${ui.secondary} py-2 text-sm`} onClick={() => setPicking(true)}>よく使う工程から入れる</button>
+      </div>
+      {steps.filter((s) => s.text.trim()).length > 1 && (
+        <button className="text-xs text-muted underline" onClick={() => setSaving(steps.map((s) => s.text))}>この作り方をまるごと「よく使う工程」に保存</button>
+      )}
+      {picking && <PickTemplateSheet orgId={orgId} onPick={addSteps} onClose={() => setPicking(false)} />}
+      {saving && <SaveTemplateSheet orgId={orgId} uid={uid} steps={saving} onClose={() => setSaving(null)} />}
     </div>
   );
 }

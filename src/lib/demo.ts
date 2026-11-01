@@ -4,7 +4,7 @@ import type { ColOptions } from "./store";
 import { seedDemo } from "./demoData";
 
 type Doc = Record<string, unknown>;
-const KEY = "cookon-demo-v1";
+const KEY = "cookon-demo-v2";
 let data: Map<string, Doc> = load();
 const listeners = new Set<() => void>();
 

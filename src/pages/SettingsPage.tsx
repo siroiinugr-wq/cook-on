@@ -21,6 +21,7 @@ export function SettingsPage({ brand }: { brand: Branding }) {
     { to: "/credits", icon: "coin", title: `クレジット（残り ${creditText(org.credits)}）`, sub: "使った記録・まとめ買い" },
     { to: "/products", icon: "box", title: "既製品", sub: "メーカーの商品の原材料をお店どうしで共有" },
     { to: "/import", icon: "upload", title: "データの取り込み", sub: "ほかのアプリや Excel から引っ越す" },
+    { to: "/tidy", icon: "sparkle", title: "データの整理", sub: "アレルゲンの確認・仕入れ値・何個分・名前・表記ゆれをまとめて見直す" },
   ];
 
   async function reset() {

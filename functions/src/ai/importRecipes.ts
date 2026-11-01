@@ -84,6 +84,7 @@ export async function buildPreview(orgId: string, answers: (ImportAnswer | null)
   const recipes: ParsedRecipe[] = raw.map((r) => ({
     name: String(r.name ?? "").slice(0, 60) || "名前のないレシピ",
     category: String(r.category ?? "").slice(0, 30),
+    subcategory: String(r.subcategory ?? "").slice(0, 30),
     pieces: typeof r.yield === "number" && r.yield > 0 ? r.yield : null,
     items: (r.items ?? []).map((it) => ({
       raw: String(it.raw ?? "").slice(0, 60),

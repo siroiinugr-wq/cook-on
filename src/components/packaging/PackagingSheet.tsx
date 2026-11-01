@@ -47,7 +47,7 @@ export function PackagingSheet({ orgId, uid, mat, usedIn, onClose }: { orgId: st
   }
 
   return (
-    <Sheet title={mat ? "包装資材を直す" : "包装資材を登録"} onClose={onClose}>
+    <Sheet title={mat ? "包装資材を編集" : "包装資材を登録"} onClose={onClose}>
       <div className="space-y-4">
         <label className="block space-y-1"><span className={ui.label}>名前</span>
           <input className={ui.input} value={name} maxLength={60} placeholder="10cm袋、脱酸素剤30 など" onChange={(e) => setName(e.target.value)} /></label>

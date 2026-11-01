@@ -24,6 +24,7 @@ import { ImportPreviewPage } from "./pages/ImportPreviewPage";
 import { ImportPhotosPage } from "./pages/ImportPhotosPage";
 import { CreditsPage } from "./pages/CreditsPage";
 import { SettingsPage } from "./pages/SettingsPage";
+import { TidyPage } from "./pages/TidyPage";
 
 export default function App() {
   const s = useSession();
@@ -76,6 +77,7 @@ function Main({ orgId, onCreated }: { orgId: string; onCreated: (id: string) => 
             <Route path="/import/photos" element={<ImportPhotosPage />} />
             <Route path="/import/:importId" element={<ImportPreviewPage />} />
             <Route path="/credits" element={<CreditsPage />} />
+            <Route path="/tidy" element={<TidyPage />} />
             <Route path="/settings" element={<SettingsPage brand={brand} />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

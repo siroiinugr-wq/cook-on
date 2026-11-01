@@ -16,7 +16,7 @@ export function LabelSheet({ d, w, h }: { d: LabelData; w: number; h: number }) 
     ["内容量", d.contentText],
     [d.expiryKind, d.expiry],
     ["保存方法", d.storage],
-    ["製造者", d.manufacturer],
+    ["製造者", [d.manufacturer, d.manufacturerAddress].filter((x) => x?.trim()).join("　")],
   ];
   return (
     <div className="label-sheet overflow-hidden bg-white text-black" style={{ width: `${w}mm`, height: `${h}mm`, padding: "1.5mm", fontSize: `${pt}pt`, lineHeight: 1.25 }}>

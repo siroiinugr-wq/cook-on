@@ -1,8 +1,8 @@
 // 共有マスターの「はじめの材料」（functions/src/shared/globalSeed.ts）を本番の globalIngredients に書く。
 // 何度実行しても同じ（同じ id に上書き）。店舗のデータには触らない。
 //
-// 使い方（MASAのMac。最初の1回だけ gcloud auth application-default login が必要）：
-//   cd ~/cook-on && npm --prefix functions run build && node scripts/seed-global.mjs --project cook-on-plaz
+// 使い方（MASAのMac。Firebase コンソールのサービスアカウント鍵 ~/cook-on-key.json を使う）：
+//   cd ~/cook-on && npm --prefix functions run build && GOOGLE_APPLICATION_CREDENTIALS=~/cook-on-key.json node scripts/seed-global.mjs --project cook-on-plaz
 // エミュレーターに入れるとき：FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 node scripts/seed-global.mjs --project demo-cook-on
 import { createRequire } from "node:module";
 

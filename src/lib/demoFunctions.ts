@@ -9,6 +9,7 @@ import { judgeUgc } from "@shared/ugc";
 import { demoGet, demoListDocs, demoWrite, onDemoWrite } from "./demo";
 import { DEMO_ORG } from "./demoData";
 import { demoAiCall } from "./demoAi";
+import { demoTidyCall } from "./demoTidy";
 
 type Data = Record<string, unknown>;
 const O = `organizations/${DEMO_ORG}`;
@@ -92,6 +93,10 @@ export async function demoCall<T>(name: string, data: object): Promise<T> {
     case "createInvite":
     case "createOrganization":
       throw new Error("デモモードではこの操作はできません。Firebase をつないでからお試しください。");
+    case "tidyRecipes":
+    case "mergeIngredients":
+    case "relinkIngredients":
+      return demoTidyCall(name, d) as T;
     default:
       return demoAiCall<T>(name, d);
   }

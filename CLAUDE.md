@@ -59,6 +59,10 @@ aiRequests/{orgId}_{requestId}             受付票（Functions だけ。AIの�
 - 仕入れ値は税抜で持つ（`purchasePrice`）。税込で入れたら `priceTax`（0・0.08・0.1）に印を残し、`toExTax`/`fromExTax`（`shared/cost.ts`）で直す
 - 既製品はパッケージの裏を撮ると `readProductPhoto`（`ai/productPhoto.ts`、1クレジット）が下書きし、裏の写真は読んだら消す。表の写真はAIに渡さず、登録のときに上げて商品の画像にする（`ugc/{orgId}/{draftId}/front.jpg`）。登録するとお店の材料に入り、`settings.shareProducts` がオンならみんなの一覧（ugcProducts）にも入る（null＝初回に1回だけ聞く）
 - 材料の写真は `orgs/{orgId}/ingredients/`（`photoPath`）
+- **アレルゲンの確認**：材料の `allergensConfirmed`。取り込み・名寄せで作った材料は名前からの推定（`shared/allergenGuess.ts`）を入れるが「未確認」。材料の編集で保存するか、データの整理で確定すると true。**未確認・未結びつきの材料があるレシピ、製造者の住所（`settings.manufacturerAddress`）が空のときはラベルを印刷させない**（`labelMissing`）
+- データの整理（`/tidy`、`pages/TidyPage.tsx`）：共有の材料に結ぶ `relinkIngredients`・アレルゲンの確定・仕入れ値（参考価格を入れる）・何個分・名前／レシピでないもの・同じ材料の行 `tidyRecipes`・表記ゆれ `mergeIngredients`（`recipes/tidy.ts`、判定は `shared/tidy.ts`）。AIなし・無料
+- レシピの分類は2段：`category`（焼菓子・料理・ドリンク）と `subcategory`（種類：パウンドケーキ・クッキー）。タグは自由なラベル。新しいレシピは分類から似たレシピをコピーして始められる
+- よく使う工程：`stepTemplates/{id}`（名前＋工程の配列。画面から書ける）。レシピの写真・イラストは `photos`（最大6枚、先頭が表紙。Storage は工程の写真と同じ `orgs/{orgId}/recipes/{recipeId}/`）
 - 食品表示は「重い順・添加物は／のあと・アレルゲンは最後に一括」まで自動。複合原材料の細かい決まりは対象外で、画面に「お店で確かめて」と出す
 
 ## よく使うコマンド

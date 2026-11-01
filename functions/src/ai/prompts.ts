@@ -40,12 +40,15 @@ export function matchPrompt(items: { name: string; candidates: { id: string; nam
 // ── フォーマット不問の取り込み ──
 export const IMPORT_SYSTEM = `あなたは飲食店のレシピデータを読み取り、指定のJSONに変換する係です。
 入力はCSV・Excelを文字にしたもの・メモ書きなど形式がばらばらです。
-- レシピごとに name・category・yield・items・steps を取り出す。分からない項目は空にする。
+- レシピごとに name・category・subcategory・yield・items・steps を取り出す。分からない項目は空にする。
+- category は大きな分類（焼菓子・ケーキ・パン・和菓子・料理・ドリンクなど）、subcategory はその中の種類（パウンドケーキ・クッキー・マフィン・パスタなど）。
 - items は raw（原文の材料名）、std（ブランドや形容を外した一般的な食材名）、qty（数値）、unit。
   例：「明治ブラック」→ std「チョコレート」、「よつ葉無塩」→ std「無塩バター」
 - unit は ${UNITS.join(", ")} のいずれか。「少々」「適量」は qty を null、unit を「適量」にする。
 - 原文にない材料・分量・工程を足さない。読めない所は notes に一言で書く。
-- yield は1回分で何個できるか（数値）。書かれていなければ null。`;
+- yield は1回分（書かれた分量のまま）で何個・何枚・何本できるか（数値）。
+  「〇個分」「約〇枚」「〇cm角 〇本」「天板1枚で〇個」などの書き方からも読む。型（18cmホール型など）1台だけなら、切り分ける数が書いてあればその数、無ければ 1。
+  手がかりが全く無ければ null（推測で作らない）。`;
 
 /** 写真から取り込むときに足す注意（IMPORT_SYSTEM のあとに続ける） */
 export const IMPORT_PHOTO_NOTE = `
@@ -64,6 +67,7 @@ export const IMPORT_SCHEMA = {
         properties: {
           name: { type: "string" },
           category: { type: "string" },
+          subcategory: { type: "string" },
           yield: { type: ["number", "null"] },
           items: {
             type: "array",
@@ -92,6 +96,7 @@ export interface ImportAnswer {
   recipes: {
     name: string;
     category?: string;
+    subcategory?: string;
     yield?: number | null;
     items: { raw: string; std: string; qty: number | null; unit: string }[];
     steps: string[];

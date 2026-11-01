@@ -45,7 +45,7 @@ export function IngredientSheet({ orgId, uid, ing, usedIn, onClose }: { orgId: s
     try {
       const data = {
         name: d.name.trim(), purchasePrice: d.purchasePrice, priceTax: d.priceTax ?? 0, purchaseQty: d.purchaseQty || 1, purchaseUnit: d.purchaseUnit,
-        gramsPerPiece: d.gramsPerPiece ?? null, gramsPerMl: d.gramsPerMl ?? null, allergens: d.allergens,
+        gramsPerPiece: d.gramsPerPiece ?? null, gramsPerMl: d.gramsPerMl ?? null, allergens: d.allergens, allergensConfirmed: true,
         labelName: d.labelName?.trim() ?? "", isAdditive: !!d.isAdditive, supplier: d.supplier?.trim() ?? "", globalRef: d.globalRef ?? null,
         photoPath: d.photoPath ?? null,
       };
@@ -81,7 +81,7 @@ export function IngredientSheet({ orgId, uid, ing, usedIn, onClose }: { orgId: s
 
   const input = ui.input;
   return (
-    <Sheet title={ing ? "材料を直す" : "材料を登録"} onClose={onClose}>
+    <Sheet title={ing ? "材料を編集" : "材料を登録"} onClose={onClose}>
       <div className="space-y-4">
         <div className="flex items-end gap-3">
           <label className="block flex-1 space-y-1"><span className={ui.label}>材料名</span><input className={input} value={d.name} maxLength={60} onChange={(e) => set({ name: e.target.value })} /></label>
@@ -119,7 +119,7 @@ export function IngredientSheet({ orgId, uid, ing, usedIn, onClose }: { orgId: s
             <input className={input} inputMode="decimal" placeholder="1" value={d.gramsPerMl ?? ""} onChange={(e) => set({ gramsPerMl: num(e.target.value) })} /></label>
         </div>
         <div className="space-y-1">
-          <p className={ui.label}>アレルゲン（含むものを押す）</p>
+          <p className={ui.label}>アレルゲン（含むものを押す）{ing && ing.allergensConfirmed !== true && <span className="ml-1 text-warn-strong">まだ確かめていません。保存すると「確認済み」になります</span>}</p>
           <div className="flex flex-wrap gap-1.5">
             {ALLERGENS.map((a) => (
               <button key={a.id} type="button" onClick={() => toggle(a.id)}
