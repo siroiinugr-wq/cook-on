@@ -2,6 +2,7 @@
 import { sortAllergens, type AllergenId } from "@shared/allergens";
 import { buildSuggestion, suggestionRefPrice } from "@shared/suggest";
 import type { GlobalIngredient, GlobalSuggestion, Ingredient } from "@shared/types";
+import type { InvoiceLine } from "@shared/invoice";
 import { demoGet, demoListDocs, demoWrite, onDemoWrite } from "./demo";
 import { DEMO_ORG } from "./demoData";
 
@@ -71,4 +72,14 @@ export function demoShareCall(name: string, d: Data): unknown | undefined {
     return { globalId };
   }
   return undefined;
+}
+
+/** デモの「レシート・納品書を読む」：お店の材料から2行ずつ、今の値段を少し変えた明細を作る（本番は ai/invoices.ts の readInvoices） */
+export function demoInvoiceLines(paths: string[], ings: Ingredient[]): InvoiceLine[] {
+  const pool = ings.filter((i) => i.purchaseUnit !== "大さじ");
+  return paths.flatMap((_, photo) => pool.slice(photo * 2, photo * 2 + 2).map((i, k) => ({
+    photo, raw: `${i.name}（デモ）${i.purchaseQty}${i.purchaseUnit}`, price: Math.round(((i.purchasePrice ?? 500) * 1.08) * (1.05 + k * 0.03)),
+    count: 1, qty: i.purchaseQty, unit: (["g", "kg", "ml", "l", "個", "枚", "本"].includes(i.purchaseUnit) ? i.purchaseUnit : "個") as InvoiceLine["unit"],
+    tax: 0.08, supplier: "デモ製菓材料店", date: new Date().toISOString().slice(0, 10), ingredientId: i.id, confidence: 0.9,
+  })));
 }

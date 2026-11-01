@@ -259,3 +259,38 @@ export const PRICE_ESTIMATE_SCHEMA = {
 export interface PriceEstimateAnswer {
   r: { i: number; price: number; qty: number; unit: string; basis: string; c: number }[];
 }
+
+export const INVOICE_SYSTEM = `あなたは製菓店・飲食店の仕入れ担当です。レシート・納品書・請求書の写真から、食材と資材の明細を読み取る。
+- 1行ずつ lines に入れる。小計・合計・値引き・ポイント・送料・袋代・預り金・お釣りの行は入れない。
+- price は「1つあたり」の値段（円）。数量が2以上で金額しか無ければ、金額÷数量にする。
+- count は買った数。qty と unit は1つの包装の量（「1kg」なら 1・kg、「500g×2」なら qty 500・unit g・count 2）。量が書いていなければ qty 1・unit 個。unit は g・kg・ml・l・個・枚・本 のどれか。
+- tax は price に含まれている消費税の率。レシートの「内税」「税込」なら 0.08（食品）か 0.1（それ以外・酒類）。「外税」「税抜」「本体価格」なら 0。軽減税率の印（※・★・軽 など）があれば 0.08。
+- supplier はお店・仕入れ先の名前、date は日付（YYYY-MM-DD。無ければ空）。
+- ingredient には、下の「お店の材料」の一覧から同じ材料の番号を選ぶ。商品名・ブランド・規格が違っても同じ材料なら選ぶ（例：よつ葉バター食塩不使用 450g → 無塩バター）。違う材料（発酵バターと無塩バター、薄力粉と強力粉など）は選ばない。無ければ -1。c は選んだ自信（0〜1）。
+- 読めない文字は推測しない。読めない行は入れない。`;
+
+export const INVOICE_SCHEMA = {
+  type: "object",
+  properties: {
+    supplier: { type: "string" },
+    date: { type: "string" },
+    lines: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          name: { type: "string" }, price: { type: "number" }, count: { type: "number" }, qty: { type: "number" }, unit: { type: "string" },
+          tax: { type: "number" }, ingredient: { type: "integer" }, c: { type: "number" },
+        },
+        required: ["name", "price", "count", "qty", "unit", "tax", "ingredient", "c"],
+      },
+    },
+  },
+  required: ["supplier", "date", "lines"],
+};
+
+export interface InvoiceAnswer {
+  supplier: string;
+  date: string;
+  lines: { name: string; price: number; count: number; qty: number; unit: string; tax: number; ingredient: number; c: number }[];
+}

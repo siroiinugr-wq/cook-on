@@ -41,6 +41,13 @@ export function IngredientsPage() {
       {canEdit && list.some((i) => i.allergensConfirmed !== true) && (
         <Link to="/tidy" className="block rounded-xl bg-warn-soft p-3 text-sm text-warn-strong">アレルゲンを確かめていない材料が{list.filter((i) => i.allergensConfirmed !== true).length}件あります。データの整理でまとめて確かめる →</Link>
       )}
+      {canEdit && (
+        <Link to="/ingredients/invoices" className={`${ui.card} flex items-center gap-3 text-sm`}>
+          <span className="text-clay"><Icon name="receipt" /></span>
+          <span className="flex-1"><b className="block">レシート・納品書から仕入れ値を入れる</b><span className="text-muted">撮るだけでAIが明細を読み、材料の値段を最新にします（1枚1クレジット）</span></span>
+          <Icon name="chevron" className="h-4 w-4 text-faint" />
+        </Link>
+      )}
       <input className={ui.input} placeholder="材料名で探す" value={q} onChange={(e) => setQ(e.target.value)} />
       {loading ? <p className="py-8 text-center text-muted">読み込み中…</p> : !list.length ? (
         <div className={`${ui.card} space-y-2 text-center text-sm`}>

@@ -8,6 +8,7 @@ import { parseUnit, type Unit } from "@shared/units";
 import { demoGet, demoListDocs, demoWrite } from "./demo";
 import { DEMO_ORG } from "./demoData";
 import { demoIngredientMap, demoWithCredits, demoWriteRecipe } from "./demoFunctions";
+import { demoInvoiceLines } from "./demoShare";
 
 type Data = Record<string, unknown>;
 const O = `organizations/${DEMO_ORG}`;
@@ -96,6 +97,13 @@ export async function demoAiCall<T>(name: string, d: Data): Promise<T> {
         const doc: ImportDoc = { status: "preview", fileName: String(d.fileName ?? ""), chars: text.length, chunks: chunks.length, failedChunks: [], creditsUsed: chunks.length, recipes, createdBy: "demo-user" };
         demoWrite(`${O}/imports/${id}`, { ...doc, createdAt: new Date().toISOString() });
         return { result: { importId: id, recipes: recipes.length, failedChunks: [] } as T };
+      });
+    }
+    case "readInvoices": {
+      const paths = d.paths as string[];
+      return demoWithCredits("invoicePhoto", paths.length, async () => {
+        const lines = demoInvoiceLines(paths, [...demoIngredientMap().values()]);
+        return { result: { lines, read: paths.length, photos: paths.length } as T };
       });
     }
     case "parseImportPhotos": {

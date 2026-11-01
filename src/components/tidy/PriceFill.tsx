@@ -1,4 +1,5 @@
 // 仕入れ値の入力：仕入れ値が空の材料を、よく使う順にその場で入れる。共有の材料に参考価格があれば1押しで入る
+import { Link } from "react-router-dom";
 import { RefBadge } from "../ingredient/RefBadge";
 import { useEffect, useState } from "react";
 import { PRICE_TAX_OPTIONS, toExTax, yen } from "@shared/cost";
@@ -39,6 +40,7 @@ export function PriceFill({ orgId, list, usedIn }: { orgId: string; list: Ingred
 
   return (
     <div className="space-y-3">
+      <Link to="/ingredients/invoices" className="block text-sm text-clay-strong underline">レシート・納品書を撮って、まとめて入れる（AI・1枚1クレジット）→</Link>
       <p className="text-xs text-muted">使っているレシピが多い順です。入れると、使っているレシピの原価がすぐ計算し直されます。</p>
       {withRef.length > 0 && (
         <div className="space-y-1 rounded-xl bg-sand p-3 text-sm">

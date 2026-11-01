@@ -16,6 +16,8 @@ export const CREDIT_COST = {
   productPhoto: 1,
   /** ラベルに出す名前（一般的名称）の案：LABEL_NAME_BATCH 件ごと */
   labelName: 1,
+  /** レシート・納品書の写真から仕入れ値を読む：1枚ごと */
+  invoicePhoto: 1,
   /** 原価ダウン・新作の提案（1回の質問） */
   aiSuggest: 2,
 } as const;
@@ -29,6 +31,7 @@ export const ACTION_LABEL: Record<CreditAction | "purchase" | "grant" | "welcome
   productPhoto: "既製品のパッケージを読み取り",
   aiSuggest: "AIに相談",
   labelName: "ラベルの名前をAIで提案",
+  invoicePhoto: "レシート・納品書から仕入れ値を読む",
   purchase: "購入",
   grant: "付与",
   welcome: "はじめてのプレゼント",
@@ -55,6 +58,9 @@ export const IMPORT_MAX_CHARS_UNLIMITED = 300_000;
 export function importMaxChars(unlimited: boolean): number {
   return unlimited ? IMPORT_MAX_CHARS_UNLIMITED : IMPORT_MAX_CHARS;
 }
+
+/** レシート・納品書：1回に読める枚数 */
+export const INVOICE_MAX_PHOTOS = 20;
 
 /** 写真から取り込み：1回に読める枚数（無制限の店舗は多め。それでも時間切れを避けるため上限は置く） */
 export const IMPORT_MAX_PHOTOS = 30;
