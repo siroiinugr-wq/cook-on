@@ -34,7 +34,7 @@ export function refPriceExTax(p: Pick<RefPrice, "price">): number {
 export const ESTAT_ITEM_MAP: { globalId: string; tokens: string[]; spec?: { qty: number; unit: Unit; note: string } }[] = [
   { globalId: "base_hakurikiko", tokens: ["小麦粉"], spec: { qty: 1, unit: "kg", note: "薄力粉・1kg袋入り" } },
   { globalId: "base_joohakuto", tokens: ["砂糖"], spec: { qty: 1, unit: "kg", note: "上白糖・1kg袋入り" } },
-  { globalId: "base_egg", tokens: ["鶏卵"], spec: { qty: 10, unit: "個", note: "白色卵・Lサイズ・10個入りパック" } },
+  { globalId: "base_egg", tokens: ["鶏卵"], spec: { qty: 580, unit: "g", note: "Lサイズ10個入りパック。殻を除いて1個58gとして計算" } },
   { globalId: "base_milk", tokens: ["牛乳"], spec: { qty: 1000, unit: "ml", note: "紙パック入り・1000mL" } },
   { globalId: "base_butter_salted", tokens: ["バター"], spec: { qty: 200, unit: "g", note: "箱入り・200g" } },
   { globalId: "base_cream", tokens: ["生クリーム"] },
