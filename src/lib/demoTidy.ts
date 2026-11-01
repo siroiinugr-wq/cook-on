@@ -40,7 +40,9 @@ export function demoTidyCall(name: string, d: Data): unknown | undefined {
     const priced = keep.purchasePrice === null ? drops.find((x) => x.purchasePrice !== null) : undefined;
     const kp = `${O}/ingredients/${keep.id}`;
     demoWrite(kp, {
-      ...demoGet(kp)!, allergens, allergensConfirmed: keep.allergensConfirmed === true && allergens.length === keep.allergens.length,
+      ...demoGet(kp)!, allergens,
+      aliases: [...new Set([...(keep.aliases ?? []), ...drops.flatMap((x) => [x.name, ...(x.aliases ?? [])])])].filter((a) => a !== keep.name).slice(0, 20),
+      allergensConfirmed: keep.allergensConfirmed === true && allergens.length === keep.allergens.length,
       ...(priced ? { purchasePrice: priced.purchasePrice, purchaseQty: priced.purchaseQty, purchaseUnit: priced.purchaseUnit } : {}),
     });
     const dropIds = drops.map((x) => x.id);

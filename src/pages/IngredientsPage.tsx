@@ -27,7 +27,7 @@ export function IngredientsPage() {
     return m;
   }, [recipes.list]);
   const missing = list.filter((i) => unitCostPerGram(i) === null);
-  const shown = (onlyMissing ? missing : list).filter((i) => !q.trim() || i.name.includes(q.trim()));
+  const shown = (onlyMissing ? missing : list).filter((i) => !q.trim() || [i.name, i.labelName ?? "", ...(i.aliases ?? [])].some((n) => n.includes(q.trim())));
 
   return (
     <div className="space-y-4">
@@ -54,7 +54,8 @@ export function IngredientsPage() {
                 <button disabled={!canEdit} onClick={() => setEdit(i)} className="flex w-full items-center gap-3 px-4 py-3 text-left">
                   <PhotoThumb path={i.photoPath} />
                   <div className="min-w-0 flex-1">
-                    <p className="truncate font-medium">{i.name}</p>
+                    <p className="truncate font-medium">{i.name}{i.labelName && i.labelName !== i.name && <span className="ml-1.5 text-xs font-normal text-muted">表示：{i.labelName}</span>}</p>
+                    {(i.aliases?.length ?? 0) > 0 && <p className="truncate text-[11px] text-faint">別名：{i.aliases!.join("・")}</p>}
                     <p className="truncate text-xs text-muted">
                       {i.allergensConfirmed !== true ? <span className="text-warn-strong">アレルゲン未確認{i.allergens.length ? `（候補：${i.allergens.map(allergenName).join("・")}）` : ""}</span> : i.allergens.length ? i.allergens.map(allergenName).join("・") : "アレルゲンなし"}
                       {usedIn.get(i.id) ? `／レシピ${usedIn.get(i.id)}件` : ""}

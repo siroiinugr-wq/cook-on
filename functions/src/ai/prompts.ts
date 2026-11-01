@@ -176,6 +176,33 @@ export interface ProductPhotoAnswer {
 }
 
 // ── 原価ダウン・新作の提案 ──
+// ── ラベル（一括表示）の原材料名 ──
+export const LABEL_NAME_SYSTEM = `あなたは食品表示基準に詳しい係です。製菓店・飲食店が使う材料の名前（お店の呼び方）を、一括表示の「原材料名」に書く一般的な名称に直す。
+- 一般的な名称にする。例：薄力粉→小麦粉、全卵→鶏卵、発酵バター→バター、キビ糖→きび砂糖、グラニュー糖→砂糖、生クリーム→クリーム（乳製品）、BP→ベーキングパウダー
+- 商品名・ブランド名・産地・規格（35%・有塩など）は外す。ただし「洋酒」「植物油脂」のような決まった書き方があればそれを使う。
+- 添加物（膨張剤・乳化剤・香料・ゲル化剤・着色料・酸味料・増粘剤・pH調整剤など）は additive を true にし、label は用途名か物質名（ベーキングパウダー→膨張剤、バニラエッセンス→香料）。
+- 既製品で中身が分かるもの（チョコレートなど）は名前だけにする（中身は店が書く）。
+- 分からないときは元の名前のまま返し、c を低くする。`;
+
+export const LABEL_NAME_SCHEMA = {
+  type: "object",
+  properties: {
+    r: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: { i: { type: "integer" }, label: { type: "string" }, additive: { type: "boolean" }, c: { type: "number" } },
+        required: ["i", "label", "additive", "c"],
+      },
+    },
+  },
+  required: ["r"],
+};
+
+export interface LabelNameAnswer {
+  r: { i: number; label: string; additive: boolean; c: number }[];
+}
+
 export const SUGGEST_SYSTEM = `あなたは製菓・飲食店の商品開発と原価管理の相談役です。
 渡されたレシピ（材料・g・原価）と相談に対して、具体的な案を3つまで出す。
 - 味や食感への影響と、手間の増減を正直に書く。品質を大きく落とす案は出さない。

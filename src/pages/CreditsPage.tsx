@@ -1,6 +1,6 @@
 // クレジット：残り・何に何クレジット使うか・使った記録（通帳）・まとめ買い（決済をつなぐまでは準備中）
 import { useState } from "react";
-import { ACTION_LABEL, AI_MATCH_BATCH, CREDIT_COST, CREDIT_PACKS, IMPORT_CHUNK_CHARS, type CreditAction } from "@shared/credits";
+import { ACTION_LABEL, AI_MATCH_BATCH, LABEL_NAME_BATCH, CREDIT_COST, CREDIT_PACKS, IMPORT_CHUNK_CHARS, type CreditAction } from "@shared/credits";
 import { useOrgCtx } from "../contexts/OrgContext";
 import { useCol } from "../hooks/useData";
 import { call, toDate } from "../lib/store";
@@ -18,6 +18,7 @@ const PER: Record<CreditAction, string> = {
   productGuess: "1商品",
   productPhoto: "写真1枚",
   aiSuggest: "1回",
+  labelName: `${LABEL_NAME_BATCH}件ごと`,
 };
 
 export function CreditsPage() {
