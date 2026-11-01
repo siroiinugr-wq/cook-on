@@ -1,4 +1,4 @@
-// 運営：共有の材料の精査。お店の提案（呼び方・アレルゲン・仕入れ値・新しい材料）と、AIの推定価格を、1件ずつ採用・却下する。
+// 運営：共有の材料の精査。お店の提案（呼び方・アレルゲン・仕入れ値・新しい材料）と、AIが Google 検索で調べた値段（出典つき）を、1件ずつ採用・却下する。
 // 採用した分だけ globalIngredients に入る（reviewSuggestion）。見られるのは operators/{uid} がある人だけ（ルールと関数の両方で確かめる）
 import { useState } from "react";
 import { allergenName, type AllergenId } from "@shared/allergens";
@@ -24,8 +24,10 @@ export function AdminSuggestionsPage() {
     setBusy(true);
     setMsg("");
     try {
-      const r = await call<{ made: number; checked: number }>("estimateRefPrices", {});
-      setMsg(r.checked ? `参考価格の無い共有の材料 ${r.checked}件のうち、${r.made}件にAIの推定を作りました。下で確かめてください。` : "参考価格の無い共有の材料はありません。");
+      const r = await call<{ made: number; checked: number; left?: number }>("estimateRefPrices", {});
+      setMsg(r.checked
+        ? `${r.checked}件を調べ、${r.made}件の値段が見つかりました。出典を見て確かめてください。${r.left ? `まだ${r.left}件あります（もう一度押すと続きを調べます）。` : ""}`
+        : "調べる材料はありません（参考価格が無い材料は、すべて案が出ているか調べ終わっています）。");
     } catch (e) {
       setMsg(e instanceof Error ? e.message : String(e));
     } finally {
@@ -40,9 +42,9 @@ export function AdminSuggestionsPage() {
       <PageHead title="共有の材料の精査" back="/settings" />
       <p className="text-sm text-ink-soft">採用したものだけが、すべてのお店の共有の材料に入ります。お店の名前と仕入れ先は、ここ以外には出ません。</p>
       <section className={`${ui.card} space-y-2`}>
-        <p className="font-bold">AIで参考価格の案を作る</p>
-        <p className="text-xs text-muted">統計に無い共有の材料（はじめの材料・お店から入った材料・既製品）に、AIが相場の目安を出します。1回100件まで。運営の費用で、お店のクレジットは使いません。</p>
-        <button disabled={busy} onClick={estimate} className={`w-full ${ui.secondary}`}>{busy ? "考えています…" : "AIで案を作る"}</button>
+        <p className="font-bold">ネットの値段を調べて参考価格の案を作る</p>
+        <p className="text-xs text-muted">統計に無い共有の材料（はじめの材料・お店から入った材料・既製品）の今の販売価格を、AIが Google 検索で調べて、いくつかのお店の真ん中くらいを案にします。見たページも残すので、確かめてから採用してください。1回40件まで（数分かかります）。運営の費用で、お店のクレジットは使いません。</p>
+        <button disabled={busy} onClick={estimate} className={`w-full ${ui.secondary}`}>{busy ? "調べています…（数分かかります）" : "ネットの値段を調べる"}</button>
         {msg && <p className="text-sm text-ink-soft">{msg}</p>}
       </section>
       {loading ? <p className="text-center text-muted">読み込み中…</p> : !sorted.length ? <p className="py-6 text-center text-sm text-muted">まだ確かめる提案はありません。</p> : (
@@ -82,7 +84,7 @@ function Card({ s }: { s: GlobalSuggestion }) {
   return (
     <li className={`${ui.card} space-y-2`}>
       <div className="flex items-baseline gap-2">
-        <span className={`rounded px-1.5 text-[11px] font-bold ${s.source === "ai" ? "bg-sand text-ink-soft" : "bg-clay-soft text-clay-strong"}`}>{s.source === "ai" ? "AIの推定" : `お店：${s.orgName}`}</span>
+        <span className={`rounded px-1.5 text-[11px] font-bold ${s.source === "ai" ? "bg-sand text-ink-soft" : "bg-clay-soft text-clay-strong"}`}>{s.source === "ai" ? (s.sources?.length ? "ネットの価格（AIが検索）" : "AIの推定") : `お店：${s.orgName}`}</span>
         <span className="text-xs text-muted">{s.kind === "new" ? "新しい材料" : `「${s.globalName}」への追加`}</span>
       </div>
       {s.kind === "new" ? (
@@ -123,10 +125,19 @@ function Card({ s }: { s: GlobalSuggestion }) {
           <span>
             参考価格にする：{yen(s.price.price)}（税抜）/{s.price.qty}{s.price.unit}
             {s.note && <span className="block text-xs text-muted">{s.note}</span>}
+            {s.sources && s.sources.length > 0 && (
+              <span className="mt-1 block text-xs text-muted">
+                見たページ：{s.sources.map((x, k) => (
+                  <a key={k} href={x.uri} target="_blank" rel="noreferrer" className="mr-2 underline">{x.title || `ページ${k + 1}`}</a>
+                ))}
+              </span>
+            )}
             {g?.refPrice && <span className="block text-xs text-muted">今の参考価格：{yen(g.refPrice.price)}（税込）/{g.refPrice.qty}{g.refPrice.unit}・{g.refPrice.source}</span>}
           </span>
         </label>
       )}
+      {/* Google 検索の結果を見せるときは「検索の候補」も出す決まり（グラウンディングの利用条件） */}
+      {s.searchHtml && <iframe title="Google 検索の候補" srcDoc={s.searchHtml} sandbox="allow-popups allow-popups-to-escape-sandbox" className="h-16 w-full rounded-lg border border-line" />}
       {s.labelName && <p className="text-xs text-muted">お店のラベルの名前：{s.labelName}</p>}
       {err && <p className="text-sm text-ng">{err}</p>}
       <div className="grid grid-cols-2 gap-2">

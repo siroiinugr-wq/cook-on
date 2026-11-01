@@ -29,16 +29,17 @@ function finish(d: Omit<SuggestionDraft, "sig">): SuggestionDraft {
 }
 
 /** 採用した値段（税抜）を、共有の参考価格（税込で持つ）に直す */
-export function suggestionRefPrice(s: Pick<GlobalSuggestion, "source" | "name" | "price" | "note">, asOf: string) {
+export function suggestionRefPrice(s: Pick<GlobalSuggestion, "source" | "name" | "price" | "note" | "sources">, asOf: string) {
   if (!s.price) return null;
   const shop = s.source === "shop";
+  const web = !shop && !!s.sources?.length;
   return {
     price: Math.round(s.price.price * 1.08),
     qty: s.price.qty,
     unit: s.price.unit,
-    item: shop ? `${s.name}（お店の仕入れ値）` : `${s.name}（AIの推定）`,
-    area: shop ? "COOK ON を使うお店" : "全国の目安",
+    item: shop ? `${s.name}（お店の仕入れ値）` : web ? `${s.name}（ネットの販売価格）` : `${s.name}（AIの推定）`,
+    area: shop ? "COOK ON を使うお店" : web ? "ネットのお店の相場" : "全国の目安",
     asOf,
-    source: shop ? "COOK ON のお店の仕入れ値（運営が確認）" : "AIの推定（運営が確認）",
+    source: shop ? "COOK ON のお店の仕入れ値（運営が確認）" : web ? "ネットの販売価格をAIが調べた目安（運営が確認）" : "AIの推定（運営が確認）",
   };
 }
