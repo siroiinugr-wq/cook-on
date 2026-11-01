@@ -15,6 +15,8 @@ import { ui } from "../common/ui";
 import { RefBadge } from "./RefBadge";
 import { GlobalInfo } from "./GlobalInfo";
 import { PhotoThumb } from "./PhotoThumb";
+import { WebSources } from "../common/WebSources";
+import { ProductForm } from "./ProductForm";
 import { numText } from "../../lib/num";
 
 const BUY_UNITS = UNITS.filter((u) => u !== "適量");
@@ -27,6 +29,8 @@ export function IngredientSheet({ orgId, uid, ing, usedIn, onClose }: { orgId: s
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const confirm = useConfirm();
+  // 既製品として登録する（パッケージの裏を撮るとAIが原材料・アレルゲンを読む）。この材料はそのまま残る
+  const [asProduct, setAsProduct] = useState(false);
   const hist = useCol<Hist>(ing ? `organizations/${orgId}/ingredients/${ing.id}/priceHistory` : null, { orderBy: ["at", "desc"], limit: 10 });
   const set = (p: Partial<Ingredient>) => setD({ ...d, ...p });
   const num = (v: string) => (v.trim() === "" ? null : Number(numText(v)));
@@ -51,6 +55,8 @@ export function IngredientSheet({ orgId, uid, ing, usedIn, onClose }: { orgId: s
         aliases: (d.aliases ?? []).filter((a) => a.trim() && a.trim() !== d.name.trim()).slice(0, 20),
         labelName: d.labelName?.trim() ?? "", isAdditive: !!d.isAdditive, supplier: d.supplier?.trim() ?? "", globalRef: d.globalRef ?? null,
         photoPath: d.photoPath ?? null, priceSource: d.purchasePrice === null ? null : d.priceSource ?? null,
+        // ネットで調べた参考価格の出典は、参考価格のままのときだけ残す
+        refWeb: d.purchasePrice !== null && d.priceSource === "ref" ? d.refWeb ?? null : null,
       };
       if (ing) await saveDoc(`organizations/${orgId}/ingredients/${ing.id}`, data);
       else await createIngredient(orgId, uid, data);
@@ -83,6 +89,7 @@ export function IngredientSheet({ orgId, uid, ing, usedIn, onClose }: { orgId: s
   }
 
   const input = ui.input;
+  if (asProduct && ing) return <ProductForm from={ing} onClose={() => setAsProduct(false)} onDone={() => onClose()} />;
   return (
     <Sheet title={ing ? "材料を編集" : "材料を登録"} onClose={onClose}>
       <div className="space-y-4">
@@ -112,7 +119,12 @@ export function IngredientSheet({ orgId, uid, ing, usedIn, onClose }: { orgId: s
             <select className={`${input} w-24`} value={d.purchaseUnit} onChange={(e) => set({ purchaseUnit: e.target.value as Unit, priceSource: null })}>{BUY_UNITS.map((u) => <option key={u}>{u}</option>)}</select>
           </div>
           {tax > 0 && d.purchasePrice !== null && <p className="text-xs text-muted">税抜 {yen(d.purchasePrice)} で原価を計算します。</p>}
-        {d.priceSource === "ref" && d.purchasePrice !== null && <p className="text-xs text-warn-strong"><RefBadge /> 共有の材料の参考価格を入れています。お店の仕入れ値に直すと、この印は消えます。</p>}
+        {d.priceSource === "ref" && d.purchasePrice !== null && (
+          <div className="text-xs text-warn-strong">
+            <p><RefBadge /> {d.refWeb ? `AIがネットの販売価格を調べて入れた目安です（${d.refWeb.note}）` : "共有の材料の参考価格を入れています"}。お店の仕入れ値に直すと、この印は消えます。</p>
+            {d.refWeb && <WebSources sources={d.refWeb.sources} searchHtml={d.refWeb.searchHtml} />}
+          </div>
+        )}
           <p className="text-xs text-muted">{perG !== null ? `1gあたり ${yen(perG)}（税抜）／1kgあたり ${yen(perG * 1000)}` : "1gあたりの値段を出すには、仕入れ値と量を入れてください。"}</p>
         </div>
         {d.globalRef && <GlobalInfo globalRef={d.globalRef} onApply={(p) => { setPriceText(String(p.price)); set({ purchasePrice: p.price, priceTax: 0, purchaseQty: p.qty, purchaseUnit: p.unit, priceSource: "ref" }); }} />}
@@ -139,6 +151,11 @@ export function IngredientSheet({ orgId, uid, ing, usedIn, onClose }: { orgId: s
           <div className="space-y-2">
             <label className="block space-y-1"><span className={ui.label}>ラベルに出す名前（既製品は中身まで。例：チョコレート（砂糖、カカオマス、ココアバター））</span>
               <textarea className={`${input} h-16`} value={d.labelName ?? ""} maxLength={300} onChange={(e) => set({ labelName: e.target.value })} /></label>
+            {ing && (
+              <button type="button" onClick={() => setAsProduct(true)} className="text-sm text-clay-strong underline">
+                既製品として登録する（パッケージの裏を撮ると、AIが原材料・アレルゲン・栄養成分を読みます）
+              </button>
+            )}
             <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={!!d.isAdditive} onChange={(e) => set({ isAdditive: e.target.checked })} />添加物（ラベルで「／」のあとに書く）</label>
             <label className="block space-y-1"><span className={ui.label}>仕入れ先</span><input className={input} value={d.supplier ?? ""} maxLength={60} onChange={(e) => set({ supplier: e.target.value })} /></label>
           </div>

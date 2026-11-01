@@ -11,7 +11,7 @@ import { buildSuggestion, suggestionRefPrice } from "../shared/suggest";
 import type { GlobalIngredient, GlobalSuggestion, Ingredient } from "../shared/types";
 import { isUnit, type Unit } from "../shared/units";
 import { costYen, GEMINI_API_KEY, GEMINI_MODEL, REGION } from "../ai/config";
-import { addUsage, callGeminiSearchJson, type Usage } from "../ai/gemini";
+import { addUsage, callGeminiSearchJson, type Usage, type WebSource } from "../ai/gemini";
 import { PRICE_SEARCH_SYSTEM, type PriceSearchAnswer } from "../ai/prompts";
 import { idOf } from "../core/auth";
 
@@ -28,6 +28,41 @@ export async function requireOperator(auth: { uid: string } | undefined): Promis
 }
 
 const month = () => new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 7);
+
+/** ネットで調べた材料の値段（税込）。見たページと Google の「検索の候補」つき */
+export interface WebPrice {
+  price: number; qty: number; unit: Unit; basis: string; n: number; c: number;
+  sources: WebSource[]; searchHtml: string;
+}
+
+/** 材料1つの今のネットの販売価格を、AIが Google 検索で調べる。見つからない・自信が低ければ found は null */
+export async function searchRefPrice(m: { name: string; aliases?: string[]; category?: string }, minC = 0): Promise<{ found: WebPrice | null; usage: Usage }> {
+  const r = await callGeminiSearchJson<PriceSearchAnswer>({
+    system: PRICE_SEARCH_SYSTEM,
+    prompt: `材料：${m.name}${m.aliases?.length ? `（別名：${m.aliases.slice(0, 3).join("・")}）` : ""}${m.category ? `\n分類：${m.category}` : ""}`,
+    maxOutputTokens: 2048,
+  });
+  const a = r.output;
+  const unit = String(a?.unit ?? "") as Unit;
+  const c = Math.max(0, Math.min(1, Number(a?.c) || 0));
+  if (!a || !(a.price > 0) || !(a.qty > 0) || !isUnit(unit) || !["g", "kg", "ml", "l", "個"].includes(unit) || c < minC) return { found: null, usage: r.usage };
+  return {
+    found: { price: a.price, qty: a.qty, unit, basis: String(a.basis ?? "").slice(0, 80), n: Number(a.n) > 0 ? Math.round(Number(a.n)) : 0, c, sources: r.sources.slice(0, 8), searchHtml: r.searchHtml.slice(0, 20000) },
+    usage: r.usage,
+  };
+}
+
+/** ネットの値段を、運営が精査する共有の材料への提案にする（値段は税抜で持つ。ネットの値段は税込なので割り戻す） */
+export function webPriceSuggestion(g: Pick<GlobalIngredient, "id" | "name">, w: WebPrice): Omit<GlobalSuggestion, "id"> {
+  return {
+    source: "ai", kind: "update", status: "pending", orgId: null, orgName: w.sources.length ? "ネットの価格（AIが検索）" : "AIの推定", ingredientId: null,
+    globalId: g.id, globalName: g.name, name: g.name, aliases: [], allergens: null, labelName: "",
+    price: { price: Math.round((w.price / 1.08) * 10) / 10, qty: w.qty, unit: w.unit },
+    note: `${w.basis}・${w.n ? `${w.n}店・` : ""}自信 ${Math.round(w.c * 100)}%・税込 ${Math.round(w.price)}円`,
+    sources: w.sources, searchHtml: w.searchHtml,
+    sig: `ai:${w.price}:${w.qty}:${w.unit}`, updatedAt: FieldValue.serverTimestamp(),
+  };
+}
 
 export const onIngredientShared = onDocumentWritten(
   { document: "organizations/{orgId}/ingredients/{ingredientId}", region: REGION },
@@ -74,27 +109,10 @@ export const estimateRefPrices = onCall({ region: REGION, timeoutSeconds: 540, s
   for (let i = 0; i < targets.length; i += SEARCH_PARALLEL) {
     await Promise.all(targets.slice(i, i + SEARCH_PARALLEL).map(async (g) => {
       try {
-        const r = await callGeminiSearchJson<PriceSearchAnswer>({
-          system: PRICE_SEARCH_SYSTEM,
-          prompt: `材料：${g.name}${g.aliases?.length ? `（別名：${g.aliases.slice(0, 3).join("・")}）` : ""}${g.category ? `\n分類：${g.category}` : ""}`,
-          maxOutputTokens: 2048,
-        });
+        const r = await searchRefPrice(g);
         usage = addUsage(usage, r.usage);
-        const a = r.output;
-        const unit = String(a?.unit ?? "") as Unit;
-        if (!a || !(a.price > 0) || !(a.qty > 0) || !isUnit(unit) || !["g", "kg", "ml", "l", "個"].includes(unit)) return;
-        const c = Math.max(0, Math.min(1, Number(a.c) || 0));
-        const sources = r.sources.slice(0, 8);
-        const s: Omit<GlobalSuggestion, "id"> = {
-          source: "ai", kind: "update", status: "pending", orgId: null, orgName: sources.length ? "ネットの価格（AIが検索）" : "AIの推定", ingredientId: null,
-          globalId: g.id, globalName: g.name, name: g.name, aliases: [], allergens: null, labelName: "",
-          // 提案の値段は税抜で持つ（お店の提案とそろえる）。ネットの値段は税込なので割り戻す
-          price: { price: Math.round((a.price / 1.08) * 10) / 10, qty: a.qty, unit },
-          note: `${String(a.basis ?? "").slice(0, 80)}・${Number(a.n) > 0 ? `${Math.round(Number(a.n))}店・` : ""}自信 ${Math.round(c * 100)}%・税込 ${Math.round(a.price)}円`,
-          sources, searchHtml: r.searchHtml.slice(0, 20000),
-          sig: `ai:${a.price}:${a.qty}:${unit}`, updatedAt: FieldValue.serverTimestamp(),
-        };
-        await db.doc(`${COL}/ai_${g.id}`).set(s);
+        if (!r.found) return;
+        await db.doc(`${COL}/ai_${g.id}`).set(webPriceSuggestion(g, r.found));
         made++;
       } catch (e) {
         console.warn("参考価格の検索に失敗", g.id, String((e as Error)?.message ?? e));

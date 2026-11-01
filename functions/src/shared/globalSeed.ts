@@ -94,7 +94,7 @@ export const SEED_MEXT_HINTS: Record<string, string[]> = {
   base_hakurikiko: ["薄力粉", "1等"], base_kyorikiko: ["強力粉", "1等"], base_churikiko: ["中力粉", "1等"],
   base_zenryufun: ["全粒粉"], base_cornstarch: ["とうもろこしでん粉"], base_katakuriko: ["じゃがいもでん粉"],
   base_komeko: ["米粉"], base_shiratamako: ["白玉粉"], base_kokoa: ["ピュアココア"], base_matcha: ["抹茶"],
-  base_granulated: ["グラニュー糖"], base_joohakuto: ["上白糖"], base_funto: ["粉糖"], base_kurozato: ["黒砂糖"],
+  base_granulated: ["グラニュー糖"], base_joohakuto: ["上白糖"], base_kibisato: ["三温糖"], base_almondpoodle: ["アーモンド", "乾"], base_funto: ["粉糖"], base_kurozato: ["黒砂糖"],
   base_hachimitsu: ["はちみつ"], base_mizuame: ["水あめ"], base_maple: ["メープルシロップ"],
   base_butter_unsalted: ["食塩不使用バター"], base_butter_salted: ["有塩バター"], base_butter_fermented: ["発酵バター"], base_milk: ["普通牛乳"],
   base_cream: ["クリーム", "乳脂肪"], base_whip_plant: ["ホイップクリーム", "植物性脂肪"],
