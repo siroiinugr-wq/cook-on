@@ -1,6 +1,7 @@
 // 画面とサーバーで共通のデータの形（Firestore に保存する形と同じ）
 // 金額は円（小数可。表示のときに丸める）、重さは g。
 
+import type { WebOffers } from "./offers";
 import type { AllergenId } from "./allergens";
 import type { LabelInfo } from "./label";
 import type { RefPrice } from "./refPrice";
@@ -37,6 +38,8 @@ export interface Ingredient {
   priceSource?: "ref" | null;
   /** 参考価格をAIがネット（Google 検索）で調べて入れたとき：何を想定したか・見たページ・検索の候補（画面に出すのが利用の条件） */
   refWeb?: { note: string; sources: { uri: string; title: string }[]; searchHtml: string } | null;
+  /** ネットで値段を比べた結果（shared/offers.ts。選んだ候補 picked も） */
+  offers?: WebOffers | null;
   supplier?: string;
   /** 写真（Storage のパス orgs/{orgId}/ingredients/… か、既製品から写した ugc/…） */
   photoPath?: string | null;

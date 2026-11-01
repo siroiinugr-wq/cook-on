@@ -17,6 +17,7 @@ export { syncSteps } from "./recipes/steps";
 export { matchPurchaseLines, readInvoices, searchPackSizes } from "./ai/invoices";
 export { onIngredientShared, estimateRefPrices, reviewSuggestion } from "./global/suggestions";
 export { onGlobalRefPrice, fillPricesFromWeb } from "./global/refPrices";
+export { compareWebPrices } from "./ai/compare";
 export { onPackagingWritten, onPackagingSetWritten } from "./recipes/packagingAlert";
 export { submitUgcProduct, onUgcVoteWritten } from "./ugc/products";
 export { createCheckout, grantCredits } from "./billing/credits";

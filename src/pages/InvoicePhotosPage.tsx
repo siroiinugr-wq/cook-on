@@ -26,6 +26,7 @@ import { CameraShooter } from "../components/import/CameraShooter";
 import { CaptureTray } from "../components/import/CaptureTray";
 import { numText } from "../lib/num";
 import { WebSources } from "../components/common/WebSources";
+import { cheapestPer100 } from "@shared/offers";
 
 /** tried＝AIで探した（見つからなかった行をもう一度クレジットで探さない）、sizeTried＝AIで量を確かめた、webTried＝ネットで確かめた */
 type Row = InvoiceLine & { use: boolean; target: string; tried?: boolean; sizeTried?: boolean; webTried?: boolean };
@@ -390,6 +391,8 @@ function Per100Line({ r, ing, doubt }: { r: Row; ing?: Ingredient; doubt: string
   const before = ing && ing.purchasePrice !== null ? per100(ing.purchasePrice, 0, ing.purchaseQty, ing.purchaseUnit, ing.gramsPerPiece) : null;
   const diff = now !== null && before ? Math.round(((now - before) / before) * 100) : null;
   const guess = r.size === "known" || r.size === "price" || r.size === "web";
+  // 材料の画面で「ネットで値段を比べる」をしてあれば、いちばん安い売り場とレシートを比べる
+  const cheap = cheapestPer100(ing?.offers, r.gramsPerPiece ?? ing?.gramsPerPiece);
   return (
     <div className="space-y-0.5 text-xs">
       {(now !== null || r.generic) && (
@@ -398,6 +401,9 @@ function Per100Line({ r, ing, doubt }: { r: Row; ing?: Ingredient; doubt: string
           {diff !== null && diff !== 0 && !doubt && <span className={diff > 0 ? "text-ng" : "text-ok"}>　前より{diff > 0 ? `${diff}%高い` : `${-diff}%安い`}</span>}
           {r.generic && <span className="text-muted">{now !== null ? "　" : ""}AIの判断：{r.generic}</span>}
         </p>
+      )}
+      {cheap !== null && now !== null && (
+        <p className="text-muted">ネットで比べた最安 {yen(cheap)}/100g（税抜）{now > cheap ? <span className="text-ng">　このレシートは{Math.round(((now - cheap) / cheap) * 100)}%高い</span> : <span className="text-ok">　このレシートのほうが安い</span>}</p>
       )}
       {guess && <p><span className={`rounded px-1.5 py-0.5 ${r.size === "web" ? "bg-ok-soft text-ok" : "bg-warn-soft text-warn-strong"}`}>{SIZE_LABEL[r.size!]}</span>{r.sizeNote && <span className="text-muted">　{r.sizeNote}</span>}</p>}
       {r.size === "web" && <WebSources sources={r.sizeSources} searchHtml={r.sizeSearchHtml} />}

@@ -22,6 +22,8 @@ export const CREDIT_COST = {
   sizeSearch: 1,
   /** 仕入れ値が空の材料の値段を Google 検索つきのAIで調べる：PRICE_SEARCH_BATCH 品ごと（共有の参考価格で入る品は数えない） */
   priceSearch: 1,
+  /** 材料1つの売り場と値段を Google 検索つきのAIで比べる：1回ごと */
+  priceCompare: 1,
   /** 原価ダウン・新作の提案（1回の質問） */
   aiSuggest: 2,
 } as const;
@@ -38,6 +40,7 @@ export const ACTION_LABEL: Record<CreditAction | "purchase" | "grant" | "welcome
   invoicePhoto: "レシート・納品書から仕入れ値を読む",
   sizeSearch: "仕入れ品の量をネットで確かめる",
   priceSearch: "仕入れ値をネットで調べる",
+  priceCompare: "ネットで値段を比べる",
   purchase: "購入",
   grant: "付与",
   welcome: "はじめてのプレゼント",

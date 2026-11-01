@@ -140,6 +140,24 @@ export async function demoAiCall<T>(name: string, d: Data): Promise<T> {
         } as T,
       }));
     }
+    case "compareWebPrices": {
+      // デモの値段比べ：決まった見本を返す（本物は Google 検索つきのAIが売り場を探す）
+      const path = `${O}/ingredients/${String(d.ingredientId)}`;
+      const ing = demoGet(path);
+      if (!ing) throw new Error("材料が見つかりません。");
+      return demoWithCredits("priceCompare", 1, async () => {
+        const offers = {
+          list: [
+            { shop: "製菓材料のお店A（デモ）", product: `${ing.name} 1kg`, price: 540, qty: 1, unit: "kg", url: "https://example.com/a", note: "送料別" },
+            { shop: "業務用通販B（デモ）", product: `${ing.name} 業務用 3kg`, price: 1380, qty: 3, unit: "kg", url: "https://example.com/b", note: "5,000円以上で送料無料" },
+            { shop: "スーパーC（デモ）", product: `${ing.name} 500g`, price: 298, qty: 500, unit: "g", url: null, note: "" },
+          ],
+          at: new Date().toISOString(), searchHtml: "<div style='font:12px sans-serif;padding:6px'>Google 検索の候補（デモ）</div>", picked: null,
+        };
+        demoWrite(path, { ...ing, offers });
+        return { result: { offers } as T };
+      });
+    }
     case "fillPricesFromWeb": {
       // デモのネット検索：材料名から決まった目安を入れる（本物は Google 検索つきのAIがお店のページを見て調べる）
       const empty = [...demoIngredientMap().values()].filter((i) => i.purchasePrice === null);
