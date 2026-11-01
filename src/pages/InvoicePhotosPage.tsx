@@ -3,7 +3,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { aiMatchCredits, CREDIT_COST, INVOICE_MAX_PHOTOS } from "@shared/credits";
 import { PRICE_TAX_OPTIONS, yen } from "@shared/cost";
-import { fromPurchaseLines, invoicePatch, INVOICE_UNITS, type InvoiceLine } from "@shared/invoice";
+import { fromPurchaseLines, invoicePatch, INVOICE_UNITS, per100, type InvoiceLine } from "@shared/invoice";
+import { suggestAllergens } from "@shared/allergenGuess";
+import type { GlobalIngredient } from "@shared/types";
 import { parsePurchaseCsv } from "@shared/purchaseLines";
 import type { Unit } from "@shared/units";
 import { useOrgCtx } from "../contexts/OrgContext";
@@ -11,7 +13,7 @@ import { useCaptureTray, type TrayItem } from "../hooks/useCaptureTray";
 import { useIngredients } from "../hooks/useIngredients";
 import { createIngredient } from "../lib/ingredientLink";
 import { uploadImportPhoto } from "../lib/photos";
-import { call, newRequestId, saveDoc } from "../lib/store";
+import { call, getOnce, newRequestId, saveDoc } from "../lib/store";
 import { PageHead } from "../components/common/Layout";
 import { CostTag } from "../components/common/CreditBadge";
 import { Icon } from "../components/common/Icon";
@@ -20,8 +22,15 @@ import { ui } from "../components/common/ui";
 import { CameraShooter } from "../components/import/CameraShooter";
 import { CaptureTray } from "../components/import/CaptureTray";
 
-type Row = InvoiceLine & { use: boolean; target: string };
+/** tried＝AIで探した（見つからなかった行をもう一度クレジットで探さない） */
+type Row = InvoiceLine & { use: boolean; target: string; tried?: boolean };
 const NEW = "__new__";
+/** 読んだ明細を画面の行にする。お店の材料に無くても、共有の材料（成分表つき）が見つかれば「新しく登録」を選んでおく */
+const toRow = (l: InvoiceLine, min: number): Row => {
+  if (l.ingredientId) return { ...l, use: l.confidence >= min, target: l.ingredientId };
+  if (l.global) return { ...l, use: l.global.confidence >= 0.6, target: NEW };
+  return { ...l, use: false, target: "" };
+};
 const SAVE_KEY = (orgId: string) => `cookon-invoice-${orgId}`;
 /** AI経理（別のアプリ）。仕入れ明細ファイルを書き出せる */
 const KEIRI_URL = "https://keiri.iwakuni-design.com";
@@ -79,7 +88,7 @@ export function InvoicePhotosPage() {
         },
       });
       if (!r) return;
-      setRows((cur) => [...cur, ...r.lines.map((l) => ({ ...l, use: !!l.ingredientId && l.confidence >= 0.5, target: l.ingredientId ?? "" }))]);
+      setRows((cur) => [...cur, ...r.lines.map((l) => toRow(l, 0.5))]);
       setMsg(`${r.read}枚から${r.lines.length}行を読み取りました${r.read < r.photos ? `（${r.photos - r.read}枚は読めず、その分のクレジットは使っていません）` : ""}。結び先と値段を確かめて「反映」を押してください。`);
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
@@ -95,7 +104,7 @@ export function InvoicePhotosPage() {
       const { lines, skipped } = parsePurchaseCsv(await readText(f));
       const got = fromPurchaseLines(lines, ings.list);
       if (!got.length) throw new Error("値段の入った明細が見つかりませんでした。");
-      setRows((cur) => [...cur, ...got.map((l) => ({ ...l, use: !!l.ingredientId && l.confidence >= 0.85, target: l.ingredientId ?? "" }))]);
+      setRows((cur) => [...cur, ...got.map((l) => toRow(l, 0.85))]);
       const linked = got.filter((l) => l.ingredientId).length;
       setMsg(`${lines.length}行から${got.length}品を読み込みました（同じ品名は一番新しい値段だけ）。${linked}品は名前で結べました${skipped ? `。読めない${skipped}行は飛ばしました` : ""}。`);
     } catch (e) {
@@ -105,28 +114,31 @@ export function InvoicePhotosPage() {
 
   // 名前で結べなかった行（ファイルから読んだ分も写真の分も）を、AIがお店の材料から探す
   // 1回に200行まで（サーバーの上限）。残りはもう一度押す
-  const loose = rows.map((r, k) => ({ r, k })).filter(({ r }) => !r.target).slice(0, 200);
+  const loose = rows.map((r, k) => ({ r, k })).filter(({ r }) => !r.target && !r.tried).slice(0, 200);
   async function aiMatch() {
     setErr("");
     setMsg("");
     setBusy(true);
     try {
       const names = loose.map(({ r }) => r.raw);
+      const hints = loose.map(({ r }) => r.generic ?? "");
       const res = await run({
         title: "仕入れ明細の材料をAIで探す", credits: aiMatchCredits(names.length),
         detail: `結び先が決まっていない${names.length}行を、AIがお店の材料から探します。反映するのは確かめてからです。`,
-        exec: () => call<{ matches: { ingredientId: string | null; confidence: number; qty: number; unit: Unit }[] }>("matchPurchaseLines", { orgId, names, requestId: newRequestId() }),
+        exec: () => call<{ matches: { ingredientId: string | null; confidence: number; qty: number; unit: Unit; generic: string; global: InvoiceLine["global"] }[] }>("matchPurchaseLines", { orgId, names, hints, requestId: newRequestId() }),
       });
       if (!res) return;
       const at = new Map(loose.map(({ k }, j) => [k, res.matches[j]]));
       setRows((cur) => cur.map((r, k) => {
         const m = at.get(k);
-        if (!m?.ingredientId || r.target) return r;
+        if (!m || r.target) return r;
+        if (!m.ingredientId && !m.global) return { ...r, tried: true, generic: m.generic || r.generic };
         const sized = r.qty === 1 && r.unit === "個" && m.qty > 0;
-        return { ...r, ingredientId: m.ingredientId, confidence: m.confidence, via: "ai" as const, target: m.ingredientId, use: m.confidence >= 0.6, ...(sized ? { qty: m.qty, unit: m.unit } : {}) };
+        return toRow({ ...r, ingredientId: m.ingredientId, confidence: m.confidence, via: "ai", generic: m.generic || r.generic, global: m.global, ...(sized ? { qty: m.qty, unit: m.unit } : {}) }, 0.6);
       }));
       const found = res.matches.filter((m) => m.ingredientId).length;
-      setMsg(`AIが${names.length}行のうち${found}行の結び先を見つけました。確かめてから「反映」を押してください。`);
+      const fresh = res.matches.filter((m) => !m.ingredientId && m.global).length;
+      setMsg(`AIが${names.length}行のうち${found}行をお店の材料に結びました${fresh ? `。${fresh}行はお店に無い材料なので、共有の材料（成分表つき）として新しく登録します` : ""}。確かめてから「反映」を押してください。`);
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
     } finally {
@@ -140,9 +152,18 @@ export function InvoicePhotosPage() {
     let done = 0;
     try {
       for (const r of rows.filter((x) => x.use && x.target)) {
-        if (r.target === NEW) {
+        const same = r.target === NEW && r.global ? ings.list.find((i) => i.globalRef === r.global!.id) : undefined;
+        if (same) {
+          // 同じ共有の材料に結んだ材料がもうある（同じファイルの別の行で登録したなど）なら、その値段を直す
+          await saveDoc(`organizations/${orgId}/ingredients/${same.id}`, invoicePatch(r, same));
+        } else if (r.target === NEW && r.global) {
+          // 共有の材料（成分表の成分・アレルゲン）に結んで登録。名前は共有の名前、レシートの表記は別名に覚える
+          const g = await getOnce<GlobalIngredient>(`globalIngredients/${r.global.id}`);
+          const name = g?.name ?? r.global.name;
+          await createIngredient(orgId, uid, { name, globalRef: r.global.id, allergens: suggestAllergens([], `${r.raw} ${name}`, g?.allergens ?? []), ...invoicePatch(r, { name }) });
+        } else if (r.target === NEW) {
           const p = invoicePatch(r, { name: r.raw });
-          await createIngredient(orgId, uid, { name: r.raw.slice(0, 60), allergens: [], ...p, aliases: [] });
+          await createIngredient(orgId, uid, { name: r.raw.slice(0, 60), allergens: suggestAllergens([], r.raw), ...p, aliases: [] });
         } else {
           const ing = byId.get(r.target);
           if (!ing) continue;
@@ -230,7 +251,7 @@ export function InvoicePhotosPage() {
                     <span className="text-faint">→</span>
                     <select className={`${input} min-w-0 flex-1`} value={r.target} onChange={(e) => set(k, { target: e.target.value, use: !!e.target.value })}>
                       <option value="">結ばない</option>
-                      <option value={NEW}>新しい材料として登録</option>
+                      <option value={NEW}>{r.global ? `新しく登録：${r.global.name}（成分表・アレルゲンつき）` : "新しい材料として登録"}</option>
                       {sorted.map((i) => <option key={i.id} value={i.id}>{i.name}{i.id === r.ingredientId ? (r.via === "name" ? "（名前が同じ）" : r.via === "similar" ? "（似た名前）" : `（AI ${Math.round(r.confidence * 100)}%）`) : ""}</option>)}
                     </select>
                   </div>
@@ -241,6 +262,7 @@ export function InvoicePhotosPage() {
                     <select className={input} value={r.unit} onChange={(e) => set(k, { unit: e.target.value as Unit })}>{INVOICE_UNITS.map((u) => <option key={u}>{u}</option>)}</select>
                     <select className={input} value={r.tax} onChange={(e) => set(k, { tax: Number(e.target.value) })}>{PRICE_TAX_OPTIONS.map((o) => <option key={o.rate} value={o.rate}>{o.label}</option>)}</select>
                   </div>
+                  <Per100Line r={r} ing={ing} />
                   {before && <p className="text-xs text-muted">{before}</p>}
                 </li>
               );
@@ -255,5 +277,20 @@ export function InvoicePhotosPage() {
           onClose={() => setShooting(false)} onUnavailable={() => setShooting(false)} />
       )}
     </div>
+  );
+}
+
+/** 100g あたりの値段（税抜）と、AIの判断（一般名）。今の仕入れ値より上がったか下がったかも出す */
+function Per100Line({ r, ing }: { r: Row; ing?: { purchasePrice: number | null; purchaseQty: number; purchaseUnit: string } }) {
+  const now = per100(r.price, r.tax, r.qty, r.unit);
+  const before = ing && ing.purchasePrice !== null ? per100(ing.purchasePrice, 0, ing.purchaseQty, ing.purchaseUnit as Unit) : null;
+  const diff = now !== null && before ? Math.round(((now - before) / before) * 100) : null;
+  if (now === null && !r.generic) return null;
+  return (
+    <p className="text-xs text-ink-soft">
+      {now !== null && <>100gあたり <b>{yen(now)}</b>（税抜）</>}
+      {diff !== null && diff !== 0 && <span className={diff > 0 ? "text-ng" : "text-ok"}>　前より{diff > 0 ? `${diff}%高い` : `${-diff}%安い`}</span>}
+      {r.generic && <span className="text-muted">{now !== null ? "　" : ""}AIの判断：{r.generic}</span>}
+    </p>
   );
 }

@@ -29,6 +29,20 @@ export interface InvoiceLine {
   confidence: number;
   /** どうやって結び先を選んだか（name＝名前・別名が同じ、similar＝似た名前、ai＝AI。無ければ ai） */
   via?: "name" | "similar" | "ai";
+  /** AIが品名から判断した一般的な材料名（薄力粉・無塩バターなど） */
+  generic?: string;
+  /** お店に無い材料のとき：一般名から見つけた共有の材料（食品成分表の成分・アレルゲン・参考価格つき）。新しく登録するときに結ぶ */
+  global?: { id: string; name: string; confidence: number } | null;
+}
+
+/** 量の単位を g（ml は g とみなす）にそろえる。個・枚・本は null */
+const GRAMS: Partial<Record<Unit, number>> = { g: 1, kg: 1000, ml: 1, l: 1000 };
+
+/** 100g（100ml）あたりの税抜の値段。量が個・枚・本なら null */
+export function per100(price: number, tax: number, qty: number, unit: Unit): number | null {
+  const g = GRAMS[unit];
+  if (!g || !(qty > 0) || !(price > 0)) return null;
+  return Math.round((toExTax(price, tax) / (qty * g)) * 100 * 10) / 10;
 }
 
 /** 明細1行を、材料の仕入れ値（税抜・印は消す）に直す。量の付いた別名も覚える */
@@ -88,6 +102,7 @@ export function fromPurchaseLines(lines: PurchaseLine[], ings: Pick<Ingredient, 
         ingredientId: hit?.id ?? (near && near.score >= 0.85 ? near.id : null),
         confidence: hit ? 1 : near && near.score >= 0.85 ? near.score * 0.8 : 0,
         via: hit ? "name" as const : "similar" as const,
+        ...(l.genericName ? { generic: l.genericName } : {}),
       };
     });
 }

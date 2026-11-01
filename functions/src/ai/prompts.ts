@@ -267,6 +267,7 @@ export const INVOICE_SYSTEM = `あなたは製菓店・飲食店の仕入れ担�
 - tax は price に含まれている消費税の率。レシートの「内税」「税込」なら 0.08（食品）か 0.1（それ以外・酒類）。「外税」「税抜」「本体価格」なら 0。軽減税率の印（※・★・軽 など）があれば 0.08。
 - supplier はお店・仕入れ先の名前、date は日付（YYYY-MM-DD。無ければ空）。
 - ingredient には、下の「お店の材料」の一覧から同じ材料の番号を選ぶ。商品名・ブランド・規格が違っても同じ材料なら選ぶ（例：よつ葉バター食塩不使用 450g → 無塩バター）。違う材料（発酵バターと無塩バター、薄力粉と強力粉など）は選ばない。無ければ -1。c は選んだ自信（0〜1）。
+- generic は一般的な材料名（食品成分表で探せる名前。例：ﾊｸﾘｷｺ 1KG → 薄力粉、よつ葉バター食塩不使用 → 無塩バター、ｸﾞﾗﾆｭｰﾄｳ → グラニュー糖）。ブランド・量は入れない。食材でないもの（袋・資材・文房具）は空。
 - 読めない文字は推測しない。読めない行は入れない。`;
 
 export const INVOICE_SCHEMA = {
@@ -280,9 +281,9 @@ export const INVOICE_SCHEMA = {
         type: "object",
         properties: {
           name: { type: "string" }, price: { type: "number" }, count: { type: "number" }, qty: { type: "number" }, unit: { type: "string" },
-          tax: { type: "number" }, ingredient: { type: "integer" }, c: { type: "number" },
+          tax: { type: "number" }, ingredient: { type: "integer" }, c: { type: "number" }, generic: { type: "string" },
         },
-        required: ["name", "price", "count", "qty", "unit", "tax", "ingredient", "c"],
+        required: ["name", "price", "count", "qty", "unit", "tax", "ingredient", "c", "generic"],
       },
     },
   },
@@ -292,7 +293,7 @@ export const INVOICE_SCHEMA = {
 export interface InvoiceAnswer {
   supplier: string;
   date: string;
-  lines: { name: string; price: number; count: number; qty: number; unit: string; tax: number; ingredient: number; c: number }[];
+  lines: { name: string; price: number; count: number; qty: number; unit: string; tax: number; ingredient: number; c: number; generic?: string }[];
 }
 
 export const PURCHASE_MATCH_SYSTEM = `あなたは製菓店・飲食店の仕入れ担当です。仕入れ明細の品名（レシートの表記）ごとに、下の「お店の材料」から同じ材料の番号を選ぶ。
@@ -300,6 +301,8 @@ export const PURCHASE_MATCH_SYSTEM = `あなたは製菓店・飲食店の仕入
 - 違う材料（発酵バターと無塩バター、薄力粉と強力粉、グラニュー糖と上白糖など）は選ばない。食材・資材でないもの（文房具・洗剤など）や、迷うものは -1。
 - c は選んだ自信（0〜1）。
 - qty と unit は品名から分かる1つの包装の量（「450g」なら 450・g、「1L」なら 1・l）。分からなければ qty 1・unit 個。unit は g・kg・ml・l・個・枚・本 のどれか。
+- generic は一般的な材料名（食品成分表で探せる名前。例：ﾊｸﾘｷｺ 1KG → 薄力粉、よつ葉バター食塩不使用 → 無塩バター、ｸﾞﾗﾆｭｰﾄｳ → グラニュー糖）。ブランド・量は入れない。食材でないもの（袋・資材・文房具）は空。
+- 品名のあとの［］は書き出したアプリの推定した一般名（参考。違っていれば直す）。
 - 答えは lines に、聞かれた行と同じ番号（n）で入れる。`;
 
 export const PURCHASE_MATCH_SCHEMA = {
@@ -309,8 +312,8 @@ export const PURCHASE_MATCH_SCHEMA = {
       type: "array",
       items: {
         type: "object",
-        properties: { n: { type: "integer" }, ingredient: { type: "integer" }, c: { type: "number" }, qty: { type: "number" }, unit: { type: "string" } },
-        required: ["n", "ingredient", "c", "qty", "unit"],
+        properties: { n: { type: "integer" }, ingredient: { type: "integer" }, c: { type: "number" }, qty: { type: "number" }, unit: { type: "string" }, generic: { type: "string" } },
+        required: ["n", "ingredient", "c", "qty", "unit", "generic"],
       },
     },
   },
@@ -318,5 +321,5 @@ export const PURCHASE_MATCH_SCHEMA = {
 };
 
 export interface PurchaseMatchAnswer {
-  lines: { n: number; ingredient: number; c: number; qty: number; unit: string }[];
+  lines: { n: number; ingredient: number; c: number; qty: number; unit: string; generic?: string }[];
 }

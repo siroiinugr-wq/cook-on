@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fromPurchaseLines, sizeFromName } from "./invoice";
+import { fromPurchaseLines, per100, sizeFromName } from "./invoice";
 import { parsePurchaseCsv, toPurchaseCsv, type PurchaseLine } from "./purchaseLines";
 
 const line = (p: Partial<PurchaseLine>): PurchaseLine => ({
@@ -25,6 +25,12 @@ describe("仕入れ明細ファイル", () => {
     expect(() => parsePurchaseCsv("a,b\n1,2")).toThrow();
   });
 
+  it("100gあたりの税抜の値段（個・枚は出さない）", () => {
+    expect(per100(1080, 0.08, 1, "kg")).toBe(100);
+    expect(per100(540, 0, 450, "g")).toBe(120);
+    expect(per100(300, 0, 10, "枚")).toBeNull();
+  });
+
   it("品名から包装の量を読む", () => {
     expect(sizeFromName("よつ葉バター 450g")).toEqual({ qty: 450, unit: "g" });
     expect(sizeFromName("牛乳１Ｌ")).toEqual({ qty: 1, unit: "l" });
@@ -42,7 +48,7 @@ describe("仕入れ明細ファイル", () => {
     ], ings);
     expect(out).toHaveLength(3);
     expect(out.find((l) => l.raw === "薄力粉 1kg")).toMatchObject({ price: 298, count: 2, qty: 1, unit: "kg", tax: 0.08, ingredientId: "a", confidence: 1, photo: -1 });
-    expect(out.find((l) => l.raw.startsWith("ﾖﾂﾊﾞ"))).toMatchObject({ price: 750, ingredientId: "b", qty: 450, unit: "g" });
+    expect(out.find((l) => l.raw.startsWith("ﾖﾂﾊﾞ"))).toMatchObject({ price: 750, ingredientId: "b", qty: 450, unit: "g", generic: "無塩バター", via: "name" });
     expect(out.find((l) => l.raw === "クッキングシート")?.ingredientId).toBeNull();
   });
 });
