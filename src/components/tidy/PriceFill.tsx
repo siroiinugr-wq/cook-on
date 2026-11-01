@@ -2,7 +2,7 @@
 import { Link } from "react-router-dom";
 import { RefBadge } from "../ingredient/RefBadge";
 import { useEffect, useState } from "react";
-import { PRICE_TAX_OPTIONS, toExTax, yen } from "@shared/cost";
+import { fromExTax, PRICE_TAX_OPTIONS, toExTax, yen } from "@shared/cost";
 import { ESTAT_CREDIT, refPriceExTax } from "@shared/refPrice";
 import type { GlobalIngredient, Ingredient } from "@shared/types";
 import { UNITS, type Unit } from "@shared/units";
@@ -108,10 +108,21 @@ export function PriceFill({ orgId, list, usedIn }: { orgId: string; list: Ingred
 }
 
 function Row({ orgId, ing, uses, g }: { orgId: string; ing: Ingredient; uses: number; g: GlobalIngredient | null }) {
-  const [price, setPrice] = useState("");
+  // 値段が入っていれば（参考価格・ネットで調べた値段も）、入れたときの税の形でそのまま欄に出す。空なら税込8%で入れてもらう
+  const startTax = ing.purchasePrice !== null ? ing.priceTax ?? 0 : 0.08;
+  const startPrice = ing.purchasePrice !== null ? String(Math.round(fromExTax(ing.purchasePrice, startTax) * 10) / 10) : "";
+  const [price, setPrice] = useState(startPrice);
   const [qty, setQty] = useState(String(ing.purchaseQty || 1));
   const [unit, setUnit] = useState<Unit>(ing.purchaseUnit || "kg");
-  const [tax, setTax] = useState(0.08);
+  const [tax, setTax] = useState(startTax);
+  // サーバーやほかの画面で値段が変わったら（ネットの値段に入れ替えたときなど）、欄も入れ直す
+  useEffect(() => {
+    setPrice(startPrice);
+    setQty(String(ing.purchaseQty || 1));
+    setUnit(ing.purchaseUnit || "kg");
+    setTax(startTax);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ing.purchasePrice, ing.purchaseQty, ing.purchaseUnit, ing.priceTax]);
   const [busy, setBusy] = useState(false);
   const rp = g?.refPrice;
 
@@ -134,7 +145,7 @@ function Row({ orgId, ing, uses, g }: { orgId: string; ing: Ingredient; uses: nu
         <span className="shrink-0 text-xs text-muted">レシピ{uses}件</span>
       </div>
       {ing.priceSource === "ref" && ing.purchasePrice !== null && (
-        <p className="text-xs text-muted"><RefBadge className="mr-1" />今は {yen(ing.purchasePrice)}（税抜）/{ing.purchaseQty}{ing.purchaseUnit}。お店の仕入れ値を入れると置き換わります。</p>
+        <p className="text-xs text-muted"><RefBadge className="mr-1" />{ing.refWeb?.at ? "AIがネットで調べた値段" : "参考価格"}を入れてあります。この値段でよければ「この値段で確定」、違えば直して保存（お店の仕入れ値になり、参考価格の印が消えます）。</p>
       )}
       <div className="flex flex-wrap items-center gap-1.5">
         <input className={`${input} w-24`} inputMode="decimal" placeholder="値段" value={price} onChange={(e) => setPrice(e.target.value)} />
@@ -142,7 +153,9 @@ function Row({ orgId, ing, uses, g }: { orgId: string; ing: Ingredient; uses: nu
         <input className={`${input} w-16`} inputMode="decimal" value={qty} onChange={(e) => setQty(e.target.value)} />
         <select className={input} value={unit} onChange={(e) => setUnit(e.target.value as Unit)}>{BUY_UNITS.map((u) => <option key={u}>{u}</option>)}</select>
         <select className={input} value={tax} onChange={(e) => setTax(Number(e.target.value))}>{PRICE_TAX_OPTIONS.map((o) => <option key={o.rate} value={o.rate}>{o.label}</option>)}</select>
-        <button disabled={busy || !(n > 0) || !(q > 0)} onClick={() => save({ price: n, qty: q, unit, tax })} className="rounded-lg bg-clay px-3 py-1.5 text-sm font-bold text-white disabled:bg-line-strong">保存</button>
+        <button disabled={busy || !(n > 0) || !(q > 0)} onClick={() => save({ price: n, qty: q, unit, tax })} className="rounded-lg bg-clay px-3 py-1.5 text-sm font-bold text-white disabled:bg-line-strong">
+          {ing.priceSource === "ref" && price === startPrice ? "この値段で確定" : "保存"}
+        </button>
       </div>
       {rp && ing.priceSource !== "ref" && (
         <button className="text-xs text-clay-strong underline" disabled={busy} onClick={() => save({ price: refPriceExTax(rp), qty: rp.qty, unit: rp.unit, tax: 0, ref: true })}>
