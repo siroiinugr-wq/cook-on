@@ -4,7 +4,7 @@ import { aiMatchCredits, priceSearchCredits, sizeSearchCredits, splitForImport }
 import type { ImportDoc, ItemMatch, ParsedRecipe } from "@shared/importTypes";
 import { buildIndex, rankCandidates, toMatchKey } from "@shared/matchKey";
 import { sizeFromName } from "@shared/invoice";
-import { withPast, type WebOffers } from "@shared/offers";
+import { needsWebRefresh, withPast, type WebOffers } from "@shared/offers";
 import { NO_MATCH, resolveLocal } from "@shared/resolveLocal";
 import { parseUnit, type Unit } from "@shared/units";
 import { demoGet, demoListDocs, demoWrite } from "./demo";
@@ -162,7 +162,7 @@ export async function demoAiCall<T>(name: string, d: Data): Promise<T> {
     }
     case "fillPricesFromWeb": {
       // デモのネット検索：材料名から決まった目安を入れる（本物は Google 検索つきのAIがお店のページを見て調べる）
-      const empty = [...demoIngredientMap().values()].filter((i) => i.purchasePrice === null);
+      const empty = [...demoIngredientMap().values()].filter((i) => i.purchasePrice === null || (d.includeRef === true && needsWebRefresh(i)));
       const web: Record<string, { price: number; qty: number; unit: string; note: string }> = {
         きび砂糖: { price: 486, qty: 1, unit: "kg", note: "製菓用・1kg袋・3店・税込486円" }, キビ糖: { price: 486, qty: 1, unit: "kg", note: "製菓用・1kg袋・3店・税込486円" },
         発酵バター: { price: 1280, qty: 450, unit: "g", note: "製菓用・450g・4店・税込1,280円" }, バニラビーンズ: { price: 980, qty: 5, unit: "本", note: "マダガスカル産・5本・3店・税込980円" },

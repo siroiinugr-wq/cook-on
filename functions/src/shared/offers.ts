@@ -57,6 +57,11 @@ export interface RefWeb {
   exPrice?: number;
 }
 
+/** 参考価格のままで、ネットで日付つきで調べた記録がまだ無い（「参考価格のものもネットで調べ直す」の対象） */
+export function needsWebRefresh(i: Pick<Ingredient, "purchasePrice" | "priceSource" | "refWeb">): boolean {
+  return i.purchasePrice !== null && i.priceSource === "ref" && !i.refWeb?.at;
+}
+
 /** いまの仕入れ値が、AIがネットで調べた値段のままか（古い記録は「参考価格のまま」で見分ける） */
 export function webPriceInUse(ing: Pick<Ingredient, "purchasePrice" | "priceSource" | "refWeb">): boolean {
   const w = ing.refWeb;
