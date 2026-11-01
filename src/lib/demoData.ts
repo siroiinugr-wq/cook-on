@@ -63,6 +63,7 @@ const RECIPES: (RecipeInput & { id: string })[] = [
       { text: "粉類と砂糖を合わせてふるう" },
       { text: "卵を加えて混ぜ、焦がしバターを40℃で加える" },
       { text: "型の8分目まで流し、190℃で13分焼く" },
+      { text: "網にのせて粗熱をとる" },
     ],
   },
   {
@@ -95,7 +96,7 @@ const RECIPES: (RecipeInput & { id: string })[] = [
       { ingredientId: "sansho", name: "山椒", qty: 2, unit: "g" },
       { ingredientId: "sansho", name: "山椒", qty: 1, unit: "g", note: "仕上げ" },
     ],
-    steps: [{ text: "バターと砂糖をすり混ぜる" }, { text: "粉と山椒を加えてまとめ、冷やして型で抜く" }, { text: "170℃で15分焼く" }],
+    steps: [{ text: "バターと砂糖をすり混ぜる" }, { text: "粉と山椒を加えてまとめ、冷やして型で抜く" }, { text: "170℃で15分焼く" }, { text: "網にのせて、粗熱をとる。" }],
   },
 ];
 

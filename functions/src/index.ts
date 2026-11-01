@@ -13,6 +13,7 @@ export { suggestLabelNames } from "./ai/labelNames";
 export { saveRecipe, restoreRecipeVersion, archiveRecipe } from "./recipes/save";
 export { onIngredientWritten } from "./recipes/costAlert";
 export { tidyRecipes, mergeIngredients, relinkIngredients } from "./recipes/tidy";
+export { syncSteps } from "./recipes/steps";
 export { onPackagingWritten, onPackagingSetWritten } from "./recipes/packagingAlert";
 export { submitUgcProduct, onUgcVoteWritten } from "./ugc/products";
 export { createCheckout, grantCredits } from "./billing/credits";

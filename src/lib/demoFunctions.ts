@@ -106,6 +106,7 @@ export async function demoCall<T>(name: string, data: object): Promise<T> {
     case "tidyRecipes":
     case "mergeIngredients":
     case "relinkIngredients":
+    case "syncSteps":
       return demoTidyCall(name, d) as T;
     default:
       return demoAiCall<T>(name, d);

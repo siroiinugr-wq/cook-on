@@ -38,7 +38,12 @@ export function sanitizeRecipe(raw: unknown): RecipeInput | string {
   }).filter((it) => it.name || it.ingredientId);
   const steps = (Array.isArray(r.steps) ? r.steps : []).slice(0, RECIPE_LIMITS.steps).map((x): RecipeStep => {
     const s = (x ?? {}) as Record<string, unknown>;
-    return { text: str(s.text, RECIPE_LIMITS.stepText), photoPath: typeof s.photoPath === "string" ? s.photoPath : null };
+    const tid = str(s.templateId, 60);
+    const ti = Number(s.templateStep);
+    return {
+      text: str(s.text, RECIPE_LIMITS.stepText), photoPath: typeof s.photoPath === "string" ? s.photoPath : null,
+      ...(tid && Number.isInteger(ti) && ti >= 0 && ti < 20 ? { templateId: tid, templateStep: ti } : {}),
+    };
   }).filter((s) => s.text || s.photoPath);
   const y = (r.yield ?? {}) as Record<string, unknown>;
   const pieces = num(y.pieces);
