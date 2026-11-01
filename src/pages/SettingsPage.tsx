@@ -13,6 +13,7 @@ import { BrandSection } from "../components/settings/BrandSection";
 import { MembersSection } from "../components/settings/MembersSection";
 import { StoreSection } from "../components/settings/StoreSection";
 import { StoresSection } from "../components/settings/StoresSection";
+import { KeiriLinkSection } from "../components/settings/KeiriLinkSection";
 import { creditText } from "../components/common/CreditBadge";
 
 export function SettingsPage({ brand }: { brand: Branding }) {
@@ -45,6 +46,7 @@ export function SettingsPage({ brand }: { brand: Branding }) {
         ))}
       </div>
       <StoreSection orgId={orgId} org={org} canManage={isAdmin} />
+      {isAdmin && <KeiriLinkSection orgId={orgId} org={org} />}
       {isAdmin && <BrandSection key={JSON.stringify(brand)} orgId={orgId} brand={brand} />}
       <MembersSection orgId={orgId} canManage={isAdmin && !isDemo} />
       <StoresSection orgs={orgs} current={orgId} email={email} onSelect={select} />

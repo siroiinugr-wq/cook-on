@@ -10,7 +10,7 @@ import { demoGet, demoListDocs, demoWrite, onDemoWrite } from "./demo";
 import { DEMO_ORG } from "./demoData";
 import { demoAiCall } from "./demoAi";
 import { demoTidyCall } from "./demoTidy";
-import { demoShareCall } from "./demoShare";
+import { demoLinkCall, demoShareCall } from "./demoShare";
 
 type Data = Record<string, unknown>;
 const O = `organizations/${DEMO_ORG}`;
@@ -110,6 +110,9 @@ export async function demoCall<T>(name: string, data: object): Promise<T> {
     case "syncSteps":
     case "confirmLinks":
       return demoTidyCall(name, d) as T;
+    case "createLinkCode":
+    case "revokeLinkCode":
+      return demoLinkCall(name) as T;
     case "estimateRefPrices":
     case "reviewSuggestion":
       return demoShareCall(name, d) as T;

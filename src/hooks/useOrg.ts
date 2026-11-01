@@ -1,5 +1,6 @@
 // いま開いている店舗の情報（名前・クレジット残高・設定）
 import { DEFAULT_TARGET_RATE } from "@shared/cost";
+import { toDate } from "../lib/store";
 import { useDoc } from "./useData";
 
 export interface OrgSettings {
@@ -23,17 +24,21 @@ export interface Org {
   credits: number;
   unlimited: boolean;
   settings: OrgSettings;
+  /** AI経理との自動連携（link/keiri.ts が書く。無ければ連携していない） */
+  keiriLink: { createdAt: Date | null; lastAt: Date | null; count: number; sender: string } | null;
 }
 
 export function useOrg(orgId: string) {
   const { data, loading } = useDoc<Partial<Org>>(`organizations/${orgId}`);
   const unlimited = data?.unlimited === true;
   const s = (data?.settings ?? {}) as Partial<OrgSettings>;
+  const k = (data as { keiriLink?: Record<string, unknown> } | null)?.keiriLink;
   const org: Org = {
     name: data?.name ?? "",
     plan: data?.plan ?? "free",
     credits: unlimited ? Infinity : Number(data?.credits ?? 0),
     unlimited,
+    keiriLink: k ? { createdAt: toDate(k.createdAt), lastAt: toDate(k.lastAt), count: Number(k.count ?? 0), sender: String(k.sender ?? "") } : null,
     settings: {
       targetCostRate: s.targetCostRate || DEFAULT_TARGET_RATE,
       manufacturer: s.manufacturer ?? data?.name ?? "",

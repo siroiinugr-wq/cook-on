@@ -19,3 +19,4 @@ export { onIngredientShared, estimateRefPrices, reviewSuggestion } from "./globa
 export { onPackagingWritten, onPackagingSetWritten } from "./recipes/packagingAlert";
 export { submitUgcProduct, onUgcVoteWritten } from "./ugc/products";
 export { createCheckout, grantCredits } from "./billing/credits";
+export { createLinkCode, receivePurchaseLines, revokeLinkCode } from "./link/keiri";

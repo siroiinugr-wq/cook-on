@@ -52,3 +52,15 @@ describe("仕入れ明細ファイル", () => {
     expect(out.find((l) => l.raw === "クッキングシート")?.ingredientId).toBeNull();
   });
 });
+
+describe("自動で受け取る明細", () => {
+  it("形を確かめて直す（品名・金額が無い行は捨てる、税率は 0・8・10 だけ）", async () => {
+    const { cleanPurchaseLine } = await import("./purchaseLines");
+    expect(cleanPurchaseLine({ name: " 薄力粉 ", amount: 298, taxRate: 7, date: "2026-10-01", taxIncluded: false, extra: 1 })).toEqual({
+      date: "2026-10-01", supplier: "", name: "薄力粉", genericName: "", quantity: null, unitPrice: null, amount: 298, taxRate: 8, taxIncluded: false, ref: "",
+    });
+    expect(cleanPurchaseLine({ name: "", amount: 1 })).toBeNull();
+    expect(cleanPurchaseLine({ name: "a", amount: "1" })).toBeNull();
+    expect(cleanPurchaseLine("x")).toBeNull();
+  });
+});

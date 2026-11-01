@@ -59,7 +59,7 @@ service cloud.firestore {
       allow read: if isMember(orgId);
       // お金と所有者の項目は画面から変えられない（クレジットを書き換える不正を防ぐ）
       allow update: if isAdmin(orgId)
-        && unchanged(['plan', 'credits', 'unlimited', 'ownerUid', 'createdAt', 'stripeCustomerId'])
+        && unchanged(['plan', 'credits', 'unlimited', 'ownerUid', 'createdAt', 'stripeCustomerId', 'keiriLink'])
         && str(request.resource.data.name, 40);
 
       // ロゴ・テーマ色・表示名。ログイン画面で使うので誰でも読める（秘密は置かない）
@@ -73,6 +73,8 @@ service cloud.firestore {
       }
 
       match /members/{uid}    { allow read: if isMember(orgId); allow write: if false; }
+      // AI経理（別のアプリ）から自動で届いた仕入れ明細。書くのは Functions（link/keiri.ts）だけ、読み込んだら画面が消す
+      match /purchaseInbox/{id} { allow read: if isMember(orgId); allow delete: if canEdit(orgId); allow create, update: if false; }
       match /invites/{token}  { allow read: if isAdmin(orgId);  allow write: if false; }
 
       match /ingredients/{id} {

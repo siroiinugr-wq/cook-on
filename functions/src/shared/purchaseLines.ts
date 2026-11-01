@@ -109,3 +109,27 @@ export function parsePurchaseCsv(text: string): { lines: PurchaseLine[]; skipped
   }
   return { lines, skipped };
 }
+
+/** 自動で送るときの1回の行数の上限（レシート数枚ぶん。送る側はレシート1枚ずつ送る） */
+export const PURCHASE_SEND_MAX_LINES = 500;
+
+/** 受け取った JSON の1行を確かめて直す（形が違えば null）。自動で送る・受け取るときに使う */
+export function cleanPurchaseLine(x: unknown): PurchaseLine | null {
+  if (!x || typeof x !== "object") return null;
+  const o = x as Record<string, unknown>;
+  const s = (v: unknown, n: number) => (typeof v === "string" ? v.trim().slice(0, n) : "");
+  const n = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
+  const name = s(o.name, 80);
+  const amount = n(o.amount);
+  if (!name || amount === null) return null;
+  const rate = n(o.taxRate);
+  const date = s(o.date, 10);
+  return {
+    date: /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : "",
+    supplier: s(o.supplier, 60), name, genericName: s(o.genericName, 60),
+    quantity: n(o.quantity), unitPrice: n(o.unitPrice), amount,
+    taxRate: rate === 0 || rate === 8 || rate === 10 ? rate : 8,
+    taxIncluded: o.taxIncluded !== false,
+    ref: s(o.ref, 60),
+  };
+}

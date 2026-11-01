@@ -83,3 +83,23 @@ export function demoInvoiceLines(paths: string[], ings: Ingredient[]): InvoiceLi
     tax: 0.08, supplier: "デモ製菓材料店", date: new Date().toISOString().slice(0, 10), ingredientId: i.id, confidence: 0.9,
   })));
 }
+
+/** デモの「AI経理と連携」：コードを作ると、AI経理から届いた見本の明細を1枚置く */
+export function demoLinkCall(name: string): unknown {
+  const org = demoGet(`organizations/${DEMO_ORG}`) ?? {};
+  if (name === "revokeLinkCode") {
+    delete (org as Record<string, unknown>).keiriLink;
+    demoWrite(`organizations/${DEMO_ORG}`, org);
+    return { ok: true };
+  }
+  const now = new Date().toISOString();
+  demoWrite(`organizations/${DEMO_ORG}`, { ...org, keiriLink: { createdAt: now, lastAt: now, count: 2, sender: "デモ株式会社（AI経理）" } });
+  demoWrite(`organizations/${DEMO_ORG}/purchaseInbox/keiri_demo`, {
+    sender: "デモ株式会社（AI経理）", app: "ai-accounting", receivedAt: now,
+    lines: [
+      { date: now.slice(0, 10), supplier: "業務スーパー", name: "ｸﾞﾗﾆｭｰﾄｳ 1KG", genericName: "グラニュー糖", quantity: 2, unitPrice: 278, amount: 556, taxRate: 8, taxIncluded: true, ref: "demo" },
+      { date: now.slice(0, 10), supplier: "業務スーパー", name: "とちおとめ 300g", genericName: "いちご", quantity: 1, unitPrice: 698, amount: 698, taxRate: 8, taxIncluded: true, ref: "demo" },
+    ],
+  });
+  return { code: "cookon-demo-xxxxxxxxxxxxxxxx" };
+}
