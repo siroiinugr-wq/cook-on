@@ -12,6 +12,7 @@
     "release": "git pull && npm install && npm --prefix functions install && npm run build && firebase deploy --project cook-on-plaz"
   },
   "dependencies": {
+    "fflate": "^0.8.2",
     "firebase": "^12.0.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
