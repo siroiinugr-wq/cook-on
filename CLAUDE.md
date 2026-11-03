@@ -86,10 +86,11 @@ productSizes/{照合キー}                     ネットで確かめた商品�
 ## よく使うコマンド
 Mac で触る前に必ず `git pull`。
 
-**本番に出すのはこの1本だけ**（取り込み→組み立て→ルール・索引・Storage・関数・画面をまとめて出す）。MASA への案内もこれだけを書く：
+**本番に出すのはこの1本だけ**（取り込み→組み立て→ルール・索引・Storage・関数・画面をまとめて出す）。MASA への案内もこれだけを、1つのコピペ用ブロックで書く（cd で移動 → git pull から。全プロジェクト共通の決まり、2026-11-03）：
 ```
-cd ~/cook-on && npm run release
+cd ~/cook-on && git pull && npm run release
 ```
+`release` は部品の一覧（package-lock.json）の手元の書き換えを捨ててから `npm ci` で入れる（`npm install` は一覧を書き換え、次の git pull が止まった。2026-11-03）。
 個別に出したいとき：
 
 ```
