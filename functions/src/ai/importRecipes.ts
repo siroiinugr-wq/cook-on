@@ -5,6 +5,7 @@
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import { importMaxChars, splitForImport } from "../shared/credits";
+import { CONTINUED_NAME } from "../shared/importSplit";
 import type { ImportDoc, ParsedRecipe } from "../shared/importTypes";
 import { isUnit, parseUnit, type Unit } from "../shared/units";
 import { GEMINI_API_KEY, REGION } from "./config";
@@ -49,7 +50,7 @@ export const parseImport = onCall(
       for (let i = 0; i < chunks.length; i += PARALLEL) {
         await Promise.all(chunks.slice(i, i + PARALLEL).map(async (chunk, j) => {
           try {
-            const r = await callGeminiJson<ImportAnswer>({ system: IMPORT_SYSTEM, prompt: chunk, schema: IMPORT_SCHEMA, maxOutputTokens: 8192 });
+            const r = await callGeminiJson<ImportAnswer>({ system: IMPORT_SYSTEM, prompt: chunk, schema: IMPORT_SCHEMA, maxOutputTokens: 32768 });
             answers[i + j] = r.output;
             usage = addUsage(usage, r.usage);
           } catch (e) {
@@ -75,7 +76,18 @@ export const parseImport = onCall(
 
 /** AIの読み取り結果を名寄せしてプレビューの形にする（名寄せは取り込みの料金に含める）。写真からの取り込みも使う */
 export async function buildPreview(orgId: string, answers: (ImportAnswer | null)[]): Promise<{ recipes: ParsedRecipe[]; usage: Usage }> {
-  const raw = answers.flatMap((a) => a?.recipes ?? []).filter((r) => r.name || r.items?.length);
+  // 塊の切れ目で割れたレシピ（name が「（続き）」）は、前のレシピにつなぐ（shared/importSplit.ts）
+  const raw: ImportAnswer["recipes"] = [];
+  for (const r of answers.flatMap((a) => a?.recipes ?? [])) {
+    const prev = raw[raw.length - 1];
+    if (String(r.name ?? "").trim() === CONTINUED_NAME && prev) {
+      prev.items = [...(prev.items ?? []), ...(r.items ?? [])];
+      prev.steps = [...(prev.steps ?? []), ...(r.steps ?? [])];
+      if (r.notes) prev.notes = [prev.notes, r.notes].filter(Boolean).join(" ");
+      continue;
+    }
+    if (r.name || r.items?.length) raw.push({ ...r, name: String(r.name ?? "").trim() === CONTINUED_NAME ? "" : r.name });
+  }
   const names = raw.flatMap((r) => (r.items ?? []).map((it) => it.std || it.raw));
   const org = await loadOrgMatchData(orgId);
   const resolved = await resolveNames(org, names, true);
@@ -134,4 +146,33 @@ export const commitImport = onCall({ region: REGION, memory: "1GiB", timeoutSeco
     await ref.update({ status: "preview" }).catch(() => undefined);
     throw e instanceof HttpsError ? e : new HttpsError("internal", "保存できませんでした。もう一度お試しください。");
   }
+});
+
+/**
+ * 取り込みのやり直し用：この取り込みで作ったレシピを、まとめて一覧からしまう（消さない。履歴も残り、一つずつ戻せる）。
+ * keepEdited なら、取り込んだあとに手で直したレシピ（第2版以降）はしまわない
+ */
+export const archiveImport = onCall({ region: REGION, timeoutSeconds: 300 }, async (req) => {
+  const orgId = idOf(req.data?.orgId, "店舗ID");
+  requireRole(req.auth, orgId, ROLES.EDIT);
+  const importId = idOf(req.data?.importId, "取り込みID");
+  const keepEdited = req.data?.keepEdited !== false;
+  const db = getFirestore();
+  const d = (await db.doc(`organizations/${orgId}/imports/${importId}`).get()).data() as ImportDoc | undefined;
+  if (!d) throw new HttpsError("not-found", "取り込みが見つかりません。");
+  const ids = d.savedRecipeIds ?? [];
+  let archived = 0;
+  let kept = 0;
+  for (let i = 0; i < ids.length; i += 300) {
+    const docs = await db.getAll(...ids.slice(i, i + 300).map((id) => db.doc(`organizations/${orgId}/recipes/${id}`)));
+    const batch = db.batch();
+    for (const doc of docs) {
+      if (!doc.exists || doc.get("archived") === true) continue;
+      if (keepEdited && Number(doc.get("version") ?? 1) > 1) { kept++; continue; }
+      batch.update(doc.ref, { archived: true, updatedAt: FieldValue.serverTimestamp() });
+      archived++;
+    }
+    await batch.commit();
+  }
+  return { archived, kept };
 });
