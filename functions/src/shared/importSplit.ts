@@ -126,16 +126,37 @@ export function splitImportText(text: string, size: number): string[] {
   for (const sec of sections) {
     const m = /^### (.+)\n/.exec(sec);
     const sheet = m ? m[1].trim() : "";
-    const body = m ? sec.slice(m[0].length) : sec;
+    let body = m ? sec.slice(m[0].length) : sec;
+    // 表の前の「【何個分】18個分」などの行は、どの塊にも付ける（表の見出しと間違えない）
+    const notes: string[] = [];
+    while (/^【[^】]+】[^\n]*\n/.test(body)) {
+      const nl = body.indexOf("\n");
+      notes.push(body.slice(0, nl));
+      body = body.slice(nl + 1);
+    }
+    const head = `${sheet ? `### ${sheet}\n` : ""}${notes.map((n) => `${n}\n`).join("")}`;
     const d = delimiterOf(body);
     if (d) {
       const { header, blocks } = tableBlocks(parseDelimited(body, d));
-      const prefix = `${sheet ? `### ${sheet}\n` : ""}${HEADER}${header}\n`;
-      out.push(...pack(blocks, prefix, size, "\n"));
+      out.push(...pack(blocks, `${head}${HEADER}${header}\n`, size, "\n"));
     } else {
       const cleaned = body.replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n");
-      out.push(...pack(textBlocks(cleaned), sheet ? `### ${sheet}\n` : "", size, "\n\n"));
+      out.push(...pack(textBlocks(cleaned), head, size, "\n\n"));
     }
+  }
+  return mergeSmall(out, size);
+}
+
+/**
+ * 小さい塊（Excel の1シート＝1レシピなど）を size 字までまとめる（1シートごとに1クレジット使わないように）。
+ * どの塊も「### シート名」から始まるので、まとめてもAIはシートの区切りが分かる。「前の続き」の塊は必ず新しい塊の先頭にする
+ */
+function mergeSmall(pieces: string[], size: number): string[] {
+  const out: string[] = [];
+  for (const p of pieces) {
+    const last = out[out.length - 1];
+    if (last !== undefined && !p.includes(CONTINUED) && last.length + 2 + p.length <= size) out[out.length - 1] = `${last}\n\n${p}`;
+    else out.push(p);
   }
   return out;
 }

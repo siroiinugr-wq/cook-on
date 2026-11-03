@@ -51,9 +51,13 @@ describe("取り込みの分け方", () => {
     expect(chunks[0].includes(CONTINUED)).toBe(false);
     expect(chunks.slice(1).every((c) => c.split("\n")[1] === CONTINUED)).toBe(true);
   });
-  it("Excel はシートごとに見出しを付ける", () => {
+  it("Excel はシートごとに見出しを付け、小さいシートは1つの塊にまとめる", () => {
     const text = "### 焼菓子\nレシピ名\t材料\nA\tx\n\n### ケーキ\nレシピ名\t材料\nB\ty";
-    const chunks = splitImportText(text, 6000);
-    expect(chunks).toEqual(["### 焼菓子\n【表の見出し】レシピ名\t材料\nA\tx", "### ケーキ\n【表の見出し】レシピ名\t材料\nB\ty"]);
+    expect(splitImportText(text, 6000)).toEqual(["### 焼菓子\n【表の見出し】レシピ名\t材料\nA\tx\n\n### ケーキ\n【表の見出し】レシピ名\t材料\nB\ty"]);
+    expect(splitImportText(text, 50)).toEqual(["### 焼菓子\n【表の見出し】レシピ名\t材料\nA\tx", "### ケーキ\n【表の見出し】レシピ名\t材料\nB\ty"]);
+  });
+  it("【何個分】の行は表の見出しと間違えず、どの塊にも付ける", () => {
+    const text = "### マドレーヌ\n【何個分】18個分\n材料\t分量\t単位\n薄力粉\t300\tg";
+    expect(splitImportText(text, 6000)).toEqual(["### マドレーヌ\n【何個分】18個分\n【表の見出し】材料\t分量\t単位\n薄力粉\t300\tg"]);
   });
 });
