@@ -7,6 +7,10 @@ import type { Recipe } from "@shared/types";
 import { categorySuspect } from "@shared/allergenGuess";
 import { HOMEMADE_HINT, madeFromCandidates, usesIngredient } from "@shared/madeFrom";
 import { HomemadeLinks } from "../components/tidy/HomemadeLinks";
+import { GramsFix } from "../components/tidy/GramsFix";
+import { Link } from "react-router-dom";
+import { unitCostPerGram, yen } from "@shared/cost";
+import { isPieceUnit } from "@shared/invoice";
 import { useOrgCtx } from "../contexts/OrgContext";
 import { useCol } from "../hooks/useData";
 import { useIngredients } from "../hooks/useIngredients";
@@ -19,6 +23,9 @@ import { MergeGroups } from "../components/tidy/MergeGroups";
 import { LabelNames } from "../components/tidy/LabelNames";
 import { LinkCard } from "../components/tidy/LinkCard";
 import { useHashScroll } from "../hooks/useHashScroll";
+
+const HIGH_PER_PIECE = 1000;
+const LOW_PER_PIECE = 10;
 
 export function TidyPage() {
   const { orgId, canEdit, org } = useOrgCtx();
@@ -40,8 +47,14 @@ export function TidyPage() {
   const noPieces = recipes.list.flatMap((r) => {
     if ((r.yield?.pieces ?? 1) !== 1) return [];
     const grams = calcCost(r.items, ings.byId).lines.reduce((t, l) => t + (l.grams ?? 0), 0);
-    return needsPieces(r, grams) ? [{ r, grams, guess: guessPieces([r.name, r.memo ?? "", ...r.steps.map((s) => s.text)]) }] : [];
+    // 材料が重い、または「1個」の原価が1,000円を超える（何個分が入っていないことが多い）
+    const heavy = needsPieces(r, grams) || (r.costCache?.perPiece ?? 0) >= HIGH_PER_PIECE;
+    return heavy ? [{ r, grams, guess: guessPieces([r.name, r.memo ?? "", ...r.steps.map((s) => s.text)]) }] : [];
   });
+  // 1個の原価が極端に安いレシピ（計算に入っていない材料がある・何個分が多すぎる）
+  const tinyCost = recipes.list.filter((r) => r.costCache && r.costCache.perPiece > 0 && r.costCache.perPiece < LOW_PER_PIECE);
+  // 仕入れ値はあるのに「1個」「1本」で買っていて重さが分からず、gに直せない材料
+  const noGrams = byUse(ings.list.filter((i) => !i.madeFrom && i.purchasePrice !== null && unitCostPerGram(i) === null && isPieceUnit(i.purchaseUnit)));
   // お店で作る材料：同じ名前のレシピがあるもの（結ぶだけ）と、名前から自家製らしいもの（レシピを選んでもらう）
   const homemade = useMemo(() => {
     const madeOf = new Map(ings.list.flatMap((i) => (i.madeFrom ? [[i.id, i.madeFrom] as const] : [])));
@@ -82,8 +95,23 @@ export function TidyPage() {
       <Accordion id="price" title={`2. 仕入れ値（${noPrice.length || refPriced.length ? `空${noPrice.length}件・参考価格${refPriced.length}件` : "済み"}）`} summary="よく使う材料から順に。参考価格は目安なので、お店の仕入れ値が分かったら直します">
         <PriceFill orgId={orgId} list={[...noPrice, ...refPriced]} usedIn={usedIn} />
       </Accordion>
-      <Accordion id="pieces" title={`3. 何個分のレシピか（${n(noPieces.length)}）`} summary={`材料が${HEAVY_SINGLE_GRAMS}g以上あるのに「1ロット＝1個」のもの`}>
+      <Accordion id="grams" title={`2b. gに直せない材料（${n(noGrams.length)}）`} summary="「1個」「1本」「1袋」で買っていて重さが分からず、原価に入らない材料。1つの重さを入れます">
+        <GramsFix orgId={orgId} list={noGrams} usedIn={usedIn} />
+      </Accordion>
+      <Accordion id="pieces" title={`3. 何個分のレシピか（${n(noPieces.length)}）`} summary={`材料が${HEAVY_SINGLE_GRAMS}g以上、または1個の原価が${HIGH_PER_PIECE.toLocaleString("ja-JP")}円以上なのに「1ロット＝1個」のもの`}>
         <PiecesFix orgId={orgId} rows={noPieces} />
+      </Accordion>
+      <Accordion id="cheap" title={`3b. 1個の原価が${LOW_PER_PIECE}円未満のレシピ（${n(tinyCost.length)}）`} summary="計算に入っていない材料があるか、何個分が多すぎるかもしれません。開いて確かめます">
+        {tinyCost.length ? (
+          <ul className="divide-y divide-line text-sm">
+            {tinyCost.map((r) => (
+              <li key={r.id} className="flex items-baseline gap-2 py-2">
+                <Link to={`/recipes/${r.id}`} className="min-w-0 flex-1 truncate text-clay-strong underline">{r.name}</Link>
+                <span className="shrink-0 text-xs text-muted">1個 {yen(r.costCache!.perPiece)}・{r.yield?.pieces ?? 1}個分{r.costCache!.missing ? `・計算に入らない材料${r.costCache!.missing}行` : ""}</span>
+              </li>
+            ))}
+          </ul>
+        ) : <p className="text-sm text-muted">ありません。</p>}
       </Accordion>
       <Accordion id="names" title={`4. 名前のないレシピ・レシピでないもの（${n(badNames.length)}）`} summary="名前を付けるか、しまう（消えません）">
         <NamesFix orgId={orgId} list={badNames} />
