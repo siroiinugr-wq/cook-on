@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:rules": "firebase emulators:exec --only firestore --project demo-cook-on \"vitest run -c vitest.rules.config.ts\"",
-    "release": "git pull && npm install && npm --prefix functions install && npm run build && firebase deploy --project cook-on-plaz"
+    "release": "git checkout -- package-lock.json functions/package-lock.json && git pull && npm ci && npm --prefix functions ci && npm run build && firebase deploy --project cook-on-plaz"
   },
   "dependencies": {
     "fflate": "^0.8.2",
