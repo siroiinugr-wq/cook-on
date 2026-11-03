@@ -4,7 +4,7 @@
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { getStorage } from "firebase-admin/storage";
 import { AI_MATCH_BATCH, INVOICE_MAX_PHOTOS, SIZE_SEARCH_BATCH, SIZE_SEARCH_MAX } from "../shared/credits";
-import { INVOICE_UNITS, isPieceUnit, productSizeKey, SIZE_BASES, sameSizePrice, type InvoiceLine, type SizeBasis } from "../shared/invoice";
+import { INVOICE_UNITS, isPieceUnit, looksNonFood, productSizeKey, SIZE_BASES, sameSizePrice, type InvoiceLine, type SizeBasis } from "../shared/invoice";
 import { toExTax } from "../shared/cost";
 import type { Unit } from "../shared/units";
 import { GEMINI_API_KEY, REGION } from "./config";
@@ -105,6 +105,7 @@ export const readInvoices = onCall({ region: REGION, memory: "1GiB", timeoutSeco
               ingredientId: ing?.id ?? null, confidence: ing ? Math.max(0, Math.min(1, Number(l.c) || 0)) : 0, via: "ai",
               generic: String(l.generic ?? "").trim().slice(0, 40),
               ...sizeOf(l, unit),
+              ...(!ing && (l.nf === true || looksNonFood(String(l.name))) ? { notIngredient: true } : {}),
             });
           }
         } catch (e) {
@@ -144,7 +145,7 @@ export const matchPurchaseLines = onCall({ region: REGION, timeoutSeconds: 300, 
 
   return runWithCredits({ orgId, uid, action: "aiMatch", units: batches, requestId }, async () => {
     let usage: Usage = { in: 0, out: 0 };
-    type Match = Pick<InvoiceLine, "ingredientId" | "confidence" | "qty" | "unit" | "generic" | "global" | "size" | "sizeNote" | "gramsPerPiece">;
+    type Match = Pick<InvoiceLine, "ingredientId" | "confidence" | "qty" | "unit" | "generic" | "global" | "size" | "sizeNote" | "gramsPerPiece" | "notIngredient">;
     const out: Match[] = names.map(() => ({ ingredientId: null, confidence: 0, qty: 0, unit: "個", generic: "", global: null, size: "none", sizeNote: "", gramsPerPiece: null }));
     let ok = 0;
     for (let b = 0; b < batches; b++) {
@@ -170,6 +171,7 @@ export const matchPurchaseLines = onCall({ region: REGION, timeoutSeconds: 300, 
             ingredientId: ing?.id ?? null, confidence: ing ? Math.max(0, Math.min(1, Number(l.c) || 0)) : 0,
             qty: Number(l.qty) > 0 ? Number(l.qty) : 0, unit,
             generic: String(l.generic ?? "").trim().slice(0, 40), global: null, ...sizeOf(l, unit),
+            notIngredient: !ing && !fixed[at] && l.nf === true,
           };
         }
       } catch (e) {

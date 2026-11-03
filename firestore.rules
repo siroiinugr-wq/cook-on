@@ -86,6 +86,14 @@ service cloud.firestore {
         match /priceHistory/{h} { allow read: if isMember(orgId); allow write: if false; }
       }
 
+      // 仕入れの画面で「今後も読み込まない」にした品名（ゴミ袋・ケーブルなど）。id は品名の照合キー
+      match /purchaseIgnore/{id} {
+        allow read: if isMember(orgId);
+        allow create, update: if canEdit(orgId) && request.resource.data.keys().hasOnly(['name', 'updatedAt', 'createdAt', 'createdBy'])
+          && str(request.resource.data.name, 80);
+        allow delete: if canEdit(orgId);
+      }
+
       // 包装資材とセット：材料と同じく画面から書ける。値段やセットを直すとトリガがレシピの原価を計算し直す
       match /packaging/{id} {
         allow read: if isMember(orgId);

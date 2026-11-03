@@ -8,6 +8,8 @@ import { categorySuspect } from "@shared/allergenGuess";
 import { HOMEMADE_HINT, madeFromCandidates, usesIngredient } from "@shared/madeFrom";
 import { HomemadeLinks } from "../components/tidy/HomemadeLinks";
 import { GramsFix } from "../components/tidy/GramsFix";
+import { PlainNames } from "../components/tidy/PlainNames";
+import { looksMextName } from "@shared/mext";
 import { Link } from "react-router-dom";
 import { unitCostPerGram, yen } from "@shared/cost";
 import { isPieceUnit } from "@shared/invoice";
@@ -121,6 +123,9 @@ export function TidyPage() {
       </Accordion>
       <Accordion id="merge" title={`6. 材料の表記ゆれ（${n(groups.length, "組")}）`} summary="きび砂糖／キビ糖のような同じ材料を1つにまとめます">
         <MergeGroups orgId={orgId} groups={groups} usedIn={usedIn} />
+      </Accordion>
+      <Accordion id="plain" title={`6b. 成分表の名前のままの材料（${n(ings.list.filter((i) => looksMextName(i.name)).length)}）`} summary="「（キャベツ類） キャベツ 結球葉 生」のような名前を、お店の呼び方に直します">
+        <PlainNames orgId={orgId} list={ings.list.filter((i) => looksMextName(i.name))} />
       </Accordion>
       <Accordion id="label" title={`7. ラベルの名前（${n(ings.list.filter((x) => !x.labelName?.trim()).length)}）`} summary="キビ糖→きび砂糖、薄力粉→小麦粉のように、品質表示に出す名前。AIが案を出し、最後に確かめます">
         <LabelNames orgId={orgId} list={byUse(ings.list)} usedIn={usedIn} credits={org.credits} />

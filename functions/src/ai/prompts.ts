@@ -265,6 +265,7 @@ export const INVOICE_SYSTEM = `あなたは製菓店・飲食店の仕入れ担�
 - ingredient には、下の「お店の材料」の一覧から同じ材料の番号を選ぶ。商品名・ブランド・規格が違っても同じ材料なら選ぶ（例：よつ葉バター食塩不使用 450g → 無塩バター）。違う材料（発酵バターと無塩バター、薄力粉と強力粉など）は選ばない。無ければ -1。c は選んだ自信（0〜1）。
 - generic は一般的な材料名（食品成分表で探せる名前。例：ﾊｸﾘｷｺ 1KG → 薄力粉、よつ葉バター食塩不使用 → 無塩バター、ｸﾞﾗﾆｭｰﾄｳ → グラニュー糖）。ブランド・量は入れない。食材でないもの（袋・資材・文房具）は空。
 - 読めない文字は推測しない。読めない行は入れない。
+- nf は、お店の材料（食材）でも包装資材（袋・箱・シール・カップなど売る品を包むもの）でもない品なら true（ゴミ袋・レジ袋・ケーブル・洗剤・文房具・お店の人が食べたお弁当や軽食・ファミチキなど）。迷えば false。
 ${SIZE_RULES}`;
 
 export const INVOICE_SCHEMA = {
@@ -279,9 +280,9 @@ export const INVOICE_SCHEMA = {
         properties: {
           name: { type: "string" }, price: { type: "number" }, count: { type: "number" }, qty: { type: "number" }, unit: { type: "string" },
           tax: { type: "number" }, ingredient: { type: "integer" }, c: { type: "number" }, generic: { type: "string" },
-          sb: { type: "string", enum: ["printed", "known", "price", "none"] }, sn: { type: "string" }, gpp: { type: "number" },
+          sb: { type: "string", enum: ["printed", "known", "price", "none"] }, sn: { type: "string" }, gpp: { type: "number" }, nf: { type: "boolean" },
         },
-        required: ["name", "price", "count", "qty", "unit", "tax", "ingredient", "c", "generic", "sb", "sn", "gpp"],
+        required: ["name", "price", "count", "qty", "unit", "tax", "ingredient", "c", "generic", "sb", "sn", "gpp", "nf"],
       },
     },
   },
@@ -303,6 +304,7 @@ export const PURCHASE_MATCH_SYSTEM = `あなたは製菓店・飲食店の仕入
 - 品名のあとの［］は手がかり（書き出したアプリの推定した一般名・1つの値段・数量・店・いまの量の読み・お店の材料の前回の量と値段）。一般名が違っていれば直す。
 - 「結び先は決まっています」と書いた行は量だけ答える（ingredient は -1 でよい）。
 - 答えは lines に、聞かれた行と同じ番号（n）で入れる。
+- nf は、お店の材料（食材）でも包装資材（袋・箱・シール・カップなど売る品を包むもの）でもない品なら true（ゴミ袋・レジ袋・ケーブル・洗剤・文房具・お店の人が食べたお弁当や軽食・ファミチキなど）。迷えば false。
 ${SIZE_RULES}`;
 
 export const PURCHASE_MATCH_SCHEMA = {
@@ -314,9 +316,9 @@ export const PURCHASE_MATCH_SCHEMA = {
         type: "object",
         properties: {
           n: { type: "integer" }, ingredient: { type: "integer" }, c: { type: "number" }, qty: { type: "number" }, unit: { type: "string" }, generic: { type: "string" },
-          sb: { type: "string", enum: ["printed", "known", "price", "none"] }, sn: { type: "string" }, gpp: { type: "number" },
+          sb: { type: "string", enum: ["printed", "known", "price", "none"] }, sn: { type: "string" }, gpp: { type: "number" }, nf: { type: "boolean" },
         },
-        required: ["n", "ingredient", "c", "qty", "unit", "generic", "sb", "sn", "gpp"],
+        required: ["n", "ingredient", "c", "qty", "unit", "generic", "sb", "sn", "gpp", "nf"],
       },
     },
   },
@@ -329,6 +331,8 @@ export interface PurchaseMatchAnswer {
 
 /** AIが答える量の根拠（sb）・理由（sn）・1つの重さ（gpp） */
 export interface SizeAnswer {
+  /** お店の材料・資材ではない品 */
+  nf?: boolean;
   sb?: string;
   sn?: string;
   gpp?: number;
