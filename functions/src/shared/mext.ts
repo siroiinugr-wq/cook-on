@@ -8,6 +8,7 @@
 //
 // 利用条件：成分表のデータは自由に使ってよいが、アプリでも出典を書く（文部科学省の案内）。画面は MEXT_CREDIT を出す。
 import type { AllergenId } from "./allergens";
+import { CATEGORY_LABEL } from "./allergenGuess";
 
 export const MEXT_EDITION = "日本食品標準成分表（八訂）増補2023年";
 export const MEXT_CREDIT = `成分値の出典：文部科学省「${MEXT_EDITION}」`;
@@ -103,7 +104,7 @@ const ALLERGEN_RULES: { id: AllergenId; re: RegExp; groups?: string[] }[] = [
   { id: "crab", re: /かに|がに/, groups: ["10"] },
   { id: "squid", re: /いか/, groups: ["10"] },
   { id: "salmonroe", re: /いくら|すじこ/, groups: ["10"] },
-  { id: "salmon", re: /さけ|サーモン/, groups: ["10"] },
+  { id: "salmon", re: /さけ|ざけ|サーモン|ます|トラウト/, groups: ["10"] },
   { id: "mackerel", re: /さば/, groups: ["10"] },
   { id: "abalone", re: /あわび/, groups: ["10"] },
   { id: "beef", re: /うし|牛/, groups: ["11"] },
@@ -115,7 +116,9 @@ const ALLERGEN_RULES: { id: AllergenId; re: RegExp; groups?: string[] }[] = [
 
 export function guessMextAllergens(code: string, name: string): AllergenId[] {
   const g = code.slice(0, 2);
-  const hits = ALLERGEN_RULES.filter((r) => (!r.groups || r.groups.includes(g)) && r.re.test(name)).map((r) => r.id);
+  // 分類の見出し（＜えび・かに類＞・（さば類）など）は外して、食品そのものの名前で見る（あまえびに「かに」が付いていた）
+  const own = name.replace(CATEGORY_LABEL, " ");
+  const hits = ALLERGEN_RULES.filter((r) => (!r.groups || r.groups.includes(g)) && r.re.test(own)).map((r) => r.id);
   return [...new Set(hits)];
 }
 
@@ -175,4 +178,25 @@ export function findMextFor(tokens: string[], foods: MextFood[]): MextFood | nul
     const segs = mextSegments(f.name);
     return want.every((t) => segs.includes(t));
   }) ?? null;
+}
+
+/**
+ * 成分表の名前を、お店の材料の名前に使える形にする（分類の見出し・状態を外す）。
+ * 「（キャベツ類） キャベツ 結球葉 生」→「キャベツ 結球葉」。以前は成分表の名前のまま登録され、読みにくかった
+ */
+export function plainFoodName(name: string): string {
+  const segs = name.normalize("NFKC").replace(CATEGORY_LABEL, " ").replace(/[［\[]([^］\]]*)[］\]]/g, "$1").split(/\s+/).filter(Boolean);
+  while (segs.length > 1 && STATE_WORDS.has(segs[segs.length - 1])) segs.pop();
+  return segs.join(" ").slice(0, 60);
+}
+
+/** 共有の材料に結んで新しく作る材料の名前。成分表（mext_*）はお店の呼び方（無ければ整えた名前）、ほかは共有の名前 */
+export function shopNameFor(globalId: string | null | undefined, globalName: string, own: string): string {
+  if (!globalId?.startsWith("mext_")) return globalName.slice(0, 60);
+  return (own.trim() || plainFoodName(globalName)).slice(0, 60);
+}
+
+/** 成分表の名前のまま登録された材料か（＜…＞・（…類）が付いている） */
+export function looksMextName(name: string): boolean {
+  return /[＜<][^＞>]*[＞>]|[（(][^）)]*類[）)]/.test(name);
 }

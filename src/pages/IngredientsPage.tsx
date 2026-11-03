@@ -17,7 +17,7 @@ import { PhotoThumb } from "../components/ingredient/PhotoThumb";
 
 export function IngredientsPage() {
   const { orgId, uid, canEdit } = useOrgCtx();
-  const { list, loading } = useIngredients(orgId);
+  const { list, byId, loading } = useIngredients(orgId);
   const recipes = useCol<Recipe>(`organizations/${orgId}/recipes`, { where: [["archived", "==", false]] });
   const [q, setQ] = useState("");
   const [onlyMissing, setOnlyMissing] = useState(false);
@@ -103,7 +103,7 @@ export function IngredientsPage() {
           })}
         </ul>
       )}
-      {edit && <IngredientSheet orgId={orgId} uid={uid} ing={edit === "new" ? null : edit} usedIn={edit === "new" ? 0 : usedIn.get(edit.id) ?? 0} usedBy={edit === "new" ? [] : usedBy.get(edit.id) ?? []} onClose={close} />}
+      {edit && <IngredientSheet orgId={orgId} uid={uid} ing={edit === "new" ? null : edit} usedIn={edit === "new" ? 0 : usedIn.get(edit.id) ?? 0} usedBy={edit === "new" ? [] : usedBy.get(edit.id) ?? []} recipes={recipes.list} ingById={byId} onClose={close} />}
     </div>
   );
 }

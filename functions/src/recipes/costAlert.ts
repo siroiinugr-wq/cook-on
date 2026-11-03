@@ -9,8 +9,9 @@ import { deriveRecipe, sanitizeRecipe } from "../shared/recipe";
 import type { CostCache, Ingredient } from "../shared/types";
 import { REGION } from "../ai/config";
 import { loadIngredientMap, loadPackaging } from "./save";
+import { syncMadeFrom } from "./madeFrom";
 
-const WATCH: (keyof Ingredient)[] = ["purchasePrice", "purchaseQty", "purchaseUnit", "gramsPerPiece", "gramsPerMl", "allergens"];
+const WATCH: (keyof Ingredient)[] = ["purchasePrice", "purchaseQty", "purchaseUnit", "gramsPerPiece", "gramsPerMl", "allergens", "allergensConfirmed"];
 
 /**
  * 変わったもの（材料・包装資材・包装セット）を使うレシピの原価・アレルゲン・包装の列を計算し直し、
@@ -54,6 +55,8 @@ export async function recalcRecipes(orgId: string, recipes: QueryDocumentSnapsho
     }
   }
   await batch.close();
+  // 計算し直したレシピから作る自家製の材料にも入れ直す（その材料のトリガが、使っているレシピをまた計算し直す）
+  await syncMadeFrom(orgId, recipes.map((r) => r.id));
 }
 
 export const onIngredientWritten = onDocumentWritten(
@@ -62,6 +65,10 @@ export const onIngredientWritten = onDocumentWritten(
     const { orgId, ingredientId } = event.params;
     const before = event.data?.before.data() as Ingredient | undefined;
     const after = event.data?.after.data() as Ingredient | undefined;
+    // 自家製の材料をレシピに結んだ（結び先を変えた）ら、そのレシピから値段・アレルゲンを入れる
+    if (after?.madeFrom && after.madeFrom !== before?.madeFrom) {
+      await syncMadeFrom(orgId, [after.madeFrom], ingredientId);
+    }
     if (!before || !after) return; // 新しく作った・消したときは、使っているレシピがまだ無い／保存時に計算し直す
     if (!WATCH.some((k) => JSON.stringify(before[k] ?? null) !== JSON.stringify(after[k] ?? null))) return;
 

@@ -69,7 +69,7 @@ export const parseImportPhotos = onCall(
             const r = await callGeminiJson<ImportAnswer>({
               system: IMPORT_SYSTEM + IMPORT_PHOTO_NOTE,
               prompt: `${first}〜${first + group.length - 1}枚目の写真です。レシピを読み取ってください。`,
-              images, schema: IMPORT_SCHEMA, maxOutputTokens: 8192,
+              images, schema: IMPORT_SCHEMA, maxOutputTokens: 32768,
             });
             answers[g] = r.output;
             usage = addUsage(usage, r.usage);

@@ -50,3 +50,23 @@ export function formatQty(qty: number | null): string {
   if (qty >= 10) return String(Math.round(qty * 10) / 10);
   return String(Math.round(qty * 100) / 100);
 }
+
+// よく使う材料の「1個・1本・1袋」の重さの目安（g）。gに直せない材料の欄に初めから入れておき、お店が確かめて確定する
+const PIECE_GRAMS: [RegExp, number][] = [
+  [/卵|たまご|玉子/, 50],
+  [/牛乳|ミルク/, 1030],
+  [/生クリーム|クリーム/, 200],
+  [/砂糖|グラニュー糖|上白糖|三温糖|きび糖|キビ糖|粉糖|てんさい糖/, 1000],
+  [/小麦粉|薄力粉|強力粉|中力粉|準強力粉/, 1000],
+  [/バナナ/, 100],
+  [/ブルーベリー|ラズベリー|いちご|苺|イチゴ/, 100],
+  [/レモン/, 100],
+  [/りんご|リンゴ/, 300],
+  [/バター/, 200],
+];
+
+/** 名前から「1個・1本・1袋」の重さの目安。分からなければ null */
+export function typicalPieceGrams(name: string): number | null {
+  const s = name.normalize("NFKC");
+  return PIECE_GRAMS.find(([re]) => re.test(s))?.[1] ?? null;
+}

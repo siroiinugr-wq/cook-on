@@ -45,6 +45,8 @@ export interface InvoiceLine {
   sizeNote?: string;
   /** 個・枚・本で買うものの1つの重さ（g。卵M＝約50g）。材料に無ければ反映のとき写す */
   gramsPerPiece?: number | null;
+  /** お店の材料・資材ではなさそうな品（ゴミ袋・ケーブル・お店で食べた軽食など）。AIか名前で判断し、初めは選ばない */
+  notIngredient?: boolean;
 }
 
 export type SizeBasis = "printed" | "known" | "price" | "web" | "none" | "edited";
@@ -204,6 +206,20 @@ export function fromPurchaseLines(lines: PurchaseLine[], ings: Pick<Ingredient, 
         confidence: hit ? 1 : near && near.score >= 0.85 ? near.score * 0.8 : 0,
         via: hit ? "name" as const : "similar" as const,
         ...(l.genericName ? { generic: l.genericName } : {}),
+        ...(!hit && looksNonFood(l.name) ? { notIngredient: true } : {}),
       };
     });
+}
+
+// 材料・包装資材ではない品（AI経理から届く明細には、日用品や家電、お店で食べた軽食も混ざる）。名前だけで分かるものは無料で外す
+const NON_FOOD = /ゴミ袋|ごみ袋|ポリ袋|レジ袋|ケーブル|充電|電池|乾電池|USB|イヤホン|洗剤|ハンドソープ|漂白|ティッシュ|トイレット|キッチンペーパー|ペーパータオル|ゴム手袋|手袋|マスク|スポンジ|たわし|文具|ボールペン|ノート|封筒|切手|はがき|収入印紙|コピー|印刷|電球|ガソリン|灯油|タバコ|たばこ|雑誌|新聞|ファミチキ|からあげクン|Lチキ|ななチキ|おにぎり|弁当|サンドイッチ|ホットスナック|肉まん|ポイント|レジ袋代|駐車/i;
+
+/** 名前から、お店の材料・資材ではなさそうか（初めは選ばず「材料ではなさそうな品」にまとめる） */
+export function looksNonFood(name: string): boolean {
+  return NON_FOOD.test(name.normalize("NFKC"));
+}
+
+/** 「この品は今後も読み込まない」の目印（organizations/{orgId}/purchaseIgnore/{key}）。品名の照合キーから数字（量・値段）を外したもの */
+export function ignoreKey(name: string): string {
+  return toMatchKey(name).replace(/[0-9]+(?:\.[0-9]+)?(?:kg|g|ml|l|個|枚|本|p|入)?/g, "").slice(0, 80);
 }

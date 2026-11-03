@@ -42,6 +42,8 @@ export interface Ingredient {
   refWeb?: RefWeb | null;
   /** ネットで値段を比べた結果（shared/offers.ts。選んだ候補 picked も） */
   offers?: WebOffers | null;
+  /** 自家製の材料（タルト生地・クレームダマンドなど）を作るレシピの id。値段・アレルゲンはそのレシピから計算して入る（shared/madeFrom.ts） */
+  madeFrom?: string | null;
   supplier?: string;
   /** 写真（Storage のパス orgs/{orgId}/ingredients/… か、既製品から写した ugc/…） */
   photoPath?: string | null;

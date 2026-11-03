@@ -220,6 +220,21 @@ export async function demoAiCall<T>(name: string, d: Data): Promise<T> {
       demoWrite(path, { ...imp, status: "saved", savedRecipeIds: ids, recipes: d.recipes });
       return { saved: ids.length } as T;
     }
+    case "archiveImport": {
+      // デモ：この取り込みで作ったレシピをしまう（手で直した＝第2版以降は残す）
+      const imp = demoGet(`${O}/imports/${d.importId}`);
+      let archived = 0;
+      let kept = 0;
+      for (const id of (imp?.savedRecipeIds as string[] | undefined) ?? []) {
+        const p = `${O}/recipes/${id}`;
+        const r = demoGet(p);
+        if (!r || r.archived) continue;
+        if (d.keepEdited !== false && Number(r.version ?? 1) > 1) { kept++; continue; }
+        demoWrite(p, { ...r, archived: true });
+        archived++;
+      }
+      return { archived, kept } as T;
+    }
     case "readProductPhoto": {
       const paths = (d.paths as string[]) ?? [];
       return demoWithCredits("productPhoto", paths.length, async () => ({

@@ -2,6 +2,7 @@
 // - 店舗の材料に結びついた行 → その材料
 // - 共有マスターに結びついた行 → 同じ共有マスターを使う店舗の材料があればそれ、無ければ作る（仕入れ値は空）
 // - 結びつかなかった行 → 名前で新しい材料を作る（同じ名前は1つにまとめる）
+import { shopNameFor } from "../shared/mext";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import { suggestAllergens } from "../shared/allergenGuess";
 import type { ParsedRecipe } from "../shared/importTypes";
@@ -30,12 +31,12 @@ export async function saveImportedRecipes(orgId: string, uid: string, recipes: P
     const gl = globalId ? g.byId.get(globalId) : undefined;
     const ing: Ingredient = {
       id: db.collection(`${org}/ingredients`).doc().id,
-      name: (gl?.name ?? name).slice(0, 60),
+      name: gl ? shopNameFor(gl.id, gl.name, name) : name.slice(0, 60),
       purchasePrice: null,
       purchaseQty: 1,
       purchaseUnit: "kg",
       // 共有の材料のアレルゲンに、名前からの推定を足す（お店が確かめるまでは「未確認」のまま）
-      allergens: suggestAllergens([], `${name} ${gl?.name ?? ""}`, gl?.allergens ?? []),
+      allergens: suggestAllergens([], `${name} ${gl?.name ?? ""}`, gl?.allergens ?? [], gl?.id),
       globalRef: gl ? gl.id : null,
     };
     newIngs.push(ing);

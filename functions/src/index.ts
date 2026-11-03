@@ -5,7 +5,7 @@ initializeApp();
 export { syncMemberClaims, createOrganization } from "./core/auth";
 export { createInvite, revokeInvite, peekInvite, acceptInvite } from "./core/invite";
 export { suggestIngredients, aiMatchIngredients } from "./ai/normalize";
-export { parseImport, commitImport } from "./ai/importRecipes";
+export { parseImport, commitImport, archiveImport } from "./ai/importRecipes";
 export { parseImportPhotos } from "./ai/importPhotos";
 export { guessProduct, aiSuggest } from "./ai/assist";
 export { readProductPhoto } from "./ai/productPhoto";

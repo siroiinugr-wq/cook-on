@@ -158,7 +158,8 @@ describe("クレジット", () => {
     const chunks = splitForImport(text);
     expect(chunks.length).toBe(3);
     expect(chunks.every((c) => c.length <= 6000)).toBe(true);
-    expect(chunks.join("\n")).toBe(text);
+    // 段落の途中で切った2つめ以降の塊は「前の続き」で始まる
+    expect(chunks.slice(1).every((c) => c.startsWith("【前の続き】"))).toBe(true);
     expect(importCredits(text)).toBe(3);
     expect(importCredits("   ")).toBe(0);
   });

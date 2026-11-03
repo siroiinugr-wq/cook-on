@@ -18,7 +18,7 @@ service cloud.firestore {
     function validIngredient() {
       let d = request.resource.data;
       return d.keys().hasOnly(['name', 'purchasePrice', 'purchaseQty', 'purchaseUnit', 'gramsPerPiece', 'gramsPerMl',
-                               'allergens', 'allergensConfirmed', 'aliases', 'labelName', 'isAdditive', 'globalRef', 'supplier', 'memo', 'photoPath', 'priceTax', 'priceSource', 'refWeb', 'offers',
+                               'allergens', 'allergensConfirmed', 'aliases', 'labelName', 'isAdditive', 'globalRef', 'supplier', 'memo', 'photoPath', 'priceTax', 'priceSource', 'refWeb', 'offers', 'madeFrom',
                                'updatedAt', 'createdAt', 'createdBy'])
         && str(d.name, 60) && d.name.size() > 0
         && numOrNull(d.purchasePrice)
@@ -31,7 +31,8 @@ service cloud.firestore {
         && str(d.get('labelName', ''), 300) && str(d.get('supplier', ''), 60) && str(d.get('memo', ''), 300)
         && (d.get('photoPath', null) == null || str(d.photoPath, 300))
         && d.get('priceTax', 0) in [0, 0.08, 0.1]
-        && d.get('priceSource', null) in [null, 'ref'];
+        && d.get('priceSource', null) in [null, 'ref']
+        && (d.get('madeFrom', null) == null || str(d.madeFrom, 60));
     }
 
     // 包装資材（袋・脱酸素剤など）。値段は税抜。priceTax は入れたときの形（材料と同じ 0・0.08・0.1）
@@ -83,6 +84,14 @@ service cloud.firestore {
         // 消してもレシピには材料名が残る（原価は「単価なし」になる）
         allow delete: if canEdit(orgId);
         match /priceHistory/{h} { allow read: if isMember(orgId); allow write: if false; }
+      }
+
+      // 仕入れの画面で「今後も読み込まない」にした品名（ゴミ袋・ケーブルなど）。id は品名の照合キー
+      match /purchaseIgnore/{id} {
+        allow read: if isMember(orgId);
+        allow create, update: if canEdit(orgId) && request.resource.data.keys().hasOnly(['name', 'updatedAt', 'createdAt', 'createdBy'])
+          && str(request.resource.data.name, 80);
+        allow delete: if canEdit(orgId);
       }
 
       // 包装資材とセット：材料と同じく画面から書ける。値段やセットを直すとトリガがレシピの原価を計算し直す

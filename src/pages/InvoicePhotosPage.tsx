@@ -1,10 +1,11 @@
 // レシート・納品書から仕入れ値を入れる：撮る → まとめて読み取る（1枚1クレジット）→ 明細ごとにお店の材料を確かめて反映。
 // 撮影と一覧は「写真から取り込み」と同じ部品（一覧はお店ごと・この画面専用にためる）。値段が変わると原価の計算し直しと値段の記録は材料のトリガが行う
+import { shopNameFor } from "@shared/mext";
 import { Link } from "react-router-dom";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { aiMatchCredits, CREDIT_COST, INVOICE_MAX_PHOTOS, SIZE_SEARCH_MAX, sizeSearchCredits } from "@shared/credits";
 import { PRICE_TAX_OPTIONS, yen } from "@shared/cost";
-import { fromPurchaseLines, invoicePatch, INVOICE_UNITS, isPieceUnit, needsWebSize, per100, SIZE_LABEL, sizeDoubt, sizeHint, type InvoiceLine } from "@shared/invoice";
+import { fromPurchaseLines, ignoreKey, invoicePatch, INVOICE_UNITS, isPieceUnit, needsWebSize, per100, SIZE_LABEL, sizeDoubt, sizeHint, type InvoiceLine } from "@shared/invoice";
 import type { Ingredient } from "@shared/types";
 import { suggestAllergens } from "@shared/allergenGuess";
 import type { GlobalIngredient } from "@shared/types";
@@ -27,6 +28,7 @@ import { CameraShooter } from "../components/import/CameraShooter";
 import { CaptureTray } from "../components/import/CaptureTray";
 import { numText } from "../lib/num";
 import { WebSources } from "../components/common/WebSources";
+import { IngredientPicker } from "../components/ingredient/IngredientPicker";
 import { cheapestPer100 } from "@shared/offers";
 
 /** tried＝AIで探した（見つからなかった行をもう一度クレジットで探さない）、sizeTried＝AIで量を確かめた、webTried＝ネットで確かめた */
@@ -34,10 +36,13 @@ type Row = InvoiceLine & { use: boolean; target: string; tried?: boolean; sizeTr
 const NEW = "__new__";
 /** 読んだ明細を画面の行にする。お店の材料に無くても、共有の材料（成分表つき）が見つかれば「新しく登録」を選んでおく */
 const toRow = (l: InvoiceLine, min: number): Row => {
+  if (l.notIngredient && !l.ingredientId) return { ...l, use: false, target: "" };
   if (l.ingredientId) return { ...l, use: l.confidence >= min, target: l.ingredientId };
   if (l.global) return { ...l, use: l.global.confidence >= 0.6, target: NEW };
   return { ...l, use: false, target: "" };
 };
+/** 除外した品の文書の id（照合キーは日本語なので、そのまま id にできる形にする） */
+const ignoreId = (raw: string) => encodeURIComponent(ignoreKey(raw)).slice(0, 400);
 const SAVE_KEY = (orgId: string) => `cookon-invoice-${orgId}`;
 /** AI経理（別のアプリ）。仕入れ明細ファイルを書き出せる */
 const KEIRI_URL = "https://keiri.iwakuni-design.com";
@@ -70,6 +75,29 @@ export function InvoicePhotosPage() {
   });
   useEffect(() => { localStorage.setItem(SAVE_KEY(orgId), JSON.stringify(rows)); }, [rows, orgId]);
 
+  // 「今後も読み込まない」にした品（お店ごと。organizations/{orgId}/purchaseIgnore/{ignoreKey}）
+  const ignored = useCol<{ name: string }>(`organizations/${orgId}/purchaseIgnore`).list;
+  const ignoreSet = useMemo(() => new Set(ignored.map((d) => d.id)), [ignored]);
+  /** 除外した品を外して行にする。外した数も返す */
+  const fresh = (lines: InvoiceLine[], min: number): [Row[], number] => {
+    const keep = lines.filter((l) => !ignoreSet.has(ignoreId(l.raw)));
+    return [keep.map((l) => toRow(l, min)), lines.length - keep.length];
+  };
+  const ignoreNote = (n: number) => (n ? `（前に「今後も読み込まない」にした${n}行は飛ばしました）` : "");
+  /** 行を消して、同じ品名を今後も読み込まないように覚える */
+  async function ignoreRows(ks: number[]) {
+    const targets = ks.map((k) => rows[k]).filter(Boolean);
+    setRows((cur) => cur.filter((_, j) => !ks.includes(j)));
+    try {
+      await Promise.all(targets.map((r) => {
+        return ignoreKey(r.raw) ? saveDoc(`organizations/${orgId}/purchaseIgnore/${ignoreId(r.raw)}`, { name: r.raw.slice(0, 80) }) : undefined;
+      }));
+      setMsg(`${targets.length}行を除外しました。同じ品名は次から読み込みません（この画面のいちばん下の「除外した品」で戻せます）。`);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    }
+  }
+
   const count = tray.items.length;
   const credits = count * CREDIT_COST.invoicePhoto;
   const byId = useMemo(() => new Map(ings.list.map((i) => [i.id, i])), [ings.list]);
@@ -95,8 +123,9 @@ export function InvoicePhotosPage() {
         },
       });
       if (!r) return;
-      setRows((cur) => [...cur, ...r.lines.map((l) => toRow(l, 0.5))]);
-      setMsg(`${r.read}枚から${r.lines.length}行を読み取りました${r.read < r.photos ? `（${r.photos - r.read}枚は読めず、その分のクレジットは使っていません）` : ""}。結び先と値段を確かめて「反映」を押してください。`);
+      const [got, skippedN] = fresh(r.lines, 0.5);
+      setRows((cur) => [...cur, ...got]);
+      setMsg(`${r.read}枚から${r.lines.length}行を読み取りました${ignoreNote(skippedN)}${r.read < r.photos ? `（${r.photos - r.read}枚は読めず、その分のクレジットは使っていません）` : ""}。結び先と値段を確かめて「反映」を押してください。`);
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
     } finally {
@@ -120,11 +149,13 @@ export function InvoicePhotosPage() {
   }
 
   function addLines(lines: PurchaseLine[], skipped: number, head = "") {
-    const got = fromPurchaseLines(lines, ings.list);
-    if (!got.length) throw new Error("値段の入った明細が見つかりませんでした。");
-    setRows((cur) => [...cur, ...got.map((l) => toRow(l, 0.85))]);
+    const all = fromPurchaseLines(lines, ings.list);
+    if (!all.length) throw new Error("値段の入った明細が見つかりませんでした。");
+    const [got, skippedN] = fresh(all, 0.85);
+    setRows((cur) => [...cur, ...got]);
     const linked = got.filter((l) => l.ingredientId).length;
-    setMsg(`${head}${lines.length}行から${got.length}品を読み込みました（同じ品名は一番新しい値段だけ）。${linked}品は名前で結べました${skipped ? `。読めない${skipped}行は飛ばしました` : ""}。`);
+    const nf = got.filter((l) => l.notIngredient && !l.target).length;
+    setMsg(`${head}${lines.length}行から${got.length}品を読み込みました（同じ品名は一番新しい値段だけ）${ignoreNote(skippedN)}。${linked}品は名前で結べました${nf ? `。材料ではなさそうな${nf}品は下にまとめました` : ""}${skipped ? `。読めない${skipped}行は飛ばしました` : ""}。`);
   }
 
   async function loadFile(f: File) {
@@ -142,7 +173,7 @@ export function InvoicePhotosPage() {
   // 量が怪しい＝量が分からない・個で買うのに1つの重さが分からない・今の材料の100gあたりと大きく違う。1回に200行まで（サーバーの上限）
   const doubt = (r: Row) => (r.sizeTried ? null : sizeDoubt(r, byId.get(r.target)));
   const todo = rows.map((r, k) => ({ r, k }))
-    .filter(({ r }) => (!r.target && !r.tried) || (!!r.target && !!doubt(r)))
+    .filter(({ r }) => (!r.target && !r.tried && !r.notIngredient) || (!!r.target && !!doubt(r)))
     .slice(0, 200);
   const looseN = todo.filter(({ r }) => !r.target).length;
   const sizeN = todo.length - looseN;
@@ -155,7 +186,7 @@ export function InvoicePhotosPage() {
       const hints = todo.map(({ r }) => r.generic ?? "");
       const fixed = todo.map(({ r }) => !!r.target);
       const clues = todo.map(({ r }) => sizeHint(r, byId.get(r.target)));
-      type Match = Pick<InvoiceLine, "ingredientId" | "confidence" | "qty" | "unit" | "generic" | "global" | "size" | "sizeNote" | "gramsPerPiece">;
+      type Match = Pick<InvoiceLine, "ingredientId" | "confidence" | "qty" | "unit" | "generic" | "global" | "size" | "sizeNote" | "gramsPerPiece" | "notIngredient">;
       const res = await run({
         title: "仕入れ明細をAIで判断する", credits: aiMatchCredits(names.length),
         detail: `${[looseN && `結び先が決まっていない${looseN}行はお店の材料から探し`, sizeN && `${sizeN}行は量（重さ・入り数・1つの重さ）を品名と値段から確かめ`].filter(Boolean).join("、")}ます。反映するのは確かめてからです。`,
@@ -177,13 +208,16 @@ export function InvoicePhotosPage() {
           ...(useSize ? { qty: m.qty, unit: m.unit, size: m.size, sizeNote: m.sizeNote } : {}),
         };
         if (r.target) return { ...r, ...size };
+        if (m.notIngredient) return { ...r, ...size, tried: true, notIngredient: true, use: false };
         if (!m.ingredientId && !m.global) return { ...r, ...size, tried: true, generic: m.generic || r.generic };
         return toRow({ ...r, ...size, ingredientId: m.ingredientId, confidence: m.confidence, via: "ai", generic: m.generic || r.generic, global: m.global }, 0.6);
       }));
       const found = res.matches.filter((m, j) => !fixed[j] && m.ingredientId).length;
+      const nfN = res.matches.filter((m, j) => !fixed[j] && m.notIngredient).length;
       const fresh = res.matches.filter((m, j) => !fixed[j] && !m.ingredientId && m.global).length;
       setMsg([
         looseN && `AIが${looseN}行のうち${found}行をお店の材料に結びました${fresh ? `（${fresh}行はお店に無い材料なので、共有の材料（成分表つき）として新しく登録します）` : ""}。`,
+        nfN && `${nfN}行は材料ではなさそうなので、下の「材料ではなさそうな品」に移しました。`,
         sized && `${sized}行の量をAIが判断しました（黄色の「AIの推定」は確かめてください）。`,
         "確かめてから「反映」を押してください。",
       ].filter(Boolean).join(""));
@@ -245,8 +279,8 @@ export function InvoicePhotosPage() {
         } else if (r.target === NEW && r.global) {
           // 共有の材料（成分表の成分・アレルゲン）に結んで登録。名前は共有の名前、レシートの表記は別名に覚える
           const g = await getOnce<GlobalIngredient>(`globalIngredients/${r.global.id}`);
-          const name = g?.name ?? r.global.name;
-          await createIngredient(orgId, uid, { name, globalRef: r.global.id, allergens: suggestAllergens([], `${r.raw} ${name}`, g?.allergens ?? []), ...invoicePatch(r, { name }) });
+          const name = shopNameFor(r.global.id, g?.name ?? r.global.name, r.generic ?? "");
+          await createIngredient(orgId, uid, { name, globalRef: r.global.id, allergens: suggestAllergens([], `${r.raw} ${name}`, g?.allergens ?? [], r.global.id), ...invoicePatch(r, { name }) });
         } else if (r.target === NEW) {
           const p = invoicePatch(r, { name: r.raw });
           await createIngredient(orgId, uid, { name: r.raw.slice(0, 60), allergens: suggestAllergens([], r.raw), ...p, aliases: [] });
@@ -333,6 +367,7 @@ export function InvoicePhotosPage() {
           )}
           <ul className="space-y-2">
             {rows.map((r, k) => {
+              if (r.notIngredient && !r.target) return null;
               const ing = byId.get(r.target);
               const before = ing && ing.purchasePrice !== null ? `今 ${yen(ing.purchasePrice)}（税抜）/${ing.purchaseQty}${ing.purchaseUnit}` : ing ? "今は値段なし" : "";
               const input = "rounded-lg border border-line-strong bg-paper px-2 py-1 text-sm";
@@ -347,11 +382,11 @@ export function InvoicePhotosPage() {
                   </label>
                   <div className="flex items-center gap-1.5 text-sm">
                     <span className="text-faint">→</span>
-                    <select className={`${input} min-w-0 flex-1`} value={r.target} onChange={(e) => set(k, { target: e.target.value, use: !!e.target.value })}>
-                      <option value="">結ばない</option>
-                      <option value={NEW}>{r.global ? `新しく登録：${r.global.name}（成分表・アレルゲンつき）` : "新しい材料として登録"}</option>
-                      {sorted.map((i) => <option key={i.id} value={i.id}>{i.name}{i.id === r.ingredientId ? (r.via === "name" ? "（名前が同じ）" : r.via === "similar" ? "（似た名前）" : `（AI ${Math.round(r.confidence * 100)}%）`) : ""}</option>)}
-                    </select>
+                    <IngredientPicker className="flex-1" value={r.target} list={sorted} hintOf={r.generic || r.raw}
+                      onPick={(id) => set(k, { target: id, use: !!id })}
+                      extras={[{ value: "", label: "結ばない" }, { value: NEW, label: r.global ? `新しく登録：${shopNameFor(r.global.id, r.global.name, r.generic ?? "")}（成分表・アレルゲンつき）` : `新しい材料として登録：${r.raw.slice(0, 30)}` }]}
+                      labelOf={(i) => `${i.name}${i.id === r.ingredientId ? (r.via === "name" ? "（名前が同じ）" : r.via === "similar" ? "（似た名前）" : `（AI ${Math.round(r.confidence * 100)}%）`) : ""}`} />
+                    <button type="button" className="shrink-0 text-xs text-muted underline" onClick={() => void ignoreRows([k])} title="この品名は次から読み込みません">除外</button>
                   </div>
                   <div className="flex flex-wrap items-center gap-1.5">
                     <input className={`${input} w-24`} inputMode="decimal" value={r.price} onChange={(e) => set(k, { price: Number(numText(e.target.value)) || 0 })} />
@@ -374,8 +409,23 @@ export function InvoicePhotosPage() {
               );
             })}
           </ul>
+          <NonFood rows={rows} busy={busy} onIgnore={(ks) => void ignoreRows(ks)} onKeep={(k) => set(k, { notIngredient: false })} />
           <button disabled={busy || !picked} onClick={apply} className={`sticky bottom-20 w-full ${ui.primary}`}>{busy ? "反映しています…" : `選んだ${picked}件を仕入れ値に反映`}</button>
         </section>
+      )}
+
+      {ignored.length > 0 && (
+        <details className="text-sm">
+          <summary className="cursor-pointer text-muted">除外した品（{ignored.length}）：次から読み込みません</summary>
+          <ul className="mt-2 divide-y divide-line">
+            {ignored.map((d) => (
+              <li key={d.id} className="flex items-baseline gap-2 py-1.5">
+                <span className="min-w-0 flex-1 truncate">{d.name}</span>
+                <button type="button" className="shrink-0 text-xs text-clay-strong underline" onClick={() => void removeDoc(`organizations/${orgId}/purchaseIgnore/${d.id}`)}>戻す</button>
+              </li>
+            ))}
+          </ul>
+        </details>
       )}
 
       {shooting && (
@@ -383,6 +433,27 @@ export function InvoicePhotosPage() {
           onClose={() => setShooting(false)} onUnavailable={() => setShooting(false)} />
       )}
     </div>
+  );
+}
+
+/** 材料ではなさそうな品（ゴミ袋・ケーブル・軽食など）。まとめて除外する（同じ品名は次から読み込まない）か、材料として扱う */
+function NonFood({ rows, busy, onIgnore, onKeep }: { rows: Row[]; busy: boolean; onIgnore: (ks: number[]) => void; onKeep: (k: number) => void }) {
+  const list = rows.map((r, k) => ({ r, k })).filter(({ r }) => r.notIngredient && !r.target);
+  if (!list.length) return null;
+  return (
+    <details className={`${ui.card} space-y-2`}>
+      <summary className="cursor-pointer font-bold">材料ではなさそうな品（{list.length}行）</summary>
+      <p className="text-xs text-muted">日用品・家電・お店で食べた軽食など、名前やAIの判断で材料・包装資材ではなさそうな品です。反映には入りません。材料なら「材料として扱う」を押してください。</p>
+      <ul className="divide-y divide-line text-sm">
+        {list.map(({ r, k }) => (
+          <li key={k} className="flex items-baseline gap-2 py-1.5">
+            <span className="min-w-0 flex-1 truncate">{r.raw}<span className="ml-1 text-xs text-muted">{yen(r.price)}{r.supplier ? `・${r.supplier}` : ""}</span></span>
+            <button type="button" className="shrink-0 text-xs text-clay-strong underline" onClick={() => onKeep(k)}>材料として扱う</button>
+          </li>
+        ))}
+      </ul>
+      <button type="button" disabled={busy} onClick={() => onIgnore(list.map((x) => x.k))} className={`w-full ${ui.secondary}`}>{list.length}行をまとめて除外する（次から読み込まない）</button>
+    </details>
   );
 }
 

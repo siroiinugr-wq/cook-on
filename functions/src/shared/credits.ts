@@ -1,6 +1,8 @@
 // クレジットの単価と、AIに渡す量の上限。画面（押す前の表示）とサーバー（実際に引く量）が同じこのファイルを読む。
 // ig-saas では単価が画面とサーバーの2か所にあって食い違ったので、COOK ON では必ずここ1か所だけにする。
 
+import { splitImportText } from "./importSplit";
+
 export const YEN_PER_CREDIT = 10;
 
 export const CREDIT_COST = {
@@ -110,27 +112,11 @@ export const CREDIT_PACKS = [
 ] as const;
 
 /**
- * 取り込む文字を、行の切れ目で IMPORT_CHUNK_CHARS 以下に分ける。
+ * 取り込む文字を IMPORT_CHUNK_CHARS 字ごとの塊に分ける（表は見出しを毎回付け、レシピの切れ目で分ける。shared/importSplit.ts）。
  * 見積り（画面）と実際の消費（サーバー）が同じ分け方になるよう、両方ここを使う。
  */
 export function splitForImport(text: string, size = IMPORT_CHUNK_CHARS): string[] {
-  const clean = text.replace(/\r\n?/g, "\n").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
-  if (!clean) return [];
-  const out: string[] = [];
-  let cur = "";
-  for (const line of clean.split("\n")) {
-    // 1行が長すぎるときは途中で切る
-    for (let i = 0; i < Math.max(1, line.length); i += size) {
-      const part = line.slice(i, i + size);
-      if (cur && cur.length + part.length + 1 > size) {
-        out.push(cur);
-        cur = "";
-      }
-      cur = cur ? `${cur}\n${part}` : part;
-    }
-  }
-  if (cur) out.push(cur);
-  return out;
+  return splitImportText(text, size);
 }
 
 export function importCredits(text: string): number {

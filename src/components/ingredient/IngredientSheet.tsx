@@ -1,9 +1,10 @@
 // 材料の登録・編集。仕入れ値を変えると、使っているレシピの原価が自動で計算し直され、目標を超えたらお知らせが出る
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { ALLERGENS, type AllergenId } from "@shared/allergens";
+import { ALLERGENS, allergenName, type AllergenId } from "@shared/allergens";
 import { fromExTax, PRICE_TAX_OPTIONS, toExTax, unitCostPerGram, yen } from "@shared/cost";
-import type { Ingredient } from "@shared/types";
+import type { Ingredient, Recipe } from "@shared/types";
+import { madeFromCandidates, madeFromPatch, usesIngredient } from "@shared/madeFrom";
 import { UNITS, type Unit } from "@shared/units";
 import { useCol } from "../../hooks/useData";
 import { removeDoc, saveDoc, toDate } from "../../lib/store";
@@ -29,7 +30,11 @@ const PIECE: Unit[] = ["個", "枚", "本"];
 const LIQUID: Unit[] = ["ml", "l", "大さじ", "小さじ", "カップ"];
 type Hist = { from: { price: number | null; qty: number; unit: string }; to: { price: number | null; qty: number; unit: string }; at: unknown };
 
-export function IngredientSheet({ orgId, uid, ing, usedIn, usedBy = [], onClose }: { orgId: string; uid: string; ing: Ingredient | null; usedIn: number; usedBy?: { id: string; name: string }[]; onClose: () => void }) {
+export function IngredientSheet({ orgId, uid, ing, usedIn, usedBy = [], recipes = [], ingById, onClose }: {
+  orgId: string; uid: string; ing: Ingredient | null; usedIn: number; usedBy?: { id: string; name: string }[];
+  /** 自家製の材料の結び先を選ぶためのレシピと材料（無ければ自家製の欄を出さない） */
+  recipes?: Recipe[]; ingById?: Map<string, Ingredient>; onClose: () => void;
+}) {
   const [d, setD] = useState<Omit<Ingredient, "id">>(ing ?? { name: "", purchasePrice: null, purchaseQty: 1, purchaseUnit: "kg", allergens: [], globalRef: null });
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
@@ -47,13 +52,18 @@ export function IngredientSheet({ orgId, uid, ing, usedIn, usedBy = [], onClose 
     const n = num(text);
     set({ purchasePrice: n === null ? null : toExTax(n, rate), priceTax: rate, priceSource: null });
   };
-  const perG = unitCostPerGram(d);
+  // 自家製の材料：結んだレシピから値段・アレルゲンを計算して見せる（保存するとこの値が入り、以後はサーバーが入れ直す）
+  const madeRecipe = d.madeFrom ? recipes.find((r) => r.id === d.madeFrom) : undefined;
+  const made = madeRecipe && ingById ? madeFromPatch(madeRecipe.items, ingById) : null;
+  const shownD = made ? { ...d, ...made } : d;
+  const perG = unitCostPerGram(shownD);
   const toggle = (a: AllergenId) => set({ allergens: d.allergens.includes(a) ? d.allergens.filter((x) => x !== a) : [...d.allergens, a] });
 
   async function save() {
     setBusy(true);
     setErr("");
     try {
+      const { missing: _m, ...madeData } = made ?? { missing: 0 };
       const data = {
         name: d.name.trim(), purchasePrice: d.purchasePrice, priceTax: d.priceTax ?? 0, purchaseQty: d.purchaseQty || 1, purchaseUnit: d.purchaseUnit,
         gramsPerPiece: d.gramsPerPiece ?? null, gramsPerMl: d.gramsPerMl ?? null, allergens: d.allergens, allergensConfirmed: true,
@@ -62,6 +72,8 @@ export function IngredientSheet({ orgId, uid, ing, usedIn, usedBy = [], onClose 
         photoPath: d.photoPath ?? null, priceSource: d.purchasePrice === null ? null : d.priceSource ?? null,
         // ネットで調べた参考価格の出典は、参考価格のままのときだけ残す
         refWeb: d.refWeb ?? null,
+        madeFrom: d.madeFrom ?? null,
+        ...(made ? madeData : {}),
       };
       if (ing) await saveDoc(`organizations/${orgId}/ingredients/${ing.id}`, data);
       else await createIngredient(orgId, uid, data);
@@ -107,7 +119,10 @@ export function IngredientSheet({ orgId, uid, ing, usedIn, usedBy = [], onClose 
             <input type="file" accept="image/*" className="hidden" disabled={busy} onChange={(e) => pickPhoto(e.target.files?.[0])} /></label>
           {d.photoPath && <button type="button" className="text-muted underline" onClick={() => set({ photoPath: null })}>写真を外す</button>}
         </div>
-        <div className="space-y-1">
+        {ingById && recipes.length > 0 && (
+          <MadeFrom ing={ing} d={d} recipes={recipes} ingById={ingById} made={made} perG={perG} onPick={(madeFrom) => set({ madeFrom })} />
+        )}
+        {!made && <div className="space-y-1">
           <div className="flex items-center justify-between gap-2">
             <span className={ui.label}>仕入れ値</span>
             <div className="flex overflow-hidden rounded-lg border border-line text-xs">
@@ -131,7 +146,8 @@ export function IngredientSheet({ orgId, uid, ing, usedIn, usedBy = [], onClose 
         )}
         {d.refWeb && <WebPriceRecord w={d.refWeb} ing={d} />}
           <p className="text-xs text-muted">{perG !== null ? `1gあたり ${yen(perG)}（税抜）／1kgあたり ${yen(perG * 1000)}` : "1gあたりの値段を出すには、仕入れ値と量を入れてください。"}</p>
-        </div>
+        </div>}
+        {!made && <>
         {ing && <WebOfferList ing={{ ...ing, ...d, id: ing.id }} onUse={(o) => { const p = offerPatch(o); setPriceText(String(o.price)); set(p); }} />}
         {d.globalRef && <GlobalInfo globalRef={d.globalRef} onApply={(p) => { setPriceText(String(p.price)); set({ purchasePrice: p.price, priceTax: 0, purchaseQty: p.qty, purchaseUnit: p.unit, priceSource: "ref" }); }} />}
         <div className="grid grid-cols-2 gap-2">
@@ -140,7 +156,8 @@ export function IngredientSheet({ orgId, uid, ing, usedIn, usedBy = [], onClose 
           <label className="space-y-1"><span className={ui.label}>1mlの重さ g{LIQUID.includes(d.purchaseUnit) ? "（無ければ1）" : ""}</span>
             <input className={input} inputMode="decimal" placeholder="1" value={d.gramsPerMl ?? ""} onChange={(e) => set({ gramsPerMl: num(e.target.value) })} /></label>
         </div>
-        <div className="space-y-1">
+        </>}
+        {!made && <div className="space-y-1">
           <p className={ui.label}>アレルゲン（含むものを押す）{ing && ing.allergensConfirmed !== true && <span className="ml-1 text-warn-strong">まだ確かめていません。保存すると「確認済み」になります</span>}</p>
           <div className="flex flex-wrap gap-1.5">
             {ALLERGENS.map((a) => (
@@ -148,7 +165,7 @@ export function IngredientSheet({ orgId, uid, ing, usedIn, usedBy = [], onClose 
                 className={`rounded-full border px-2.5 py-1 text-xs ${d.allergens.includes(a.id) ? "border-clay bg-clay-soft font-bold text-clay-strong" : a.required ? "border-line-strong" : "border-line text-muted"}`}>{a.name}</button>
             ))}
           </div>
-        </div>
+        </div>}
         <div className="space-y-1">
           <p className={ui.label}>別名（レシピでの呼び方。取り込みのとき、この名前もこの材料に結びつきます）</p>
           <Aliases list={d.aliases ?? []} set={(aliases) => set({ aliases })} />
@@ -192,6 +209,55 @@ export function IngredientSheet({ orgId, uid, ing, usedIn, usedBy = [], onClose 
         {ing && <button onClick={remove} className={`w-full ${ui.quiet} text-ng`}>この材料を消す</button>}
       </div>
     </Sheet>
+  );
+}
+
+/** 自家製の材料：作るレシピを選ぶ。名前が同じレシピを先に出し、この材料を使うレシピ（ぐるぐる回る）は出さない */
+function MadeFrom({ ing, d, recipes, ingById, made, perG, onPick }: {
+  ing: Ingredient | null; d: Omit<Ingredient, "id">; recipes: Recipe[]; ingById: Map<string, Ingredient>;
+  made: ReturnType<typeof madeFromPatch> | null; perG: number | null; onPick: (id: string | null) => void;
+}) {
+  const [open, setOpen] = useState(!!d.madeFrom);
+  const madeOf = new Map([...ingById.values()].flatMap((i) => (i.madeFrom ? [[i.id, i.madeFrom] as const] : [])));
+  const recIngs = new Map(recipes.map((r) => [r.id, r.ingredientIds ?? []]));
+  const ok = recipes.filter((r) => !ing || !usesIngredient(r.id, ing.id, recIngs, madeOf));
+  const cands = madeFromCandidates({ name: d.name, aliases: d.aliases }, ok);
+  const rest = ok.filter((r) => !cands.includes(r)).sort((a, b) => a.name.localeCompare(b.name, "ja"));
+  const cur = d.madeFrom ? recipes.find((r) => r.id === d.madeFrom) : undefined;
+
+  if (!open && !d.madeFrom) {
+    return (
+      <div className="rounded-xl bg-sand p-3 text-sm">
+        {cands.length > 0 ? (
+          <p>同じ名前のレシピ「{cands[0].name}」があります。<button type="button" className="text-clay-strong underline" onClick={() => { onPick(cands[0].id); setOpen(true); }}>このレシピから作る材料にする</button></p>
+        ) : (
+          <button type="button" className="text-clay-strong underline" onClick={() => setOpen(true)}>お店で作る材料（タルト生地・クリームなど）なら、作るレシピを選ぶ</button>
+        )}
+      </div>
+    );
+  }
+  return (
+    <div className="space-y-2 rounded-xl border border-line bg-sand p-3">
+      <label className="block space-y-1"><span className={ui.label}>お店で作る材料：作るレシピ</span>
+        <select className={ui.input} value={d.madeFrom ?? ""} onChange={(e) => onPick(e.target.value || null)}>
+          <option value="">自家製ではない（仕入れる材料）</option>
+          {cands.length > 0 && <optgroup label="同じ名前のレシピ">{cands.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}</optgroup>}
+          <optgroup label="ほかのレシピ">{rest.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}</optgroup>
+        </select>
+      </label>
+      {cur && made && (
+        <div className="space-y-1 text-sm">
+          <p>
+            材料の合計 <b>{made.purchaseQty.toLocaleString("ja-JP")}g</b> で <b>{made.purchasePrice === null ? "—" : yen(made.purchasePrice)}</b>
+            {perG !== null && <span className="text-muted">（1gあたり {yen(perG)}）</span>}
+          </p>
+          {made.missing > 0 && <p className="text-xs text-warn-strong">レシピの材料のうち{made.missing}行は値段か重さが分からないので、まだ原価に入りません。レシピの材料を直すと入ります。</p>}
+          <p className="text-xs">アレルゲン：{made.allergens.length ? made.allergens.map(allergenName).join("・") : "なし"}
+            {!made.allergensConfirmed && <span className="ml-1 text-warn-strong">（中身にまだ確かめていない材料があります）</span>}</p>
+          <p className="text-xs text-muted">値段とアレルゲンは「<Link to={`/recipes/${cur.id}`} className="text-clay-strong underline">{cur.name}</Link>」の材料から計算します。レシピや材料の値段を直すと、自動で入れ直します。</p>
+        </div>
+      )}
+    </div>
   );
 }
 

@@ -8,6 +8,7 @@ import { call } from "../lib/store";
 import { PageHead } from "../components/common/Layout";
 import { ui } from "../components/common/ui";
 import { ImportRecipeCard } from "../components/import/ImportRecipeCard";
+import { useConfirm } from "../components/common/ConfirmDialog";
 
 export function ImportPreviewPage() {
   const { importId } = useParams();
@@ -56,7 +57,10 @@ export function ImportPreviewPage() {
         </p>
       )}
       {saved ? (
-        <p className="rounded-xl bg-ok-soft p-3 text-sm text-ok-strong">保存済みです（{data.savedRecipeIds?.length ?? 0}件）。<Link to="/" className="underline">レシピの一覧へ</Link></p>
+        <>
+          <p className="rounded-xl bg-ok-soft p-3 text-sm text-ok-strong">保存済みです（{data.savedRecipeIds?.length ?? 0}件）。<Link to="/" className="underline">レシピの一覧へ</Link></p>
+          {canEdit && (data.savedRecipeIds?.length ?? 0) > 0 && <ArchiveImport orgId={orgId} importId={importId!} n={data.savedRecipeIds!.length} />}
+        </>
       ) : (
         <div className="grid grid-cols-3 gap-2 text-center text-xs">
           <div className="rounded-xl bg-ok-soft p-2 text-ok-strong"><b className="block text-lg">{count.ok}</b>一致</div>
@@ -79,5 +83,39 @@ export function ImportPreviewPage() {
         </div>
       )}
     </div>
+  );
+}
+
+/** 取り込みのやり直し用：この取り込みで作ったレシピをまとめてしまう（消さない）。材料の値段・アレルゲンはレシピとは別なので残る */
+function ArchiveImport({ orgId, importId, n }: { orgId: string; importId: string; n: number }) {
+  const confirm = useConfirm();
+  const [keepEdited, setKeepEdited] = useState(true);
+  const [msg, setMsg] = useState("");
+  const [busy, setBusy] = useState(false);
+  async function go() {
+    const ok = await confirm({
+      title: `この取り込みのレシピ${n}件をしまいますか？`,
+      body: `一覧から外れます（消えません。「しまったレシピを見る」から1件ずつ戻せます）。${keepEdited ? "取り込んだあとに手で直したレシピは残します。" : "手で直したレシピもしまいます。"}材料の仕入れ値・アレルゲン・別名はそのまま残ります。`,
+      ok: "しまう",
+    });
+    if (!ok) return;
+    setBusy(true);
+    try {
+      const r = await call<{ archived: number; kept: number }>("archiveImport", { orgId, importId, keepEdited });
+      setMsg(`${r.archived}件をしまいました${r.kept ? `（手で直した${r.kept}件は残しました）` : ""}。`);
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <section className={`${ui.card} space-y-2 text-sm`}>
+      <p className="font-bold">この取り込みをやり直すとき</p>
+      <p className="text-xs text-muted">読み取り直して保存したあと、こちらで古いレシピをまとめてしまえます。</p>
+      <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={keepEdited} onChange={(e) => setKeepEdited(e.target.checked)} />取り込んだあとに手で直したレシピは残す</label>
+      <button disabled={busy} onClick={go} className={`w-full ${ui.secondary}`}>{busy ? "しまっています…" : `この取り込みのレシピ${n}件をしまう`}</button>
+      {msg && <p className="text-xs text-ink-soft">{msg}</p>}
+    </section>
   );
 }

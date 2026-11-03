@@ -7,6 +7,7 @@ import { deriveRecipe, sanitizeRecipe, type RecipeInput } from "../shared/recipe
 import type { Ingredient, PackagingMaterial, PackagingSet } from "../shared/types";
 import { REGION } from "../ai/config";
 import { idOf, requireRole, ROLES } from "../core/auth";
+import { syncMadeFrom } from "./madeFrom";
 
 export async function loadIngredientMap(orgId: string): Promise<Map<string, Ingredient>> {
   const snap = await getFirestore().collection(`organizations/${orgId}/ingredients`).get();
@@ -52,6 +53,8 @@ export async function writeRecipe(orgId: string, recipeId: string | null, input:
     });
     return prev + 1;
   });
+  // このレシピから作る自家製の材料（タルト生地など）の値段・アレルゲンを入れ直す
+  await syncMadeFrom(orgId, [ref.id]);
   return { recipeId: ref.id, version };
 }
 
