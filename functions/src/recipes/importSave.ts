@@ -35,7 +35,7 @@ export async function saveImportedRecipes(orgId: string, uid: string, recipes: P
       purchaseQty: 1,
       purchaseUnit: "kg",
       // 共有の材料のアレルゲンに、名前からの推定を足す（お店が確かめるまでは「未確認」のまま）
-      allergens: suggestAllergens([], `${name} ${gl?.name ?? ""}`, gl?.allergens ?? []),
+      allergens: suggestAllergens([], `${name} ${gl?.name ?? ""}`, gl?.allergens ?? [], gl?.id),
       globalRef: gl ? gl.id : null,
     };
     newIngs.push(ing);

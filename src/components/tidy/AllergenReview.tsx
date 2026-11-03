@@ -1,7 +1,8 @@
 // アレルゲンの確認：まだ確かめていない材料に、名前から推定した候補を付けて並べ、まとめて確定する
 import { useEffect, useMemo, useState } from "react";
 import { ALLERGENS, allergenName, sortAllergens, type AllergenId } from "@shared/allergens";
-import { suggestAllergens } from "@shared/allergenGuess";
+import { categorySuspect, dropCategoryHits, needsPackageCheck, suggestAllergens } from "@shared/allergenGuess";
+import { Link } from "react-router-dom";
 import type { Ingredient } from "@shared/types";
 import { saveDoc } from "../../lib/store";
 import { ui } from "../common/ui";
@@ -19,7 +20,13 @@ export function AllergenReview({ orgId, list, usedIn }: { orgId: string; list: I
   useEffect(() => {
     setPicked((cur) => {
       const next = { ...cur };
-      for (const i of page) if (!next[i.id]) next[i.id] = suggestAllergens(i.allergens ?? [], `${i.name} ${i.labelName ?? ""}`);
+      for (const i of page) {
+        if (next[i.id]) continue;
+        const names = [i.name, i.labelName ?? ""];
+        // 成分表に結んだ材料は、分類の見出し（＜えび・かに類＞など）から誤って付いたものを外しておく
+        const cur = i.globalRef?.startsWith("mext_") ? dropCategoryHits(i.allergens ?? [], names) : i.allergens ?? [];
+        next[i.id] = suggestAllergens(cur, names.join(" "));
+      }
       return next;
     });
   }, [page]);
@@ -59,8 +66,13 @@ export function AllergenReview({ orgId, list, usedIn }: { orgId: string; list: I
             <li key={i.id} className="space-y-1.5 py-2.5">
               <div className="flex items-baseline gap-2">
                 <span className="min-w-0 flex-1 truncate font-medium">{i.name}</span>
+                {i.allergensConfirmed === true && categorySuspect(i) && <span className="shrink-0 rounded bg-warn-soft px-1.5 text-[11px] text-warn-strong">見直し</span>}
                 <span className="shrink-0 text-xs text-muted">レシピ{usedIn.get(i.id) ?? 0}件</span>
               </div>
+              {needsPackageCheck(`${i.name} ${i.labelName ?? ""}`) && (
+                <p className="text-xs text-warn-strong">既製品です。名前だけでは中身が分からないので、袋の裏の原材料・アレルゲンの表示で確かめてください。
+                  <Link to={`/ingredients?open=${i.id}`} className="ml-1 underline">裏を撮ってAIに読ませる</Link></p>
+              )}
               <div className="flex flex-wrap items-center gap-1.5">
                 {cur.length ? cur.map((a) => (
                   <button key={a} onClick={() => toggle(i.id, a)} className="rounded-full border border-clay bg-clay-soft px-2.5 py-1 text-xs font-bold text-clay-strong">{allergenName(a)} ×</button>

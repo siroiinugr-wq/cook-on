@@ -8,6 +8,7 @@
 //
 // 利用条件：成分表のデータは自由に使ってよいが、アプリでも出典を書く（文部科学省の案内）。画面は MEXT_CREDIT を出す。
 import type { AllergenId } from "./allergens";
+import { CATEGORY_LABEL } from "./allergenGuess";
 
 export const MEXT_EDITION = "日本食品標準成分表（八訂）増補2023年";
 export const MEXT_CREDIT = `成分値の出典：文部科学省「${MEXT_EDITION}」`;
@@ -103,7 +104,7 @@ const ALLERGEN_RULES: { id: AllergenId; re: RegExp; groups?: string[] }[] = [
   { id: "crab", re: /かに|がに/, groups: ["10"] },
   { id: "squid", re: /いか/, groups: ["10"] },
   { id: "salmonroe", re: /いくら|すじこ/, groups: ["10"] },
-  { id: "salmon", re: /さけ|サーモン/, groups: ["10"] },
+  { id: "salmon", re: /さけ|ざけ|サーモン|ます|トラウト/, groups: ["10"] },
   { id: "mackerel", re: /さば/, groups: ["10"] },
   { id: "abalone", re: /あわび/, groups: ["10"] },
   { id: "beef", re: /うし|牛/, groups: ["11"] },
@@ -115,7 +116,9 @@ const ALLERGEN_RULES: { id: AllergenId; re: RegExp; groups?: string[] }[] = [
 
 export function guessMextAllergens(code: string, name: string): AllergenId[] {
   const g = code.slice(0, 2);
-  const hits = ALLERGEN_RULES.filter((r) => (!r.groups || r.groups.includes(g)) && r.re.test(name)).map((r) => r.id);
+  // 分類の見出し（＜えび・かに類＞・（さば類）など）は外して、食品そのものの名前で見る（あまえびに「かに」が付いていた）
+  const own = name.replace(CATEGORY_LABEL, " ");
+  const hits = ALLERGEN_RULES.filter((r) => (!r.groups || r.groups.includes(g)) && r.re.test(own)).map((r) => r.id);
   return [...new Set(hits)];
 }
 

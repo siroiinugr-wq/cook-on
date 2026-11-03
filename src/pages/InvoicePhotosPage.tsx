@@ -246,7 +246,7 @@ export function InvoicePhotosPage() {
           // 共有の材料（成分表の成分・アレルゲン）に結んで登録。名前は共有の名前、レシートの表記は別名に覚える
           const g = await getOnce<GlobalIngredient>(`globalIngredients/${r.global.id}`);
           const name = g?.name ?? r.global.name;
-          await createIngredient(orgId, uid, { name, globalRef: r.global.id, allergens: suggestAllergens([], `${r.raw} ${name}`, g?.allergens ?? []), ...invoicePatch(r, { name }) });
+          await createIngredient(orgId, uid, { name, globalRef: r.global.id, allergens: suggestAllergens([], `${r.raw} ${name}`, g?.allergens ?? [], r.global.id), ...invoicePatch(r, { name }) });
         } else if (r.target === NEW) {
           const p = invoicePatch(r, { name: r.raw });
           await createIngredient(orgId, uid, { name: r.raw.slice(0, 60), allergens: suggestAllergens([], r.raw), ...p, aliases: [] });

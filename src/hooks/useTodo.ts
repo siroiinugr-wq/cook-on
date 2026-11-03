@@ -1,6 +1,7 @@
 // 「やること」の一覧。下の入口のバッジと、やることの画面が同じ数を使う（2か所で数え方が食い違わないように）
 import { useMemo } from "react";
 import { unitCostPerGram } from "@shared/cost";
+import { categorySuspect } from "@shared/allergenGuess";
 import { useOrgCtx } from "../contexts/OrgContext";
 import { useCol } from "./useData";
 import { useIngredients } from "./useIngredients";
@@ -19,13 +20,14 @@ export function useTodo() {
   return useMemo(() => {
     const noPrice = ings.list.filter((i) => unitCostPerGram(i) === null).length;
     const refPrice = ings.list.filter((i) => i.purchasePrice !== null && i.priceSource === "ref").length;
-    const unconfirmed = ings.list.filter((i) => i.allergensConfirmed !== true).length;
+    // データの整理の「アレルゲンの確認」と同じ数え方（自家製の材料は除く・成分表の分類から誤って付いたものは数える）
+    const unconfirmed = ings.list.filter((i) => !i.madeFrom && (i.allergensConfirmed !== true || categorySuspect(i))).length;
     const noAddress = !org.settings.manufacturerAddress?.trim() || !org.settings.manufacturer?.trim();
     const list: Todo[] = [
       { key: "alerts", tone: "ng" as const, count: alerts.list.length, to: "/", title: `値上がりで目標の原価率を超えたレシピ ${alerts.list.length}件`, sub: "レシピの一覧のいちばん上で確かめられます" },
       ...(canEdit ? [
         { key: "inbox", tone: "info", count: inbox.list.length, to: "/ingredients/invoices", title: `AI経理から届いたレシート ${inbox.list.length}枚`, sub: "読み込むと材料の仕入れ値が最新になります" },
-        { key: "allergen", tone: "warn", count: unconfirmed, to: "/tidy#allergen", title: `アレルゲンを確かめていない材料 ${unconfirmed}件`, sub: "確かめるまで、その材料を使うレシピのラベルは印刷できません" },
+        { key: "allergen", tone: "warn", count: unconfirmed, to: "/tidy#allergen", title: `アレルゲンを確かめる材料 ${unconfirmed}件`, sub: "確かめるまで、その材料を使うレシピのラベルは印刷できません" },
         { key: "price", tone: "warn", count: noPrice, to: "/tidy#price", title: `仕入れ値が入っていない材料 ${noPrice}件`, sub: "参考価格を入れる・AIがネットで調べる・レシートから読む" },
       ] as Todo[] : []),
       ...(isAdmin ? [{ key: "address", tone: "warn", count: noAddress ? 1 : 0, to: "/settings#store", title: "ラベルの製造者（名前・住所）が空です", sub: "食品表示に必要です。入れるまでラベルは印刷できません" }] as Todo[] : []),

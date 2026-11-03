@@ -1,9 +1,12 @@
 // データの整理：取り込んだあとの見直しを、上から順に片付ける画面。AIを使うのは「AIで探す」「ラベルの名前」だけ（クレジット）。
-// 共有の材料に結ぶ → 1. アレルゲンの確認 → 2. 仕入れ値 → 3. 何個分 → 4. 名前・レシピでないもの → 5. 同じ材料の行 → 6. 表記ゆれ → 7. ラベルの名前
+// 共有の材料に結ぶ → お店で作る材料をレシピに結ぶ → 1. アレルゲンの確認 → 2. 仕入れ値 → 3. 何個分 → 4. 名前・レシピでないもの → 5. 同じ材料の行 → 6. 表記ゆれ → 7. ラベルの名前
 import { useMemo } from "react";
 import { calcCost } from "@shared/cost";
 import { duplicateItems, guessPieces, HEAVY_SINGLE_GRAMS, isPlaceholderName, needsPieces, looksNotRecipe, similarIngredientGroups } from "@shared/tidy";
 import type { Recipe } from "@shared/types";
+import { categorySuspect } from "@shared/allergenGuess";
+import { HOMEMADE_HINT, madeFromCandidates, usesIngredient } from "@shared/madeFrom";
+import { HomemadeLinks } from "../components/tidy/HomemadeLinks";
 import { useOrgCtx } from "../contexts/OrgContext";
 import { useCol } from "../hooks/useData";
 import { useIngredients } from "../hooks/useIngredients";
@@ -29,7 +32,8 @@ export function TidyPage() {
   }, [recipes.list]);
   const byUse = <T extends { id: string }>(xs: T[]) => [...xs].sort((a, b) => (usedIn.get(b.id) ?? 0) - (usedIn.get(a.id) ?? 0));
 
-  const unconfirmed = byUse(ings.list.filter((i) => i.allergensConfirmed !== true));
+  // 自家製の材料（レシピに結んだもの）は、中身の材料から自動で入るので除く。成分表の分類から誤って付いたらしいものは確認済みでも出す
+  const unconfirmed = byUse(ings.list.filter((i) => !i.madeFrom && (i.allergensConfirmed !== true || categorySuspect(i))));
   const noPrice = byUse(ings.list.filter((i) => i.purchasePrice === null));
   // 参考価格のままの材料は、空のものの後ろに並べる（お店の仕入れ値に直してもらう）
   const refPriced = byUse(ings.list.filter((i) => i.purchasePrice !== null && i.priceSource === "ref"));
@@ -38,6 +42,20 @@ export function TidyPage() {
     const grams = calcCost(r.items, ings.byId).lines.reduce((t, l) => t + (l.grams ?? 0), 0);
     return needsPieces(r, grams) ? [{ r, grams, guess: guessPieces([r.name, r.memo ?? "", ...r.steps.map((s) => s.text)]) }] : [];
   });
+  // お店で作る材料：同じ名前のレシピがあるもの（結ぶだけ）と、名前から自家製らしいもの（レシピを選んでもらう）
+  const homemade = useMemo(() => {
+    const madeOf = new Map(ings.list.flatMap((i) => (i.madeFrom ? [[i.id, i.madeFrom] as const] : [])));
+    const recIngs = new Map(recipes.list.map((r) => [r.id, r.ingredientIds ?? []]));
+    const rows: { ing: (typeof ings.list)[number]; recipe: Recipe }[] = [];
+    const hinted: typeof ings.list = [];
+    for (const ing of ings.list) {
+      if (ing.madeFrom) continue;
+      const c = madeFromCandidates(ing, recipes.list).find((r) => !usesIngredient(r.id, ing.id, recIngs, madeOf));
+      if (c) rows.push({ ing, recipe: c });
+      else if (HOMEMADE_HINT.test(ing.name) && !ing.globalRef && (usedIn.get(ing.id) ?? 0) > 0) hinted.push(ing);
+    }
+    return { rows, hinted };
+  }, [ings.list, recipes.list, usedIn]);
   const badNames = recipes.list.filter((r) => isPlaceholderName(r.name) || looksNotRecipe(r));
   const dupRows = recipes.list.map((r) => ({ r, names: duplicateItems(r.items) })).filter((x) => x.names.length);
   const groups = similarIngredientGroups(ings.list).map(byUse);
@@ -55,6 +73,9 @@ export function TidyPage() {
 
       <div id="link" className="scroll-mt-20"><LinkCard orgId={orgId} loose={loose} credits={org.credits} /></div>
 
+      <Accordion id="homemade" title={`お店で作る材料をレシピに結ぶ（${n(homemade.rows.length)}）`} summary="タルト生地・クレームダマンドなど。結ぶと値段とアレルゲンがレシピの中身から入ります" defaultOpen={homemade.rows.length > 0}>
+        <HomemadeLinks orgId={orgId} rows={homemade.rows} hinted={homemade.hinted} ingById={ings.byId} />
+      </Accordion>
       <Accordion id="allergen" title={`1. アレルゲンの確認（${n(unconfirmed.length)}）`} summary="名前から推定した候補を見て、確定します。確定するまでラベルは印刷できません" defaultOpen={unconfirmed.length > 0}>
         <AllergenReview orgId={orgId} list={unconfirmed} usedIn={usedIn} />
       </Accordion>
