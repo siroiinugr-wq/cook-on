@@ -1,65 +1,55 @@
-// 食品表示ラベル：材料の重い順・アレルゲンの一括表示を自動で作り、ラベル用紙の大きさで印刷する。
+// 食品表示ラベル：材料の重い順・添加物は「／」のあと・アレルゲンの一括表示を自動で作り、ラベル用紙の大きさで印刷する。
 // 最終的な表示の責任はお店にあるので、自動で作った文は必ず直せるようにし、確かめてほしい点を並べて出す
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { calcCost } from "@shared/cost";
-import { buildLabel, expiryDate, LABEL_PAPERS, labelMissing, type LabelInfo, type LabelLine } from "@shared/label";
+import { labelMissing, LABEL_PAPERS, paperOf, type LabelInfo } from "@shared/label";
+import type { Recipe } from "@shared/types";
 import { useOrgCtx } from "../contexts/OrgContext";
 import { useIngredients } from "../hooks/useIngredients";
 import { useRecipe } from "../hooks/useRecipe";
+import { useCol } from "../hooks/useData";
 import { call } from "../lib/store";
+import { buildRecipeLabel, labelData, labelInfoFor, textOutdated } from "../lib/labelBuild";
 import { Icon } from "../components/common/Icon";
 import { ui } from "../components/common/ui";
-import { LabelSheet, printCss, type LabelData } from "../components/label/LabelSheet";
+import { LabelSheet, PaperPicker, PrintGrid, printCss, sheetSlots } from "../components/label/LabelSheet";
+import { AdditiveBox } from "../components/label/AdditiveBox";
 import { numText } from "../lib/num";
 
 const PAPER_KEY = "cookon-labelPaper";
-const readPaper = () => { try { return localStorage.getItem(PAPER_KEY); } catch { return null; } };
-const keepPaper = (id: string) => { try { localStorage.setItem(PAPER_KEY, id); } catch { /* 覚えられなくても印刷はできる */ } };
-const today = () => new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10);
+export const readPaper = () => { try { return localStorage.getItem(PAPER_KEY); } catch { return null; } };
+export const keepPaper = (id: string) => { try { localStorage.setItem(PAPER_KEY, id); } catch { /* 覚えられなくても印刷はできる */ } };
+export const today = () => new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10);
 
 export function LabelPage() {
   const { id } = useParams();
   const { orgId, org, canEdit } = useOrgCtx();
   const { recipe, loading } = useRecipe(orgId, id);
   const ings = useIngredients(orgId);
+  // お店で作った材料（タルト生地など）の中身を開くのに、ほかのレシピも読む
+  const all = useCol<Recipe>(`organizations/${orgId}/recipes`);
+  const recipeById = useMemo(() => new Map(all.list.map((r) => [r.id, r as Recipe])), [all.list]);
   const [paperId, setPaperId] = useState(() => readPaper() ?? LABEL_PAPERS[0].id);
   const [made, setMade] = useState(today);
   const [copies, setCopies] = useState(1);
+  const [start, setStart] = useState(1);
   const [info, setInfo] = useState<LabelInfo | null>(null);
-  const [text, setText] = useState<string | null>(null);
   const [msg, setMsg] = useState("");
-  const paper = LABEL_PAPERS.find((p) => p.id === paperId) ?? LABEL_PAPERS[0];
+  const paper = paperOf(paperId);
 
   useEffect(() => {
     if (!recipe || info) return;
-    setInfo({
-      productName: recipe.category || "菓子", storage: "直射日光・高温多湿を避けて保存してください", expiryDays: 7, expiryKind: "賞味期限",
-      manufacturer: org.settings.manufacturer, ...recipe.labelInfo,
-      manufacturerAddress: recipe.labelInfo?.manufacturerAddress || org.settings.manufacturerAddress,
-    });
-  }, [recipe, info, org.settings.manufacturer, org.settings.manufacturerAddress]);
+    setInfo(labelInfoFor(recipe, org.settings));
+  }, [recipe, info, org.settings]);
 
-  const built = useMemo(() => {
-    if (!recipe) return null;
-    const grams = calcCost(recipe.items, ings.byId).lines.map((l) => l.grams);
-    const unlinked: string[] = [];
-    // アレルゲンをお店が確かめていない材料（取り込みで作った材料など）。確かめるまで印刷させない
-    const unconfirmed = new Set<string>();
-    const lines: LabelLine[] = recipe.items.map((it, i) => {
-      const ing = it.ingredientId ? ings.byId.get(it.ingredientId) : undefined;
-      if (!ing) unlinked.push(it.name);
-      else if (ing.allergensConfirmed !== true) unconfirmed.add(ing.name);
-      return { name: ing?.labelName || ing?.name || it.name, grams: grams[i], allergens: ing?.allergens ?? [], isAdditive: ing?.isAdditive };
-    });
-    return { ...buildLabel(lines, { pieces: recipe.yield.pieces, gramsPerPiece: recipe.yield.gramsPerPiece, includeRecommended: org.settings.includeRecommendedAllergens }), unlinked, unconfirmed: [...unconfirmed] };
-  }, [recipe, ings.byId, org.settings.includeRecommendedAllergens]);
+  const built = useMemo(() => (recipe ? buildRecipeLabel(recipe, ings.byId, recipeById, org.settings) : null), [recipe, ings.byId, recipeById, org.settings]);
 
   if (loading || !info || !built) return <p className="p-10 text-center text-muted">{loading ? "読み込み中…" : "レシピが見つかりません。"}</p>;
   const set = (p: Partial<LabelInfo>) => setInfo({ ...info, ...p });
   const missing = labelMissing(info);
   const blocked = missing.length > 0 || built.unconfirmed.length > 0 || built.unlinked.length > 0;
-  const data: LabelData = { ...info, ingredientsText: text ?? built.ingredientsText, contentText: built.contentText, expiry: expiryDate(new Date(`${made}T00:00:00+09:00`), info.expiryDays) };
+  const data = labelData(info, built, made);
+  const outdated = textOutdated(info, built.ingredientsText);
 
   async function remember() {
     setMsg("");
@@ -71,7 +61,8 @@ export function LabelPage() {
     }
   }
 
-  const input = "w-full rounded-lg border border-line-strong bg-paper px-2 py-1.5 text-sm";
+  const inputSm = "rounded-lg border border-line-strong bg-paper px-2 py-1.5 text-sm";
+  const input = `w-full ${inputSm}`;
   return (
     <div className="mx-auto max-w-3xl space-y-4 p-4">
       <style>{`@media print { ${printCss(paper)} }`}</style>
@@ -86,11 +77,11 @@ export function LabelPage() {
           <div className="space-y-1 rounded-xl bg-ng/10 p-3 text-sm text-ng">
             <p className="font-bold">アレルゲンをまだ確かめていない材料があります。確かめるまで印刷できません。</p>
             <p>{built.unconfirmed.join("、")}</p>
-            {canEdit && <Link to="/tidy" className="underline">データの整理で、アレルゲンをまとめて確かめる</Link>}
+            {canEdit && <Link to="/tidy#allergen" className="underline">データの整理で、アレルゲンをまとめて確かめる</Link>}
           </div>
         )}
         {missing.length > 0 && (
-          <p className="rounded-xl bg-ng/10 p-3 text-sm text-ng">ラベルに必要な項目が空です：{missing.join("・")}。下の欄か、設定の「お店」で入れてください。</p>
+          <p className="rounded-xl bg-ng/10 p-3 text-sm text-ng">ラベルに必要な項目が空です：{missing.join("・")}。下の欄か、<Link to="/settings#store" className="underline">設定の「お店・ラベル」</Link>で入れてください。</p>
         )}
         {(built.unlinked.length > 0 || built.unknownWeight.length > 0) && (
           <ul className="space-y-1 rounded-xl bg-warn-soft p-3 text-sm text-warn-strong">
@@ -98,6 +89,7 @@ export function LabelPage() {
             {built.unknownWeight.length > 0 && <li>重さが分からず、並びが正しくないかもしれないもの：{built.unknownWeight.join("、")}</li>}
           </ul>
         )}
+        <AdditiveBox orgId={orgId} hints={built.additives} canEdit={canEdit} />
         <section className={`${ui.card} space-y-2`}>
           <div className="grid grid-cols-2 gap-2">
             <label className="space-y-1"><span className={ui.label}>名称</span><input className={input} value={info.productName} onChange={(e) => set({ productName: e.target.value })} /></label>
@@ -106,34 +98,59 @@ export function LabelPage() {
               <select className={input} value={info.expiryKind} onChange={(e) => set({ expiryKind: e.target.value as LabelInfo["expiryKind"] })}><option>賞味期限</option><option>消費期限</option></select></label>
             <label className="space-y-1"><span className={ui.label}>製造日から何日</span><input className={input} inputMode="numeric" value={info.expiryDays} onChange={(e) => set({ expiryDays: Number(e.target.value.replace(/\D/g, "")) || 0 })} /></label>
           </div>
-          <label className="block space-y-1"><span className={ui.label}>原材料名（自動で作った文。直せます）</span>
-            <textarea className={`${input} h-24`} value={data.ingredientsText} onChange={(e) => setText(e.target.value)} />
-            {text !== null && <button className="text-xs text-muted underline" onClick={() => setText(null)}>自動の文に戻す</button>}
+          <label className="flex items-start gap-2 text-sm">
+            <input type="checkbox" className="mt-0.5 h-4 w-4 accent-clay" checked={!!info.dateOutside} onChange={(e) => set({ dateOutside: e.target.checked })} />
+            <span>日付は枠の外に書く（枠の中は「枠外下部に記載」）</span>
           </label>
-          <label className="block space-y-1"><span className={ui.label}>保存方法</span><input className={input} value={info.storage} onChange={(e) => set({ storage: e.target.value })} /></label>
+          {info.dateOutside && (
+            <label className="ml-6 flex items-start gap-2 text-sm">
+              <input type="checkbox" className="mt-0.5 h-4 w-4 accent-clay" checked={info.datePrint !== false} onChange={(e) => set({ datePrint: e.target.checked })} />
+              <span>枠の外の日付も印刷する<span className="block text-xs text-muted">外すと、日付スタンプや手書き用に空けておきます。</span></span>
+            </label>
+          )}
+          <label className="block space-y-1"><span className={ui.label}>原材料名（自動で作った文。直せます）</span>
+            <textarea className={`${input} h-24`} value={data.ingredientsText} onChange={(e) => set({ ingredientsText: e.target.value, ingredientsBase: built.ingredientsText })} />
+            {outdated && <span className="block text-xs text-warn-strong">手で直したあとにレシピの材料が変わりました。「自動の文に戻す」で作り直してから、もう一度直してください。</span>}
+            {info.ingredientsText && <button className="text-xs text-muted underline" onClick={() => set({ ingredientsText: undefined, ingredientsBase: undefined })}>自動の文に戻す</button>}
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            <label className="space-y-1"><span className={ui.label}>内容量</span>
+              <input className={input} value={info.content ?? ""} placeholder={built.contentText} onChange={(e) => set({ content: e.target.value || undefined })} /></label>
+            <label className="space-y-1"><span className={ui.label}>保存方法</span><input className={input} value={info.storage} onChange={(e) => set({ storage: e.target.value })} /></label>
+          </div>
           <div className="grid grid-cols-2 gap-2">
             <label className="space-y-1"><span className={ui.label}>製造者の名前</span><input className={input} value={info.manufacturer} onChange={(e) => set({ manufacturer: e.target.value })} /></label>
             <label className="space-y-1"><span className={ui.label}>製造者の住所（必須）</span><input className={input} value={info.manufacturerAddress ?? ""} placeholder="都道府県から" onChange={(e) => set({ manufacturerAddress: e.target.value })} /></label>
           </div>
-          {canEdit && <button className="text-sm text-clay-strong underline" onClick={remember}>名称・期限・保存方法・製造者をこのレシピに覚える</button>}
+          {canEdit && <button className="text-sm text-clay-strong underline" onClick={remember}>このラベルの内容をレシピに覚える（まとめて印刷でも使います）</button>}
           {msg && <p className="text-sm text-ink-soft">{msg}</p>}
         </section>
         <section className={`${ui.card} space-y-2`}>
           <label className="block space-y-1"><span className={ui.label}>ラベル用紙</span>
-            <select className={input} value={paperId} onChange={(e) => { setPaperId(e.target.value); keepPaper(e.target.value); }}>
-              {LABEL_PAPERS.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </select></label>
-          <label className="flex items-center gap-2 text-sm">枚数<input className={`${input} w-20`} inputMode="numeric" value={copies} onChange={(e) => setCopies(Math.max(1, Math.min(200, Number(numText(e.target.value)) || 1)))} /></label>
+            <PaperPicker paperId={paper.id} papers={LABEL_PAPERS} onChange={(v) => { setPaperId(v); keepPaper(v); }} /></label>
+          {paper.sheet?.cut && <p className="text-xs text-muted">86.4×42.3mm の1面に2個分を並べます。貼る前に、はさみで1面を縦に半分に切ってください。</p>}
+          <div className="flex flex-wrap items-center gap-4 text-sm">
+            <label className="flex items-center gap-2">枚数<input className={`${inputSm} w-20`} inputMode="numeric" value={copies} onChange={(e) => setCopies(Math.max(1, Math.min(200, Number(numText(e.target.value)) || 1)))} /></label>
+            {paper.sheet && (
+              <label className="flex items-center gap-2">何面目から
+                <select className={`${inputSm} w-20`} value={start} onChange={(e) => setStart(Number(e.target.value))}>
+                  {Array.from({ length: sheetSlots(paper) }, (_, i) => <option key={i} value={i + 1}>{i + 1}</option>)}
+                </select>
+              </label>
+            )}
+          </div>
+          {paper.sheet && start > 1 && <p className="text-xs text-muted">使いかけのシートの {start} 面目から刷ります（左上から右へ数えます）。</p>}
           <button disabled={blocked} className={`w-full ${ui.primary} flex items-center justify-center gap-2`} onClick={() => window.print()}><Icon name="printer" />{blocked ? "上の赤い項目を済ませると印刷できます" : "印刷する"}</button>
           <p className="text-xs text-muted">印刷の画面で「余白なし」「倍率100%」を選んでください。PDFに保存もできます。</p>
+          <Link to={`/labels?add=${recipe!.id}`} className="block text-sm text-clay-strong underline">ほかの商品とまとめて印刷する・詰め合わせのラベルを作る</Link>
         </section>
         <p className="text-xs leading-relaxed text-muted">
-          表示は食品表示基準にそって自動で作っていますが、複合原材料の書き方・添加物の用途名・栄養成分表示などは対象外です。
-          販売の前に、お店の責任で必ず内容を確かめてください。
+          表示は食品表示基準にそって自動で作っています（原材料は重い順、添加物は「／」のあと、アレルゲンは最後にまとめて、お店で作った材料は「（ ）」の中に中身）。
+          複合原材料の省略のしかた・栄養成分表示などは対象外です。販売の前に、お店の責任で必ず内容を確かめてください。
         </p>
       </div>
 
-      <div className="print-only"><div className="label-grid">{Array.from({ length: copies }, (_, i) => <div key={i}><LabelSheet d={data} w={paper.w} h={paper.h} /></div>)}</div></div>
+      <PrintGrid labels={Array.from({ length: copies }, () => data)} paper={paper} start={start} />
     </div>
   );
 }

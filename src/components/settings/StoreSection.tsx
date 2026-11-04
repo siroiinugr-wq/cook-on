@@ -13,7 +13,19 @@ export function StoreSection({ orgId, org, canManage }: { orgId: string; org: Or
   const [rec, setRec] = useState(org.settings.includeRecommendedAllergens);
   const [share, setShare] = useState(org.settings.shareProducts === true);
   const [shareIng, setShareIng] = useState(org.settings.shareIngredients);
+  const [kind, setKind] = useState(org.settings.labelExpiryKind);
+  const [days, setDays] = useState(String(org.settings.labelExpiryDays));
+  const [storage, setStorage] = useState(org.settings.labelStorage);
+  const [outside, setOutside] = useState(org.settings.labelDateOutside);
+  const [datePrint, setDatePrint] = useState(org.settings.labelDatePrint);
   const [msg, setMsg] = useState("");
+  useEffect(() => {
+    setKind(org.settings.labelExpiryKind);
+    setDays(String(org.settings.labelExpiryDays));
+    setStorage(org.settings.labelStorage);
+    setOutside(org.settings.labelDateOutside);
+    setDatePrint(org.settings.labelDatePrint);
+  }, [org.settings.labelExpiryKind, org.settings.labelExpiryDays, org.settings.labelStorage, org.settings.labelDateOutside, org.settings.labelDatePrint]);
   useEffect(() => {
     setName(org.name);
     setRate(String(Math.round(org.settings.targetCostRate * 1000) / 10));
@@ -30,7 +42,8 @@ export function StoreSection({ orgId, org, canManage }: { orgId: string; org: Or
     if (!(r > 0 && r < 1)) return setMsg("原価率は1〜99%で入れてください。");
     if (!maker.trim() || !address.trim()) return setMsg("ラベルの製造者は、名前と住所の両方を入れてください（食品表示に必要です）。");
     try {
-      await saveDoc(`organizations/${orgId}`, { name: name.trim().slice(0, 40), settings: { ...org.settings, targetCostRate: r, manufacturer: maker.trim(), manufacturerAddress: address.trim(), includeRecommendedAllergens: rec, shareProducts: share || (org.settings.shareProducts === null ? null : false), shareIngredients: shareIng } });
+      await saveDoc(`organizations/${orgId}`, { name: name.trim().slice(0, 40), settings: { ...org.settings, targetCostRate: r, manufacturer: maker.trim(), manufacturerAddress: address.trim(), includeRecommendedAllergens: rec, shareProducts: share || (org.settings.shareProducts === null ? null : false), shareIngredients: shareIng,
+        labelExpiryKind: kind, labelExpiryDays: Math.max(1, Math.min(3650, Number(days) || 7)), labelStorage: storage.trim().slice(0, 120), labelDateOutside: outside, labelDatePrint: datePrint } });
       setMsg("保存しました。");
     } catch {
       setMsg("保存できませんでした。");
@@ -53,6 +66,28 @@ export function StoreSection({ orgId, org, canManage }: { orgId: string; org: Or
           <input type="checkbox" className="mt-1 h-5 w-5 accent-clay" checked={rec} onChange={(e) => setRec(e.target.checked)} />
           <span>ラベルに推奨20品目のアレルゲン（アーモンド・大豆など）も書く<span className="block text-xs text-muted">義務の8品目は必ず書きます。推奨品目も書くのがおすすめです。</span></span>
         </label>
+        <div className="space-y-2 rounded-xl bg-sand/60 p-3">
+          <p className="text-sm font-bold">ラベルの初期値<span className="ml-1 text-xs font-normal text-muted">（レシピごとに覚えた値があれば、そちらを使います）</span></p>
+          <div className="grid grid-cols-2 gap-2">
+            <label className="space-y-1"><span className={ui.label}>期限の種類</span>
+              <select className={ui.input} value={kind} onChange={(e) => setKind(e.target.value as typeof kind)}><option>賞味期限</option><option>消費期限</option></select></label>
+            <label className="space-y-1"><span className={ui.label}>製造日から何日</span>
+              <input className={ui.input} inputMode="numeric" value={days} onChange={(e) => setDays(e.target.value.replace(/\D/g, ""))} /></label>
+          </div>
+          <p className="text-xs text-muted">消費期限＝傷みやすいもの（生菓子・サンドイッチなど、おおむね5日以内）。賞味期限＝おいしく食べられる期限（焼菓子・コーヒー豆など）。</p>
+          <label className="block space-y-1"><span className={ui.label}>保存方法</span>
+            <input className={ui.input} value={storage} maxLength={120} placeholder="直射日光・高温多湿を避けて保存してください" onChange={(e) => setStorage(e.target.value)} /></label>
+          <label className="flex items-start gap-2 text-sm">
+            <input type="checkbox" className="mt-1 h-5 w-5 accent-clay" checked={outside} onChange={(e) => setOutside(e.target.checked)} />
+            <span>期限の日付は枠の外に書く<span className="block text-xs text-muted">枠の中は「枠外下部に記載」になります。同じラベルを何日も使えます。</span></span>
+          </label>
+          {outside && (
+            <label className="ml-7 flex items-start gap-2 text-sm">
+              <input type="checkbox" className="mt-1 h-5 w-5 accent-clay" checked={datePrint} onChange={(e) => setDatePrint(e.target.checked)} />
+              <span>枠の外の日付も印刷する<span className="block text-xs text-muted">外すと日付は空けておきます（日付スタンプや手書き用）。</span></span>
+            </label>
+          )}
+        </div>
         <label className="flex items-start gap-2 text-sm">
           <input type="checkbox" className="mt-1 h-5 w-5 accent-clay" checked={share} onChange={(e) => setShare(e.target.checked)} />
           <span>登録した既製品を、みんなの既製品データベースにも入れる<span className="block text-xs text-muted">ほかのお店の確認が集まると、どのお店でも材料の候補に出ます。お店の名前は出ません。外すと、お店の材料にだけ入ります。</span></span>

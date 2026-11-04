@@ -33,6 +33,7 @@ export function SettingsPage({ brand }: { brand: Branding }) {
   const links: { to: string; icon: IconName; title: string; sub: string }[] = [
     { to: "/credits", icon: "coin", title: `クレジット（残り ${creditText(org.credits)}）`, sub: "使った記録・まとめ買い" },
     { to: "/import", icon: "upload", title: "データの取り込み", sub: "ほかのアプリや Excel から引っ越す" },
+    { to: "/labels", icon: "printer", title: "ラベルをまとめて印刷", sub: "いくつもの商品を1回で・詰め合わせ（ギフト・コーヒー豆）のラベル" },
     { to: "/tidy", icon: "sparkle", title: "データの整理", sub: "アレルゲンの確認・仕入れ値・何個分・名前・表記ゆれをまとめて見直す" },
     { to: "/todo", icon: "check", title: "やること・AIでできること", sub: "いま片付けたいことと、AIの機能の一覧" },
     ...(op.data ? [{ to: "/admin/suggestions", icon: "check" as IconName, title: "運営：共有の材料の精査", sub: "お店の提案とAIの推定価格を、採用・却下する" }] : []),
