@@ -44,6 +44,10 @@ export interface Ingredient {
   offers?: WebOffers | null;
   /** 自家製の材料（タルト生地・クレームダマンドなど）を作るレシピの id。値段・アレルゲンはそのレシピから計算して入る（shared/madeFrom.ts） */
   madeFrom?: string | null;
+  /** 自家製の材料の100gあたりの成分（kcal・protein・fat・carbohydrate・salt）。作るレシピの中身の成分表から計算して入る */
+  nutrition?: Record<string, number> | null;
+  /** 成分を計算したとき、成分か重さが分からなかった中身の行の数（0 ならそろっている） */
+  nutritionMissing?: number | null;
   supplier?: string;
   /** 写真（Storage のパス orgs/{orgId}/ingredients/… か、既製品から写した ugc/…） */
   photoPath?: string | null;

@@ -7,6 +7,8 @@ import { sizeFromName } from "@shared/invoice";
 import { needsWebRefresh, withPast, type WebOffers } from "@shared/offers";
 import { NO_MATCH, resolveLocal } from "@shared/resolveLocal";
 import { parseUnit, type Unit } from "@shared/units";
+import { madeFromPatch } from "@shared/madeFrom";
+import type { Ingredient, RecipeItem } from "@shared/types";
 import { demoGet, demoListDocs, demoWrite } from "./demo";
 import { DEMO_ORG } from "./demoData";
 import { demoIngredientMap, demoWithCredits, demoWriteRecipe } from "./demoFunctions";
@@ -234,6 +236,42 @@ export async function demoAiCall<T>(name: string, d: Data): Promise<T> {
         archived++;
       }
       return { archived, kept } as T;
+    }
+    case "removeImports": {
+      // デモ：選んだ取り込みの記録を消し、そのレシピをしまう（手で直した＝第2版以降は残す）
+      let removed = 0, archived = 0, kept = 0;
+      for (const importId of (d.importIds as string[]) ?? []) {
+        const path = `${O}/imports/${importId}`;
+        const imp = demoGet(path);
+        if (!imp) continue;
+        for (const id of (imp.savedRecipeIds as string[] | undefined) ?? []) {
+          const p = `${O}/recipes/${id}`;
+          const r = demoGet(p);
+          if (!r || r.archived) continue;
+          if (d.keepEdited !== false && Number(r.version ?? 1) > 1) { kept++; continue; }
+          demoWrite(p, { ...r, archived: true });
+          archived++;
+        }
+        demoWrite(path, null);
+        removed++;
+      }
+      return { removed, busy: 0, archived, kept } as T;
+    }
+    case "refreshMadeFrom": {
+      // デモ：結んである自家製の材料に、レシピの値段・アレルゲン・成分を入れる
+      const byId = demoIngredientMap();
+      const nut = (ing: Ingredient) => ing.nutrition ?? (ing.globalRef ? (demoGet(`globalIngredients/${ing.globalRef}`)?.nutrition as Record<string, number> | undefined) : null) ?? null;
+      let linked = 0, updated = 0;
+      for (const ing of byId.values()) {
+        if (!ing.madeFrom) continue;
+        linked++;
+        const r = demoGet(`${O}/recipes/${ing.madeFrom}`);
+        if (!r) continue;
+        const { missing: _m, ...p } = madeFromPatch(r.items as RecipeItem[], byId, nut);
+        demoWrite(`${O}/ingredients/${ing.id}`, { ...demoGet(`${O}/ingredients/${ing.id}`), ...p });
+        updated++;
+      }
+      return { linked, updated } as T;
     }
     case "readProductPhoto": {
       const paths = (d.paths as string[]) ?? [];

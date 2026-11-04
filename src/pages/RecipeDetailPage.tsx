@@ -19,10 +19,11 @@ import { CostPanel } from "../components/recipe/CostPanel";
 import { ItemsTable } from "../components/recipe/ItemsTable";
 import { ScaleControl } from "../components/recipe/ScaleControl";
 import { VersionHistory } from "../components/recipe/VersionHistory";
+import { UseAsIngredient } from "../components/recipe/UseAsIngredient";
 
 export function RecipeDetailPage() {
   const { id } = useParams();
-  const { orgId, org, canEdit } = useOrgCtx();
+  const { orgId, uid, org, canEdit } = useOrgCtx();
   const { recipe, loading } = useRecipe(orgId, id);
   const ings = useIngredients(orgId);
   const pack = usePackaging(orgId);
@@ -95,6 +96,8 @@ export function RecipeDetailPage() {
         </section>
       )}
       {recipe.memo && <p className={`${ui.card} whitespace-pre-wrap text-sm text-ink-soft`}>{recipe.memo}</p>}
+
+      {!archived && <UseAsIngredient orgId={orgId} uid={uid} recipe={recipe} ings={ings} canEdit={canEdit} />}
 
       {canEdit && (
         <Accordion title="AIに相談" summary="原価を下げる案・新しい商品の案">

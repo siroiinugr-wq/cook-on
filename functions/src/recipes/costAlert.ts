@@ -11,7 +11,7 @@ import { REGION } from "../ai/config";
 import { loadIngredientMap, loadPackaging } from "./save";
 import { syncMadeFrom } from "./madeFrom";
 
-const WATCH: (keyof Ingredient)[] = ["purchasePrice", "purchaseQty", "purchaseUnit", "gramsPerPiece", "gramsPerMl", "allergens", "allergensConfirmed"];
+const WATCH: (keyof Ingredient)[] = ["purchasePrice", "purchaseQty", "purchaseUnit", "gramsPerPiece", "gramsPerMl", "allergens", "allergensConfirmed", "nutrition"];
 
 /**
  * 変わったもの（材料・包装資材・包装セット）を使うレシピの原価・アレルゲン・包装の列を計算し直し、

@@ -1,5 +1,5 @@
 // データの取り込み（ほかのアプリや Excel からの引っ越し）。
-// ファイルを選ぶ／貼る → 使うクレジットを先に見せる → AIが読み取る → プレビュー（ImportPreviewPage）で確かめて保存
+// ファイルを選ぶ（ドロップでも）／貼る → 使うクレジットを先に見せる → AIが読み取る → プレビュー（ImportPreviewPage）で確かめて保存
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { IMPORT_CHUNK_CHARS, importCredits, importMaxChars } from "@shared/credits";
@@ -7,14 +7,13 @@ import type { ImportDoc } from "@shared/importTypes";
 import { useOrgCtx } from "../contexts/OrgContext";
 import { useCol } from "../hooks/useData";
 import { ACCEPT, fileToText } from "../lib/importFile";
-import { call, newRequestId, toDate } from "../lib/store";
+import { call, newRequestId } from "../lib/store";
 import { PageHead } from "../components/common/Layout";
 import { CostTag } from "../components/common/CreditBadge";
 import { Icon } from "../components/common/Icon";
 import { useCreditAction } from "../components/common/useCreditAction";
 import { ui } from "../components/common/ui";
-
-const STATUS: Record<string, string> = { parsing: "読み取り中", preview: "確認待ち", saving: "保存中", saved: "保存済み", failed: "失敗" };
+import { PastImports } from "../components/import/PastImports";
 
 export function ImportPage() {
   const { orgId, org, canEdit } = useOrgCtx();
@@ -22,16 +21,19 @@ export function ImportPage() {
   const [fileName, setFileName] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  const [over, setOver] = useState(false);
   const run = useCreditAction(org.credits);
   const nav = useNavigate();
-  const past = useCol<ImportDoc>(`organizations/${orgId}/imports`, { orderBy: ["createdAt", "desc"], limit: 10 });
+  const past = useCol<ImportDoc>(`organizations/${orgId}/imports`, { orderBy: ["createdAt", "desc"], limit: 100 });
   const credits = importCredits(text);
   const maxChars = importMaxChars(org.unlimited);
   const tooLong = text.length > maxChars;
 
-  async function pick(f: File | undefined) {
+  async function pick(files: FileList | null | undefined) {
+    const f = files?.[0];
     if (!f) return;
     setErr("");
+    if (files.length > 1) setErr(`1回に読めるのは1つのファイルです。いちばん上の「${f.name}」を読みました。`);
     try {
       setText(await fileToText(f));
       setFileName(f.name);
@@ -69,12 +71,25 @@ export function ImportPage() {
         <span className="min-w-0 flex-1"><b className="block">写真から取り込む</b><span className="text-xs text-muted">レシピのノートや本を何枚も撮って、まとめて読み取る（手書きも可）</span></span>
         <Icon name="chevron" className="h-5 w-5 text-faint" />
       </Link>
-      <label className={`${ui.card} flex cursor-pointer flex-col items-center gap-2 border-dashed py-6 text-center`}>
+      <label
+        onDragOver={(e) => { e.preventDefault(); setOver(true); }}
+        onDragLeave={() => setOver(false)}
+        onDrop={(e) => { e.preventDefault(); setOver(false); pick(e.dataTransfer.files); }}
+        className={`${ui.card} flex cursor-pointer flex-col items-center gap-2 border-dashed py-6 text-center ${over ? "border-clay bg-clay-soft" : ""}`}>
         <span className="text-clay"><Icon name="file" className="h-8 w-8" /></span>
-        <span className="font-bold">{fileName || "ファイルを選ぶ"}</span>
-        <span className="text-xs text-muted">CSV・Excel（.xlsx）・テキスト</span>
-        <input type="file" accept={ACCEPT} className="hidden" onChange={(e) => pick(e.target.files?.[0])} />
+        <span className="font-bold">{over ? "ここで離すと読み込みます" : fileName || "ファイルを選ぶ・ここにドロップ"}</span>
+        <span className="text-xs text-muted">CSV・Excel（.xlsx）・テキスト（.txt）</span>
+        <input type="file" accept={ACCEPT} className="hidden" onChange={(e) => { pick(e.target.files); e.target.value = ""; }} />
       </label>
+      <details className="text-xs text-muted">
+        <summary className="cursor-pointer">どのファイルが読める？</summary>
+        <ul className="mt-1 list-disc space-y-0.5 pl-5">
+          <li>CSV：ほかのアプリや Excel・Google スプレッドシートで書き出したものは読めます。表の1行目の見出し（レシピ名・材料・分量など）を手がかりにします。</li>
+          <li>Excel（.xlsx）：シートが分かれていても読めます。シートの名前がレシピ名のときは、その名前を使います。</li>
+          <li>Numbers：そのままや CSV ではレシピ名（シートの名前）が消えるので、「ファイル → 書き出す → Excel」で .xlsx にしてから入れてください。</li>
+          <li>PDF・画像：「写真から取り込む」を使うか、文字をコピーして下の欄に貼ってください。</li>
+        </ul>
+      </details>
       <label className="block space-y-1">
         <span className={ui.label}>または、ここに貼り付け（読み取った中身もここに出ます。直してから読み取れます）</span>
         <textarea className={`${ui.input} h-48 font-mono text-xs`} value={text} onChange={(e) => { setText(e.target.value); if (!e.target.value) setFileName(""); }}
@@ -90,21 +105,7 @@ export function ImportPage() {
         {busy ? "読み取っています…（大きいファイルは数分かかります）" : "読み取る"}{!busy && credits > 0 && <CostTag credits={credits} />}
       </button>
 
-      {past.list.length > 0 && (
-        <section className="space-y-2">
-          <h2 className="text-sm font-bold">これまでの取り込み</h2>
-          <ul className="divide-y divide-line rounded-2xl border border-line bg-paper">
-            {past.list.map((p) => (
-              <li key={p.id}>
-                <Link to={`/import/${p.id}`} className="flex items-center gap-2 px-4 py-2.5 text-sm">
-                  <span className="min-w-0 flex-1 truncate">{p.fileName || "貼り付け"}<span className="ml-2 text-xs text-muted">{toDate(p.createdAt)?.toLocaleDateString("ja-JP")}</span></span>
-                  <span className="text-xs text-muted">{p.recipes?.length ?? 0}件・{STATUS[p.status] ?? p.status}</span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
+      <PastImports orgId={orgId} list={past.list} canEdit={canEdit} />
     </div>
   );
 }
