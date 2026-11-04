@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { additiveLabel, guessAdditive } from "./additives";
-import { assortContent, assortText, buildLabel, paperOf } from "./label";
+import { assortContent, assortName, assortText, buildLabel, paperOf } from "./label";
 
 describe("添加物の見分け", () => {
   it("ベーキングパウダーは膨張剤（一括名）。覚えた書き方が正式なら使う", () => {
@@ -50,6 +50,10 @@ describe("詰め合わせと用紙", () => {
   it("品目ごとに【名前】", () => {
     expect(assortText([{ name: "マドレーヌ", text: "A" }, { name: "クッキー", text: "B" }])).toBe("【マドレーヌ】A　【クッキー】B");
     expect(assortContent([{ name: "マドレーヌ", count: 2 }, { name: "クッキー", count: 0 }])).toBe("マドレーヌ2個");
+    expect(assortContent([{ name: "バナナブレッド", count: 1 }, { name: "チョコスコーン", count: 2 }, { name: "コーヒー豆", count: 1, content: "100g" }])).toBe("バナナブレッド1個、チョコスコーン2個、コーヒー豆100g");
+    expect(assortContent([{ name: "コーヒー豆", count: 2, content: "100g" }])).toBe("コーヒー豆100g×2");
+    expect(assortName("焼菓子", ["コーヒー豆（エチオピア）"])).toBe("焼菓子・コーヒー詰合せ");
+    expect(assortName("焼菓子", [])).toBe("焼菓子詰合せ");
   });
   it("A4 12面の半分は 4列×6段", () => {
     const p = paperOf("a4-12-half");

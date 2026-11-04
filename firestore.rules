@@ -117,6 +117,17 @@ service cloud.firestore {
         allow delete: if canEdit(orgId);
       }
 
+      // よく使う詰め合わせのラベル（ギフト箱など。品目・名称・期限の初期値。印刷する画面 /labels で呼び出す）
+      match /labelSets/{id} {
+        allow read: if isMember(orgId);
+        allow create, update: if canEdit(orgId)
+          && request.resource.data.keys().hasOnly(['name', 'rows', 'info', 'updatedAt', 'createdAt', 'createdBy'])
+          && str(request.resource.data.name, 40) && request.resource.data.name.size() > 0
+          && request.resource.data.rows is list && request.resource.data.rows.size() > 0 && request.resource.data.rows.size() <= 20
+          && request.resource.data.info is map;
+        allow delete: if canEdit(orgId);
+      }
+
       // レシピは saveRecipe（Functions）だけが書く。版の記録・検索用の列を必ず作り直すため
       match /recipes/{id} {
         allow read: if isMember(orgId);

@@ -1,84 +1,133 @@
 // ラベルをまとめて印刷：いくつもの商品を1回で刷る（クッキー10枚・スコーン6枚…）。
-// 詰め合わせ（ギフト・コーヒー豆のセット）は1枚のラベルに品目ごとの原材料を【名前】で並べる（食品表示基準の詰め合わせの書き方）。
+// 詰め合わせ（ギフト箱の外に貼るラベル）は1枚のラベルに品目ごとの原材料を【名前】で並べる（食品表示基準の詰め合わせの書き方）。
+// レシピの無い品目（コーヒー豆など）は名前・原材料・内容量を手で入れる。よく使う詰め合わせは labelSets に保存して呼び出す。
 // それぞれの商品の名称・期限・内容量などは、1枚ずつのラベル画面で「レシピに覚える」を押した内容を使う
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { assortContent, assortText, labelMissing, LABEL_PAPERS, paperOf, type LabelInfo } from "@shared/label";
+import { assortContent, assortName, assortText, labelMissing, LABEL_PAPERS, paperOf, type LabelInfo } from "@shared/label";
 import type { Recipe } from "@shared/types";
 import { useOrgCtx } from "../contexts/OrgContext";
 import { useIngredients } from "../hooks/useIngredients";
 import { useCol } from "../hooks/useData";
+import { newId, removeDoc, saveDoc } from "../lib/store";
 import { buildRecipeLabel, labelData, labelInfoFor, type BuiltLabel, type LabelData } from "../lib/labelBuild";
 import { PageHead } from "../components/common/Layout";
 import { Icon } from "../components/common/Icon";
 import { ui } from "../components/common/ui";
+import { useConfirm } from "../components/common/ConfirmDialog";
 import { LabelSheet, PaperPicker, PrintGrid, printCss, sheetSlots } from "../components/label/LabelSheet";
 import { keepPaper, readPaper, today } from "./LabelPage";
 
-interface Row { recipeId: string; count: number }
+/** 品目1行：お店のレシピか、レシピの無い品目（コーヒー豆など）。content は詰め合わせでの1つの内容量（100g など） */
+interface Row { recipeId?: string; free?: { name: string; text: string }; count: number; content?: string }
+/** よく使う詰め合わせ organizations/{orgId}/labelSets/{id} */
+interface LabelSet { id: string; name: string; rows: Row[]; info: Partial<LabelInfo> }
+
 const inputSm = "rounded-lg border border-line-strong bg-paper px-2 py-1.5 text-sm";
 const input = `w-full ${inputSm}`;
+const num = (v: string, max = 200) => Math.max(0, Math.min(max, Number(v.replace(/\D/g, "")) || 0));
+/** Firestore は undefined を保存できないので落とす */
+const clean = <T extends object>(o: T): T => JSON.parse(JSON.stringify(o)) as T;
 
 export function LabelsPage() {
-  const { orgId, org } = useOrgCtx();
+  const { orgId, org, canEdit } = useOrgCtx();
+  const confirm = useConfirm();
   const [params] = useSearchParams();
   const ings = useIngredients(orgId);
   const all = useCol<Recipe>(`organizations/${orgId}/recipes`);
+  const sets = useCol<Omit<LabelSet, "id">>(`organizations/${orgId}/labelSets`);
   const recipes = useMemo(() => all.list.filter((r) => !(r as { archived?: boolean }).archived).map((r) => r as Recipe).sort((a, b) => a.name.localeCompare(b.name, "ja")), [all.list]);
   const recipeById = useMemo(() => new Map(all.list.map((r) => [r.id, r as Recipe])), [all.list]);
-  const [mode, setMode] = useState<"each" | "assort">("each");
+  const [mode, setMode] = useState<"each" | "assort">(params.get("mode") === "assort" ? "assort" : "each");
   const [rows, setRows] = useState<Row[]>(() => (params.get("add") ? [{ recipeId: params.get("add")!, count: 1 }] : []));
   const [made, setMade] = useState(today);
   const [paperId, setPaperId] = useState(() => readPaper() ?? LABEL_PAPERS[0].id);
   const [start, setStart] = useState(1);
   const [copies, setCopies] = useState(1);
   const [assort, setAssort] = useState<LabelInfo | null>(null);
+  const [setId, setSetId] = useState<string | null>(null);
+  const [setName, setSetName] = useState("");
+  const [msg, setMsg] = useState("");
   const paper = paperOf(paperId);
 
-  const items = useMemo(() => rows.flatMap((row) => {
-    const r = recipeById.get(row.recipeId);
+  const items = useMemo(() => rows.flatMap((row, at) => {
+    if (row.free) {
+      const problems = row.free.name.trim() && row.free.text.trim() ? [] : ["品目の名前と原材料を入れてください"];
+      return [{ at, row, name: row.free.name.trim(), text: row.free.text.trim(), content: row.content, info: null as LabelInfo | null, recipe: null as Recipe | null, built: null as BuiltLabel | null, problems }];
+    }
+    const r = row.recipeId ? recipeById.get(row.recipeId) : undefined;
     if (!r) return [];
     const built = buildRecipeLabel(r, ings.byId, recipeById, org.settings);
     const info = labelInfoFor(r, org.settings);
-    return [{ row, recipe: r, built, info, problems: problemsOf(info, built) }];
+    return [{ at, row, name: r.name, text: info.ingredientsText || built.ingredientsText, content: row.content ?? info.content, info, recipe: r, built, problems: problemsOf(info, built) }];
   }), [rows, recipeById, ings.byId, org.settings]);
+  const shown = mode === "each" ? items.filter((i) => i.recipe) : items;
 
   // 詰め合わせの初めの値：期限は一番短い商品に合わせ、どれかが消費期限なら消費期限
   useEffect(() => {
     if (mode !== "assort" || assort || !items.length) return;
-    const first = items[0].info;
+    const withInfo = items.filter((i) => i.info);
+    const first = withInfo[0]?.info;
     setAssort({
-      ...first,
-      productName: "焼菓子詰合せ",
-      expiryDays: Math.min(...items.map((i) => i.info.expiryDays || 7)),
-      expiryKind: items.some((i) => i.info.expiryKind === "消費期限") ? "消費期限" : first.expiryKind,
-      storage: org.settings.labelStorage || first.storage,
-      content: undefined, ingredientsText: undefined, ingredientsBase: undefined,
+      productName: assortName(first?.productName, items.filter((i) => i.row.free).map((i) => i.name)),
+      expiryDays: withInfo.length ? Math.min(...withInfo.map((i) => i.info!.expiryDays || 7)) : org.settings.labelExpiryDays,
+      expiryKind: withInfo.some((i) => i.info!.expiryKind === "消費期限") ? "消費期限" : (first?.expiryKind ?? org.settings.labelExpiryKind),
+      storage: org.settings.labelStorage || first?.storage || "直射日光・高温多湿を避けて保存してください",
+      dateOutside: org.settings.labelDateOutside, datePrint: org.settings.labelDatePrint,
+      manufacturer: org.settings.manufacturer, manufacturerAddress: org.settings.manufacturerAddress,
     });
-  }, [mode, assort, items, org.settings.labelStorage]);
+  }, [mode, assort, items, org.settings]);
 
   const unused = recipes.filter((r) => !rows.some((x) => x.recipeId === r.id));
   const setRow = (i: number, p: Partial<Row>) => setRows(rows.map((x, j) => (j === i ? { ...x, ...p } : x)));
 
   let labels: LabelData[] = [];
-  let blocked = items.length === 0;
+  let blocked = shown.length === 0;
   let preview: LabelData | null = null;
   if (mode === "each") {
-    for (const it of items) {
-      const d = labelData(it.info, it.built, made);
+    for (const it of shown) {
+      const d = labelData(it.info!, it.built!, made);
       preview ??= d;
       if (it.problems.length) blocked = true;
       labels.push(...Array.from({ length: it.row.count }, () => d));
     }
-  } else if (assort) {
-    const text = assortText(items.map((i) => ({ name: i.recipe.name, text: i.info.ingredientsText || i.built.ingredientsText })));
-    const content = assortContent(items.map((i) => ({ name: i.recipe.name, count: i.row.count })));
+  } else if (assort && items.length) {
+    const live = items.filter((i) => i.row.count > 0);
+    const text = assortText(live.map((i) => ({ name: i.name, text: i.text })));
+    const content = assortContent(live.map((i) => ({ name: i.name, count: i.row.count, content: i.content })));
     const d = labelData({ ...assort, content: assort.content || content }, { ingredientsText: text, contentText: content }, made);
     preview = d;
-    if (items.some((i) => i.problems.length) || labelMissing(assort).length) blocked = true;
+    if (live.some((i) => i.problems.length) || labelMissing(assort).length || !live.length) blocked = true;
     labels = Array.from({ length: copies }, () => d);
   }
   const setA = (p: Partial<LabelInfo>) => assort && setAssort({ ...assort, ...p });
+
+  function load(s: LabelSet) {
+    setRows(s.rows);
+    setAssort({ ...(assort ?? labelInfoForOrg(org.settings)), ...s.info, manufacturer: org.settings.manufacturer, manufacturerAddress: org.settings.manufacturerAddress });
+    setSetId(s.id);
+    setSetName(s.name);
+    setMsg("");
+  }
+  async function save(asNew: boolean) {
+    if (!assort || !rows.length) return;
+    const name = setName.trim() || assort.productName;
+    const id = !asNew && setId ? setId : newId(`organizations/${orgId}/labelSets`);
+    const { productName, content, expiryKind, expiryDays, storage, dateOutside, datePrint } = assort;
+    try {
+      await saveDoc(`organizations/${orgId}/labelSets/${id}`, clean({ name: name.slice(0, 40), rows: rows.slice(0, 20), info: { productName, content, expiryKind, expiryDays, storage, dateOutside, datePrint } }), { merge: false });
+      setSetId(id);
+      setSetName(name);
+      setMsg(`「${name}」を保存しました。次から上の一覧で呼び出せます。`);
+    } catch {
+      setMsg("保存できませんでした。");
+    }
+  }
+  async function drop(s: LabelSet) {
+    if (!(await confirm({ title: `「${s.name}」を消しますか？`, body: "レシピや材料は消えません。", ok: "消す" }))) return;
+    await removeDoc(`organizations/${orgId}/labelSets/${s.id}`);
+    if (setId === s.id) setSetId(null);
+  }
 
   return (
     <div className="mx-auto max-w-3xl space-y-4 p-4">
@@ -86,46 +135,87 @@ export function LabelsPage() {
       <div className="no-print space-y-4">
         <PageHead title="ラベルをまとめて印刷" back={params.get("add") ? `/recipes/${params.get("add")}/label` : "/"} />
         <div className="grid grid-cols-2 gap-1 rounded-xl bg-sand p-1 text-sm">
-          {([["each", "商品ごとに何枚か"], ["assort", "詰め合わせ（ギフト・セット）"]] as const).map(([k, t]) => (
+          {([["each", "商品ごとに何枚か"], ["assort", "詰め合わせ（箱の外に貼る）"]] as const).map(([k, t]) => (
             <button key={k} onClick={() => setMode(k)} className={`rounded-lg px-3 py-2 ${mode === k ? "bg-paper font-bold shadow-sm" : "text-muted"}`}>{t}</button>
           ))}
         </div>
         <p className="text-xs text-muted">
           {mode === "each"
-            ? "いくつもの商品のラベルを1回で刷ります。名称・期限・内容量などは、それぞれのラベル画面で「レシピに覚える」を押した内容を使います（コーヒー豆の「200g」などもそこで）。"
-            : "1枚のラベルに、品目ごとの原材料を【商品名】で並べます（詰め合わせの書き方）。期限は一番短い商品に合わせています。"}
+            ? "いくつもの商品のラベルを1回で刷ります。名称・期限・内容量などは、それぞれのラベル画面で「レシピに覚える」を押した内容を使います。"
+            : "ギフト箱などの外に貼る1枚のラベルです。品目ごとの原材料を【品目名】で並べ、内容量も品目ごとに書きます（詰め合わせの書き方）。期限は一番短い品目に合わせています。"}
         </p>
 
+        {mode === "assort" && sets.list.length > 0 && (
+          <section className={`${ui.card} space-y-2`}>
+            <p className={ui.label}>よく使う詰め合わせ</p>
+            <div className="flex flex-wrap gap-1.5">
+              {sets.list.map((s) => (
+                <span key={s.id} className={`${ui.chip} ${setId === s.id ? "ring-2 ring-clay" : ""}`}>
+                  <button onClick={() => load(s as LabelSet)}>{s.name}</button>
+                  {canEdit && <button aria-label="消す" className="text-faint" onClick={() => drop(s as LabelSet)}><Icon name="close" className="h-3 w-3" /></button>}
+                </span>
+              ))}
+            </div>
+          </section>
+        )}
+
         <section className={`${ui.card} space-y-2`}>
-          {items.map((it, i) => (
-            <div key={it.row.recipeId} className="space-y-1 border-b border-line pb-2 last:border-0">
+          {shown.map((it) => (
+            <div key={it.at} className="space-y-1 border-b border-line pb-2 last:border-0">
               <div className="flex items-center gap-2">
-                <Link to={`/recipes/${it.recipe.id}/label`} className="flex-1 truncate font-medium underline decoration-line-strong">{it.recipe.name}</Link>
-                <input className={`${inputSm} w-16 text-right`} inputMode="numeric" value={it.row.count} onChange={(e) => setRow(i, { count: Math.max(0, Math.min(200, Number(e.target.value.replace(/\D/g, "")) || 0)) })} />
+                {it.recipe
+                  ? <Link to={`/recipes/${it.recipe.id}/label`} className="min-w-0 flex-1 truncate font-medium underline decoration-line-strong">{it.name}</Link>
+                  : <input className={`${inputSm} min-w-0 flex-1`} placeholder="品目名（例：コーヒー豆（エチオピア））" value={it.row.free!.name} onChange={(e) => setRow(it.at, { free: { ...it.row.free!, name: e.target.value } })} />}
+                <input className={`${inputSm} w-14 text-right`} inputMode="numeric" value={it.row.count} onChange={(e) => setRow(it.at, { count: num(e.target.value) })} />
                 <span className="text-sm text-muted">{mode === "each" ? "枚" : "個"}</span>
-                <button className="rounded-lg p-1 text-muted" aria-label="外す" onClick={() => setRows(rows.filter((_, j) => j !== i))}><Icon name="close" className="h-4 w-4" /></button>
+                <button className="rounded-lg p-1 text-muted" aria-label="外す" onClick={() => setRows(rows.filter((_, j) => j !== it.at))}><Icon name="close" className="h-4 w-4" /></button>
               </div>
-              {it.problems.length > 0 && <p className="text-xs text-ng">印刷できません：{it.problems.join("・")}（名前を押してラベル画面で直す）</p>}
+              {mode === "assort" && (
+                <div className="grid grid-cols-[1fr_7rem] gap-2">
+                  {it.row.free
+                    ? <input className={input} placeholder="原材料名（例：コーヒー豆（生豆生産国名 エチオピア））" value={it.row.free.text} onChange={(e) => setRow(it.at, { free: { ...it.row.free!, text: e.target.value } })} />
+                    : <span className="truncate self-center text-xs text-muted">{it.text}</span>}
+                  <input className={input} placeholder={it.row.free ? "100g" : "1つの内容量"} value={it.row.content ?? ""} onChange={(e) => setRow(it.at, { content: e.target.value || undefined })} />
+                </div>
+              )}
+              {it.problems.length > 0 && <p className="text-xs text-ng">印刷できません：{it.problems.join("・")}{it.recipe && "（名前を押してラベル画面で直す）"}</p>}
             </div>
           ))}
-          <select className={input} value="" onChange={(e) => e.target.value && setRows([...rows, { recipeId: e.target.value, count: mode === "each" ? 1 : 1 }])}>
+          <select className={input} value="" onChange={(e) => e.target.value && setRows([...rows, { recipeId: e.target.value, count: 1 }])}>
             <option value="">＋ 商品（レシピ）を足す</option>
             {unused.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
           </select>
+          {mode === "assort" && (
+            <button className="text-sm text-clay-strong underline" onClick={() => setRows([...rows, { free: { name: "", text: "" }, count: 1 }])}>
+              ＋ レシピの無い品目（コーヒー豆・仕入れた商品など）を足す
+            </button>
+          )}
         </section>
 
         {mode === "assort" && assort && (
           <section className={`${ui.card} space-y-2`}>
             <div className="grid grid-cols-2 gap-2">
               <label className="space-y-1"><span className={ui.label}>名称</span><input className={input} value={assort.productName} onChange={(e) => setA({ productName: e.target.value })} /></label>
-              <label className="space-y-1"><span className={ui.label}>内容量</span><input className={input} value={assort.content ?? ""} placeholder={preview?.contentText} onChange={(e) => setA({ content: e.target.value || undefined })} /></label>
+              <label className="space-y-1"><span className={ui.label}>内容量（空なら品目ごと）</span><input className={input} value={assort.content ?? ""} placeholder="自動" onChange={(e) => setA({ content: e.target.value || undefined })} /></label>
               <label className="space-y-1"><span className={ui.label}>期限の種類</span>
                 <select className={input} value={assort.expiryKind} onChange={(e) => setA({ expiryKind: e.target.value as LabelInfo["expiryKind"] })}><option>賞味期限</option><option>消費期限</option></select></label>
-              <label className="space-y-1"><span className={ui.label}>製造日から何日</span><input className={input} inputMode="numeric" value={assort.expiryDays} onChange={(e) => setA({ expiryDays: Number(e.target.value.replace(/\D/g, "")) || 0 })} /></label>
+              <label className="space-y-1"><span className={ui.label}>製造日から何日</span><input className={input} inputMode="numeric" value={assort.expiryDays} onChange={(e) => setA({ expiryDays: num(e.target.value, 3650) })} /></label>
             </div>
             <label className="block space-y-1"><span className={ui.label}>保存方法</span><input className={input} value={assort.storage} onChange={(e) => setA({ storage: e.target.value })} /></label>
             <label className="flex items-center gap-2 text-sm"><input type="checkbox" className="h-4 w-4 accent-clay" checked={!!assort.dateOutside} onChange={(e) => setA({ dateOutside: e.target.checked })} />日付は枠の外に書く</label>
-            <label className="flex items-center gap-2 text-sm">枚数<input className={`${inputSm} w-20`} inputMode="numeric" value={copies} onChange={(e) => setCopies(Math.max(1, Math.min(200, Number(e.target.value.replace(/\D/g, "")) || 1)))} /></label>
+            <label className="flex items-center gap-2 text-sm">枚数<input className={`${inputSm} w-20`} inputMode="numeric" value={copies} onChange={(e) => setCopies(Math.max(1, num(e.target.value)))} /></label>
+            {canEdit && (
+              <div className="space-y-1 border-t border-line pt-2">
+                <span className={ui.label}>よく使う詰め合わせとして保存</span>
+                <div className="flex gap-2">
+                  <input className={input} maxLength={40} placeholder={assort.productName} value={setName} onChange={(e) => setSetName(e.target.value)} />
+                  {setId && <button className={`${ui.secondary} whitespace-nowrap py-1.5 text-sm`} onClick={() => save(false)}>上書き</button>}
+                  <button className={`${ui.secondary} whitespace-nowrap py-1.5 text-sm`} onClick={() => save(true)}>{setId ? "別に保存" : "保存"}</button>
+                </div>
+                {msg && <p className="text-xs text-ink-soft">{msg}</p>}
+              </div>
+            )}
+            <p className="text-xs text-muted">箱の中の品物それぞれに表示があり、箱の外から見えるなら、外のラベルは省けます。見えない箱は、外にこのラベルを貼ってください。</p>
           </section>
         )}
 
@@ -144,7 +234,7 @@ export function LabelsPage() {
           {mode === "assort" && paper.w * paper.h < 3500 && <p className="text-xs text-warn-strong">詰め合わせは原材料が長くなります。62×100mm や自由な大きさなど、大きめの用紙がおすすめです。</p>}
           {preview && <div className="flex justify-center overflow-x-auto rounded-2xl bg-sand p-4"><LabelSheet d={preview} w={paper.w} h={paper.h} /></div>}
           <button disabled={blocked} className={`w-full ${ui.primary} flex items-center justify-center gap-2`} onClick={() => window.print()}>
-            <Icon name="printer" />{blocked ? (items.length ? "赤い項目を済ませると印刷できます" : "商品を足してください") : `${labels.length}枚を印刷する`}
+            <Icon name="printer" />{blocked ? (shown.length ? "赤い項目を済ませると印刷できます" : "商品を足してください") : `${labels.length}枚を印刷する`}
           </button>
           <p className="text-xs text-muted">印刷の画面で「余白なし」「倍率100%」を選んでください。</p>
         </section>
@@ -152,6 +242,13 @@ export function LabelsPage() {
       <PrintGrid labels={labels} paper={paper} start={start} />
     </div>
   );
+}
+
+function labelInfoForOrg(s: ReturnType<typeof useOrgCtx>["org"]["settings"]): LabelInfo {
+  return {
+    productName: "詰合せ", storage: s.labelStorage || "直射日光・高温多湿を避けて保存してください", expiryDays: s.labelExpiryDays, expiryKind: s.labelExpiryKind,
+    dateOutside: s.labelDateOutside, datePrint: s.labelDatePrint, manufacturer: s.manufacturer, manufacturerAddress: s.manufacturerAddress,
+  };
 }
 
 function problemsOf(info: LabelInfo, b: BuiltLabel): string[] {

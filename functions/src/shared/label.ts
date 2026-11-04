@@ -139,9 +139,24 @@ export function assortText(items: { name: string; text: string }[]): string {
   return items.map((i) => `【${i.name}】${i.text}`).join("　");
 }
 
-/** 詰め合わせの内容量（「マドレーヌ2個、フィナンシェ3個」） */
-export function assortContent(items: { name: string; count: number }[]): string {
-  return items.filter((i) => i.count > 0).map((i) => `${i.name}${i.count}個`).join("、");
+/**
+ * 詰め合わせの内容量（「バナナブレッド1個、チョコスコーン2個、コーヒー豆100g」）。
+ * 品目に内容量（100g など）があればそれを使い、2つ以上なら「100g×2」
+ */
+export function assortContent(items: { name: string; count: number; content?: string }[]): string {
+  return items.filter((i) => i.count > 0).map((i) => {
+    const c = i.content?.trim();
+    if (!c) return `${i.name}${i.count}個`;
+    return `${i.name}${c}${i.count > 1 ? `×${i.count}` : ""}`;
+  }).join("、");
+}
+
+/** 詰め合わせの名称の案：お店のレシピだけなら「焼菓子詰合せ」、コーヒー豆も入れば「焼菓子・コーヒー詰合せ」、ほかの品目なら「詰合せ」 */
+export function assortName(category: string | undefined, freeNames: string[]): string {
+  const cat = category || "菓子";
+  if (!freeNames.length) return `${cat}詰合せ`;
+  if (freeNames.every((n) => /コーヒー|珈琲/.test(n))) return `${cat}・コーヒー詰合せ`;
+  return "詰合せ";
 }
 
 const REQUIRED = new Set<string>(["shrimp", "crab", "walnut", "wheat", "buckwheat", "egg", "milk", "peanut"]);
