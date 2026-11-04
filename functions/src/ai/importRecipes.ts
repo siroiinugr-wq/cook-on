@@ -157,10 +157,14 @@ export const archiveImport = onCall({ region: REGION, timeoutSeconds: 300 }, asy
   requireRole(req.auth, orgId, ROLES.EDIT);
   const importId = idOf(req.data?.importId, "取り込みID");
   const keepEdited = req.data?.keepEdited !== false;
-  const db = getFirestore();
-  const d = (await db.doc(`organizations/${orgId}/imports/${importId}`).get()).data() as ImportDoc | undefined;
+  const d = (await getFirestore().doc(`organizations/${orgId}/imports/${importId}`).get()).data() as ImportDoc | undefined;
   if (!d) throw new HttpsError("not-found", "取り込みが見つかりません。");
-  const ids = d.savedRecipeIds ?? [];
+  return archiveRecipesOf(orgId, d.savedRecipeIds ?? [], keepEdited);
+});
+
+/** レシピをしまう（keepEdited なら第2版以降＝手で直したものは残す） */
+async function archiveRecipesOf(orgId: string, ids: string[], keepEdited: boolean): Promise<{ archived: number; kept: number }> {
+  const db = getFirestore();
   let archived = 0;
   let kept = 0;
   for (let i = 0; i < ids.length; i += 300) {
@@ -175,4 +179,38 @@ export const archiveImport = onCall({ region: REGION, timeoutSeconds: 300 }, asy
     await batch.commit();
   }
   return { archived, kept };
+}
+
+/** 読み取り中・保存中がこれより古ければ、止まったものとして消せる */
+const STUCK_MS = 60 * 60 * 1000;
+
+/**
+ * これまでの取り込みを、選んでまとめて消す（重複した取り込みの片付け）。
+ * 取り込みの記録を消し、その取り込みで作ったレシピはしまう（消さない。一つずつ戻せる）。keepEdited なら手で直したレシピは残す
+ */
+export const removeImports = onCall({ region: REGION, timeoutSeconds: 300 }, async (req) => {
+  const orgId = idOf(req.data?.orgId, "店舗ID");
+  requireRole(req.auth, orgId, ROLES.EDIT);
+  const raw = Array.isArray(req.data?.importIds) ? (req.data.importIds as unknown[]) : [];
+  const importIds = [...new Set(raw.map((x) => idOf(x, "取り込みID")))];
+  if (!importIds.length || importIds.length > 100) throw new HttpsError("invalid-argument", "消す取り込みを1〜100件選んでください。");
+  const keepEdited = req.data?.keepEdited !== false;
+  const db = getFirestore();
+  const snaps = await db.getAll(...importIds.map((id) => db.doc(`organizations/${orgId}/imports/${id}`)));
+  let removed = 0;
+  let busy = 0;
+  let archived = 0;
+  let kept = 0;
+  for (const s of snaps) {
+    if (!s.exists) continue;
+    const d = s.data() as ImportDoc;
+    const at = s.updateTime?.toMillis() ?? 0;
+    if ((d.status === "parsing" || d.status === "saving") && Date.now() - at < STUCK_MS) { busy++; continue; }
+    const r = await archiveRecipesOf(orgId, d.savedRecipeIds ?? [], keepEdited);
+    archived += r.archived;
+    kept += r.kept;
+    await s.ref.delete();
+    removed++;
+  }
+  return { removed, busy, archived, kept };
 });

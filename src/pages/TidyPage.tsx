@@ -5,7 +5,7 @@ import { calcCost } from "@shared/cost";
 import { duplicateItems, guessPieces, HEAVY_SINGLE_GRAMS, isPlaceholderName, needsPieces, looksNotRecipe, similarIngredientGroups } from "@shared/tidy";
 import type { Recipe } from "@shared/types";
 import { categorySuspect } from "@shared/allergenGuess";
-import { HOMEMADE_HINT, madeFromCandidates, usesIngredient } from "@shared/madeFrom";
+import { HOMEMADE_HINT, madeFromCandidates, madeFromPartial, usesIngredient } from "@shared/madeFrom";
 import { HomemadeLinks } from "../components/tidy/HomemadeLinks";
 import { GramsFix } from "../components/tidy/GramsFix";
 import { PlainNames } from "../components/tidy/PlainNames";
@@ -61,13 +61,18 @@ export function TidyPage() {
   const homemade = useMemo(() => {
     const madeOf = new Map(ings.list.flatMap((i) => (i.madeFrom ? [[i.id, i.madeFrom] as const] : [])));
     const recIngs = new Map(recipes.list.map((r) => [r.id, r.ingredientIds ?? []]));
-    const rows: { ing: (typeof ings.list)[number]; recipe: Recipe }[] = [];
+    const rows: { ing: (typeof ings.list)[number]; recipe: Recipe; partial?: boolean }[] = [];
     const hinted: typeof ings.list = [];
     for (const ing of ings.list) {
       if (ing.madeFrom) continue;
-      const c = madeFromCandidates(ing, recipes.list).find((r) => !usesIngredient(r.id, ing.id, recIngs, madeOf));
-      if (c) rows.push({ ing, recipe: c });
-      else if (HOMEMADE_HINT.test(ing.name) && !ing.globalRef && (usedIn.get(ing.id) ?? 0) > 0) hinted.push(ing);
+      const ok = (r: Recipe) => !usesIngredient(r.id, ing.id, recIngs, madeOf);
+      const c = madeFromCandidates(ing, recipes.list).find(ok);
+      if (c) { rows.push({ ing, recipe: c }); continue; }
+      if (!HOMEMADE_HINT.test(ing.name) || ing.globalRef) continue;
+      // 名前の一部が同じレシピが1つだけなら、それを結び先の案にする（「ダマンド」→「クレームダマンド」）
+      const part = madeFromPartial(ing, recipes.list).filter(ok);
+      if (part.length === 1) rows.push({ ing, recipe: part[0], partial: true });
+      else if ((usedIn.get(ing.id) ?? 0) > 0) hinted.push(ing);
     }
     return { rows, hinted };
   }, [ings.list, recipes.list, usedIn]);
@@ -89,7 +94,7 @@ export function TidyPage() {
       <div id="link" className="scroll-mt-20"><LinkCard orgId={orgId} loose={loose} credits={org.credits} /></div>
 
       <Accordion id="homemade" title={`お店で作る材料をレシピに結ぶ（${n(homemade.rows.length)}）`} summary="タルト生地・クレームダマンドなど。結ぶと値段とアレルゲンがレシピの中身から入ります" defaultOpen={homemade.rows.length > 0}>
-        <HomemadeLinks orgId={orgId} rows={homemade.rows} hinted={homemade.hinted} ingById={ings.byId} />
+        <HomemadeLinks orgId={orgId} rows={homemade.rows} hinted={homemade.hinted} ingById={ings.byId} linked={ings.list.filter((i) => i.madeFrom).length} />
       </Accordion>
       <Accordion id="allergen" title={`1. アレルゲンの確認（${n(unconfirmed.length)}）`} summary="名前から推定した候補を見て、確定します。確定するまでラベルは印刷できません" defaultOpen={unconfirmed.length > 0}>
         <AllergenReview orgId={orgId} list={unconfirmed} usedIn={usedIn} />

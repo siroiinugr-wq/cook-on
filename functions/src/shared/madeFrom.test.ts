@@ -71,3 +71,41 @@ describe("自家製の材料（レシピに結ぶ）", () => {
     expect(madeFromCandidates({ name: "クランブル" }, rs).map((r) => r.id)).toEqual(["2"]);
   });
 });
+
+describe("自家製の材料：成分と名前の一部", () => {
+  it("中身の成分（100gあたり）を重さで割り合わせる", async () => {
+    const { madeFromNutrition } = await import("./madeFrom");
+    const ings = new Map<string, Ingredient>([
+      ["a", { id: "a", name: "バター", purchasePrice: null, purchaseQty: 1, purchaseUnit: "g", allergens: [], globalRef: "g_a" }],
+      ["b", { id: "b", name: "砂糖", purchasePrice: null, purchaseQty: 1, purchaseUnit: "g", allergens: [], globalRef: "g_b" }],
+      ["c", { id: "c", name: "塩", purchasePrice: null, purchaseQty: 1, purchaseUnit: "g", allergens: [] }],
+    ]);
+    const nut: Record<string, Record<string, number>> = { g_a: { kcal: 700, fat: 80 }, g_b: { kcal: 400 } };
+    const r = madeFromNutrition([
+      { ingredientId: "a", name: "バター", qty: 100, unit: "g" },
+      { ingredientId: "b", name: "砂糖", qty: 100, unit: "g" },
+      { ingredientId: "c", name: "塩", qty: 0, unit: "適量" },
+    ], ings, (i) => (i.globalRef ? nut[i.globalRef] : null));
+    expect(r.missing).toBe(0);
+    expect(r.nutrition).toEqual({ kcal: 550, fat: 40 });
+    const r2 = madeFromNutrition([
+      { ingredientId: "a", name: "バター", qty: 100, unit: "g" },
+      { ingredientId: "c", name: "塩", qty: 100, unit: "g" },
+    ], ings, (i) => (i.globalRef ? nut[i.globalRef] : null));
+    expect(r2.missing).toBe(1);
+    expect(r2.nutrition?.kcal).toBe(350);
+  });
+  it("成分を渡したときだけ patch に入る", () => {
+    const ings = new Map<string, Ingredient>();
+    expect("nutrition" in madeFromPatch([], ings)).toBe(false);
+    expect("nutrition" in madeFromPatch([], ings, () => null)).toBe(true);
+  });
+  it("名前の一部が同じレシピ", async () => {
+    const { madeFromPartial } = await import("./madeFrom");
+    const recipes = [{ id: "1", name: "クレームダマンド" }, { id: "2", name: "りんごのキャラメリゼ" }, { id: "3", name: "ガトーショコラ" }];
+    expect(madeFromPartial({ name: "ダマンド" }, recipes).map((r) => r.id)).toEqual(["1"]);
+    expect(madeFromPartial({ name: "キャラメリゼ" }, recipes).map((r) => r.id)).toEqual(["2"]);
+    expect(madeFromPartial({ name: "ショコラ" }, recipes).map((r) => r.id)).toEqual(["3"]);
+    expect(madeFromPartial({ name: "卵" }, recipes)).toEqual([]);
+  });
+});

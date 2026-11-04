@@ -4,7 +4,8 @@ import { Link } from "react-router-dom";
 import { ALLERGENS, allergenName, type AllergenId } from "@shared/allergens";
 import { fromExTax, PRICE_TAX_OPTIONS, toExTax, unitCostPerGram, yen } from "@shared/cost";
 import type { Ingredient, Recipe } from "@shared/types";
-import { madeFromCandidates, madeFromPatch, usesIngredient } from "@shared/madeFrom";
+import { madeFromCandidates, madeFromPartial, madeFromPatch, usesIngredient } from "@shared/madeFrom";
+import { NUTRIENT_LABELS } from "@shared/mext";
 import { UNITS, type Unit } from "@shared/units";
 import { useCol } from "../../hooks/useData";
 import { removeDoc, saveDoc, toDate } from "../../lib/store";
@@ -74,6 +75,8 @@ export function IngredientSheet({ orgId, uid, ing, usedIn, usedBy = [], recipes 
         refWeb: d.refWeb ?? null,
         madeFrom: d.madeFrom ?? null,
         ...(made ? madeData : {}),
+        // レシピから外したら、レシピから計算した成分も消す（仕入れる材料は共有の材料の成分を使う）
+        ...(!d.madeFrom && ing?.madeFrom ? { nutrition: null, nutritionMissing: null } : {}),
       };
       if (ing) await saveDoc(`organizations/${orgId}/ingredients/${ing.id}`, data);
       else await createIngredient(orgId, uid, data);
@@ -221,7 +224,8 @@ function MadeFrom({ ing, d, recipes, ingById, made, perG, onPick }: {
   const madeOf = new Map([...ingById.values()].flatMap((i) => (i.madeFrom ? [[i.id, i.madeFrom] as const] : [])));
   const recIngs = new Map(recipes.map((r) => [r.id, r.ingredientIds ?? []]));
   const ok = recipes.filter((r) => !ing || !usesIngredient(r.id, ing.id, recIngs, madeOf));
-  const cands = madeFromCandidates({ name: d.name, aliases: d.aliases }, ok);
+  const exact = madeFromCandidates({ name: d.name, aliases: d.aliases }, ok);
+  const cands = [...exact, ...madeFromPartial({ name: d.name, aliases: d.aliases }, ok).filter((r) => !exact.includes(r))];
   const rest = ok.filter((r) => !cands.includes(r)).sort((a, b) => a.name.localeCompare(b.name, "ja"));
   const cur = d.madeFrom ? recipes.find((r) => r.id === d.madeFrom) : undefined;
 
@@ -229,7 +233,7 @@ function MadeFrom({ ing, d, recipes, ingById, made, perG, onPick }: {
     return (
       <div className="rounded-xl bg-sand p-3 text-sm">
         {cands.length > 0 ? (
-          <p>同じ名前のレシピ「{cands[0].name}」があります。<button type="button" className="text-clay-strong underline" onClick={() => { onPick(cands[0].id); setOpen(true); }}>このレシピから作る材料にする</button></p>
+          <p>{exact.length ? "同じ名前" : "名前の近い"}のレシピ「{cands[0].name}」があります。<button type="button" className="text-clay-strong underline" onClick={() => { onPick(cands[0].id); setOpen(true); }}>このレシピから作る材料にする</button></p>
         ) : (
           <button type="button" className="text-clay-strong underline" onClick={() => setOpen(true)}>お店で作る材料（タルト生地・クリームなど）なら、作るレシピを選ぶ</button>
         )}
@@ -241,7 +245,7 @@ function MadeFrom({ ing, d, recipes, ingById, made, perG, onPick }: {
       <label className="block space-y-1"><span className={ui.label}>お店で作る材料：作るレシピ</span>
         <select className={ui.input} value={d.madeFrom ?? ""} onChange={(e) => onPick(e.target.value || null)}>
           <option value="">自家製ではない（仕入れる材料）</option>
-          {cands.length > 0 && <optgroup label="同じ名前のレシピ">{cands.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}</optgroup>}
+          {cands.length > 0 && <optgroup label="同じ・近い名前のレシピ">{cands.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}</optgroup>}
           <optgroup label="ほかのレシピ">{rest.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}</optgroup>
         </select>
       </label>
@@ -254,10 +258,25 @@ function MadeFrom({ ing, d, recipes, ingById, made, perG, onPick }: {
           {made.missing > 0 && <p className="text-xs text-warn-strong">レシピの材料のうち{made.missing}行は値段か重さが分からないので、まだ原価に入りません。レシピの材料を直すと入ります。</p>}
           <p className="text-xs">アレルゲン：{made.allergens.length ? made.allergens.map(allergenName).join("・") : "なし"}
             {!made.allergensConfirmed && <span className="ml-1 text-warn-strong">（中身にまだ確かめていない材料があります）</span>}</p>
-          <p className="text-xs text-muted">値段とアレルゲンは「<Link to={`/recipes/${cur.id}`} className="text-clay-strong underline">{cur.name}</Link>」の材料から計算します。レシピや材料の値段を直すと、自動で入れ直します。</p>
+          <MadeNutrition ing={ing} recipeId={cur.id} />
+          <p className="text-xs text-muted">値段・アレルゲン・成分は「<Link to={`/recipes/${cur.id}`} className="text-clay-strong underline">{cur.name}</Link>」の材料から計算します。レシピや材料の値段を直すと、自動で入れ直します。</p>
         </div>
       )}
     </div>
+  );
+}
+
+/** レシピの中身の成分表から計算した、100gあたりの成分（サーバーが入れる。結んだ直後は保存してから少し待つ） */
+function MadeNutrition({ ing, recipeId }: { ing: Ingredient | null; recipeId: string }) {
+  if (!ing || ing.madeFrom !== recipeId) return <p className="text-xs text-muted">成分（100gあたり）は、保存すると中身の成分表から計算して入ります。</p>;
+  const n = ing.nutrition;
+  if (!n || !Object.keys(n).length) return <p className="text-xs text-muted">成分：中身の材料が成分表に結ばれていないため、まだ出ません（データの整理の「共有の材料に結ぶ」で結べます）。</p>;
+  const shown = ["kcal", "protein", "fat", "carbohydrate", "salt"].filter((k) => typeof n[k] === "number");
+  return (
+    <p className="text-xs">
+      成分（100gあたり・目安）：{shown.map((k) => `${NUTRIENT_LABELS[k]} ${n[k]}${k === "kcal" ? "kcal" : "g"}`).join("・")}
+      {(ing.nutritionMissing ?? 0) > 0 && <span className="ml-1 text-warn-strong">（中身の{ing.nutritionMissing}行は成分が分からず、0として計算）</span>}
+    </p>
   );
 }
 
