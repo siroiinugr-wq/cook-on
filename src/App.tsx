@@ -17,6 +17,7 @@ import { RecipeDetailPage } from "./pages/RecipeDetailPage";
 import { RecipeEditPage } from "./pages/RecipeEditPage";
 import { WorkModePage } from "./pages/WorkModePage";
 import { LabelPage } from "./pages/LabelPage";
+import { LabelsPage } from "./pages/LabelsPage";
 import { IngredientsPage } from "./pages/IngredientsPage";
 import { PackagingPage } from "./pages/PackagingPage";
 import { ProductsPage } from "./pages/ProductsPage";
@@ -68,6 +69,7 @@ function Main({ orgId, onCreated }: { orgId: string; onCreated: (id: string) => 
       {/* 作業モードとラベル印刷は、下の入口や見出しを出さない（画面いっぱいに使う） */}
       <Route path="/recipes/:id/work" element={<WorkModePage />} />
       <Route path="/recipes/:id/label" element={<LabelPage />} />
+      <Route path="/labels" element={<LabelsPage />} />
       <Route path="/new-store" element={<OnboardingPage onCreated={onCreated} canGoBack />} />
       <Route path="*" element={
         <Layout brand={brand}>

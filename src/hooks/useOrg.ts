@@ -15,6 +15,14 @@ export interface OrgSettings {
   shareProducts: boolean | null;
   /** 確かめた材料の情報（呼び方・アレルゲン・仕入れ値）を共有の材料への提案として出すか（運営が精査して採用したものだけ共有に入る） */
   shareIngredients: boolean;
+  /** ラベルの初期値（レシピに覚えた値があればそちらが先） */
+  labelExpiryKind: "賞味期限" | "消費期限";
+  labelExpiryDays: number;
+  labelStorage: string;
+  /** 期限の日付を枠の外に書く（枠の中は「枠外下部に記載」） */
+  labelDateOutside: boolean;
+  /** 枠の外の日付も印刷する（false＝スタンプや手書きで入れる） */
+  labelDatePrint: boolean;
 }
 
 export interface Org {
@@ -46,6 +54,11 @@ export function useOrg(orgId: string) {
       includeRecommendedAllergens: s.includeRecommendedAllergens !== false,
       shareProducts: typeof s.shareProducts === "boolean" ? s.shareProducts : null,
       shareIngredients: s.shareIngredients === true,
+      labelExpiryKind: s.labelExpiryKind === "消費期限" ? "消費期限" : "賞味期限",
+      labelExpiryDays: Number(s.labelExpiryDays) > 0 ? Number(s.labelExpiryDays) : 7,
+      labelStorage: typeof s.labelStorage === "string" ? s.labelStorage : "",
+      labelDateOutside: s.labelDateOutside === true,
+      labelDatePrint: s.labelDatePrint !== false,
     },
   };
   return { org, loading };
