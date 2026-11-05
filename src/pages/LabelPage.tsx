@@ -12,7 +12,8 @@ import { call } from "../lib/store";
 import { buildRecipeLabel, labelData, labelInfoFor, textOutdated } from "../lib/labelBuild";
 import { Icon } from "../components/common/Icon";
 import { ui } from "../components/common/ui";
-import { LabelSheet, PaperPicker, PrintGrid, printCss, sheetSlots } from "../components/label/LabelSheet";
+import { LabelSheet, PaperPicker, PrintGrid, printCss, sheetSlots, usePrinting } from "../components/label/LabelSheet";
+import { LabelExport } from "../components/label/LabelExport";
 import { AdditiveBox } from "../components/label/AdditiveBox";
 import { numText } from "../lib/num";
 
@@ -35,6 +36,7 @@ export function LabelPage() {
   const [start, setStart] = useState(1);
   const [info, setInfo] = useState<LabelInfo | null>(null);
   const [msg, setMsg] = useState("");
+  const [printing, print] = usePrinting();
   const paper = paperOf(paperId);
 
   useEffect(() => {
@@ -140,8 +142,9 @@ export function LabelPage() {
             )}
           </div>
           {paper.sheet && start > 1 && <p className="text-xs text-muted">使いかけのシートの {start} 面目から刷ります（左上から右へ数えます）。</p>}
-          <button disabled={blocked} className={`w-full ${ui.primary} flex items-center justify-center gap-2`} onClick={() => window.print()}><Icon name="printer" />{blocked ? "上の赤い項目を済ませると印刷できます" : "印刷する"}</button>
+          <button disabled={blocked} className={`w-full ${ui.primary} flex items-center justify-center gap-2`} onClick={print}><Icon name="printer" />{blocked ? "上の赤い項目を済ませると印刷できます" : "印刷する"}</button>
           <p className="text-xs text-muted">印刷の画面で「余白なし」「倍率100%」を選んでください。PDFに保存もできます。</p>
+          <LabelExport d={data} w={paper.w} h={paper.h} name={recipe!.name} disabled={blocked} />
           <Link to={`/labels?add=${recipe!.id}`} className="block text-sm text-clay-strong underline">ほかの商品とまとめて印刷する・詰め合わせのラベルを作る</Link>
         </section>
         <p className="text-xs leading-relaxed text-muted">
@@ -150,7 +153,7 @@ export function LabelPage() {
         </p>
       </div>
 
-      <PrintGrid labels={Array.from({ length: copies }, () => data)} paper={paper} start={start} />
+      {printing && <PrintGrid labels={Array.from({ length: copies }, () => data)} paper={paper} start={start} />}
     </div>
   );
 }

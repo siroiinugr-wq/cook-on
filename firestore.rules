@@ -128,6 +128,17 @@ service cloud.firestore {
         allow delete: if canEdit(orgId);
       }
 
+      // 保存したレシピの無い品目（コーヒー豆・仕入れた商品など。詰め合わせのラベルで探して使い回す）
+      match /labelItems/{id} {
+        allow read: if isMember(orgId);
+        allow create, update: if canEdit(orgId)
+          && request.resource.data.keys().hasOnly(['name', 'text', 'content', 'updatedAt', 'createdAt', 'createdBy'])
+          && str(request.resource.data.name, 60) && request.resource.data.name.size() > 0
+          && str(request.resource.data.text, 1000)
+          && (!('content' in request.resource.data) || str(request.resource.data.content, 40));
+        allow delete: if canEdit(orgId);
+      }
+
       // レシピは saveRecipe（Functions）だけが書く。版の記録・検索用の列を必ず作り直すため
       match /recipes/{id} {
         allow read: if isMember(orgId);

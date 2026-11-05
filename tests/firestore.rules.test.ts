@@ -97,6 +97,18 @@ describe("包装資材とセット", () => {
   });
 });
 
+describe("ラベルの保存した品目", () => {
+  const item = { name: "コーヒー豆（エチオピア）", text: "コーヒー豆（生豆生産国名 エチオピア）", content: "100g" };
+  it("スタッフは保存・消せる。見るだけの人・ほかの店舗はできない。形のおかしいものは書けない", async () => {
+    await assertSucceeds(setDoc(doc(as("u3", { orgA: "editor" }), "organizations/orgA/labelItems/l1"), item));
+    await assertSucceeds(deleteDoc(doc(as("u3", { orgA: "editor" }), "organizations/orgA/labelItems/l1")));
+    await assertFails(setDoc(doc(as("u4", { orgA: "viewer" }), "organizations/orgA/labelItems/l2"), item));
+    await assertFails(setDoc(doc(as("u2", { orgB: "owner" }), "organizations/orgA/labelItems/l2"), item));
+    await assertFails(setDoc(doc(as("u3", { orgA: "editor" }), "organizations/orgA/labelItems/l3"), { ...item, name: "" }));
+    await assertFails(setDoc(doc(as("u3", { orgA: "editor" }), "organizations/orgA/labelItems/l3"), { ...item, price: 1 }));
+  });
+});
+
 describe("アラート・ブランド・票", () => {
   it("アラートは既読にだけできる", async () => {
     const db = as("u3", { orgA: "editor" });
