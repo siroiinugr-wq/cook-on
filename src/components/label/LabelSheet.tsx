@@ -1,26 +1,20 @@
 // ラベル1枚の見た目。画面のプレビューと印刷で同じ部品を使う（大きさは mm で指定）
+import { useEffect, useState } from "react";
+import { flushSync } from "react-dom";
 import type { LabelPaper } from "@shared/label";
 import type { LabelData } from "../../lib/labelBuild";
+import { LABEL_FONT, labelPt, labelRows } from "../../lib/labelImage";
 
 export type { LabelData };
 
 export function LabelSheet({ d, w, h }: { d: LabelData; w: number; h: number }) {
-  // 小さい用紙ほど字を小さく（62×40 で 6pt 前後）。読める下限は 5.5pt。原材料が長いときはさらに少し詰める
-  const base = Math.max(5.5, Math.min(8, Math.min(w, h * 1.6) / 10.5));
-  const long = d.ingredientsText.length > (w * h) / 22;
-  const pt = long ? Math.max(5, base - 0.6) : base;
-  const rows: [string, string][] = [
-    ["名称", d.productName],
-    ["原材料名", d.ingredientsText],
-    ["内容量", d.contentText],
-    [d.expiryKind, d.expiry],
-    ["保存方法", d.storage],
-    ["製造者", [d.manufacturer, d.manufacturerAddress].filter((x) => x?.trim()).join("　")],
-  ];
+  // 字の大きさと欄は画像の書き出し（lib/labelImage.ts）と共通
+  const pt = labelPt(d, w, h);
+  const rows = labelRows(d);
   // 枠外に日付を書くときは、下に日付の場所を空ける（印刷しない設定でもスタンプ用に空ける）
   const foot = d.dateOutside ? Math.max(3.2, pt * 0.55) : 0;
   return (
-    <div className="label-sheet flex flex-col overflow-hidden bg-white text-black" style={{ width: `${w}mm`, height: `${h}mm`, padding: "1.5mm", fontSize: `${pt}pt`, lineHeight: 1.25 }}>
+    <div className="label-sheet flex flex-col overflow-hidden bg-white text-black" style={{ width: `${w}mm`, height: `${h}mm`, padding: "1.5mm", fontSize: `${pt}pt`, lineHeight: 1.25, fontFamily: LABEL_FONT }}>
       <table className="w-full flex-1 border-collapse" style={{ border: "0.2mm solid #000" }}>
         <tbody>
           {rows.map(([k, v]) => (
@@ -58,6 +52,22 @@ export function printCss(paper: LabelPaper): string {
 /** A4 の面付けで、何面目から貼るか（使いかけのシートの続きに刷る）。前を空けるための数 */
 export function sheetSlots(paper: LabelPaper): number {
   return paper.sheet ? paper.sheet.cols * paper.sheet.rows : 0;
+}
+
+/**
+ * 印刷するときだけラベルを並べる。以前は隠したまま何百枚分も毎回作り直していて、入力や印刷が重かった（2026-11-05）。
+ * 印刷ボタンのほか、ブラウザのメニューから印刷したとき（beforeprint）も並べる
+ */
+export function usePrinting(): [boolean, () => void] {
+  const [on, setOn] = useState(false);
+  useEffect(() => {
+    const before = () => flushSync(() => setOn(true));
+    const after = () => setOn(false);
+    window.addEventListener("beforeprint", before);
+    window.addEventListener("afterprint", after);
+    return () => { window.removeEventListener("beforeprint", before); window.removeEventListener("afterprint", after); };
+  }, []);
+  return [on, () => { flushSync(() => setOn(true)); window.print(); }];
 }
 
 /** 印刷するラベルを並べる（A4 の面付けは start 面目から。前は空ける） */
