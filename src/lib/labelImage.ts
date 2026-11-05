@@ -9,11 +9,17 @@ export const LABEL_FONT = `"Hiragino Sans","Hiragino Kaku Gothic ProN","Yu Gothi
 const PT = 0.3528; // 1pt = 0.3528mm
 export const LABEL_DPI = 600;
 
-export function labelPt(d: Pick<LabelData, "ingredientsText">, w: number, h: number): number {
-  // 小さい用紙ほど字を小さく（62×40 で 6pt 前後）。読める下限は 5.5pt。原材料が長いときはさらに少し詰める
-  const base = Math.max(5.5, Math.min(8, Math.min(w, h * 1.6) / 10.5));
-  const long = d.ingredientsText.length > (w * h) / 22;
-  return long ? Math.max(5, base - 0.6) : base;
+/**
+ * 字の大きさの下限（食品表示基準）：8pt 以上。表示できる面がおおむね150cm²以下なら 5.5pt 以上。
+ * ラベル1枚の面積で見る（A4 12面の1面は約36cm²なので 5.5pt）
+ */
+export function minLabelPt(w: number, h: number): number {
+  return w * h <= 15000 ? 5.5 : 8;
+}
+
+/** はじめの字の大きさ：小さい用紙ほど小さく（62×40 で 6pt 前後）。入りきらなければ fitLabel が下限まで縮める */
+export function labelPt(w: number, h: number): number {
+  return Math.max(minLabelPt(w, h), Math.min(8, Math.min(w, h * 1.6) / 10.5));
 }
 
 export function labelRows(d: LabelData): [string, string][] {
@@ -28,7 +34,7 @@ export function labelRows(d: LabelData): [string, string][] {
 }
 
 interface Text { x: number; y: number; s: string; size: number }
-interface Layout { w: number; h: number; lines: [number, number, number, number][]; texts: Text[] }
+interface Layout { w: number; h: number; lines: [number, number, number, number][]; texts: Text[]; fits: boolean; /** 全部が入る高さ(mm) */ needH: number }
 
 /** 1文字ずつ折り返す（ラベルの欄と同じ「どこでも折る」） */
 function wrap(s: string, max: number, measure: (s: string) => number): string[] {
@@ -44,8 +50,7 @@ function wrap(s: string, max: number, measure: (s: string) => number): string[] 
 }
 
 /** 線と字の置き場所を mm で決める。measure は「この字の大きさ(mm)で何mmの幅か」 */
-function layout(d: LabelData, w: number, h: number, measure: (s: string, size: number) => number): Layout {
-  const pt = labelPt(d, w, h);
+function layout(d: LabelData, w: number, h: number, pt: number, measure: (s: string, size: number) => number): Layout {
   const size = pt * PT;
   const lh = size * 1.25;
   const pad = 1.5, cellX = 0.8, cellY = 0.4;
@@ -57,8 +62,9 @@ function layout(d: LabelData, w: number, h: number, measure: (s: string, size: n
   const wrapped = rows.map(([, v]) => wrap(v ?? "", tw - keyW - cellX * 2, (s) => measure(s, size)));
   const need = wrapped.map((ls) => Math.max(1, ls.length) * lh + cellY * 2);
   // 枠いっぱいまで行を伸ばす（画面の表と同じ）。足りないときは下が切れる
-  const extra = Math.max(0, th - need.reduce((a, b) => a + b, 0)) / rows.length;
-  const out: Layout = { w, h, lines: [], texts: [] };
+  const total = need.reduce((a, b) => a + b, 0);
+  const extra = Math.max(0, th - total) / rows.length;
+  const out: Layout = { w, h, lines: [], texts: [], fits: total <= th + 0.05, needH: Math.ceil((total + pad * 2 + foot) * 10) / 10 };
   let y = pad;
   rows.forEach(([k], i) => {
     const rh = need[i] + extra;
@@ -79,12 +85,43 @@ function layout(d: LabelData, w: number, h: number, measure: (s: string, size: n
   return out;
 }
 
+let ctx: CanvasRenderingContext2D | null = null;
 function measurer(): (s: string, size: number) => number {
-  const ctx = document.createElement("canvas").getContext("2d")!;
+  ctx ??= document.createElement("canvas").getContext("2d")!;
   return (s, size) => {
+    if (!ctx) return s.length * size;
     ctx.font = `${size * 10}px ${LABEL_FONT}`;
     return ctx.measureText(s).width / 10;
   };
+}
+
+export interface LabelFit {
+  /** 使う字の大きさ(pt) */
+  pt: number;
+  /** この用紙に全部入るか */
+  fits: boolean;
+  /** 下限の字で全部入る高さ(mm)。入らないとき「下に伸ばして保存」に使う */
+  needH: number;
+  /** 下限の字の大きさ */
+  minPt: number;
+}
+
+/** 入りきるまで字を縮める（0.25pt ずつ、下限まで）。それでも入らなければ fits=false */
+export function fitLabel(d: LabelData, w: number, h: number): LabelFit {
+  const m = measurer();
+  const minPt = minLabelPt(w, h);
+  let pt = labelPt(w, h);
+  for (;;) {
+    const L = layout(d, w, h, pt, m);
+    if (L.fits) return { pt, fits: true, needH: L.needH, minPt };
+    if (pt <= minPt) return { pt: minPt, fits: false, needH: L.needH, minPt };
+    pt = Math.max(minPt, Math.round((pt - 0.25) * 100) / 100);
+  }
+}
+
+/** 入りきらないとき、ほかの用紙で入るもの（字の下限で） */
+export function papersThatFit<P extends { w: number; h: number }>(d: LabelData, papers: readonly P[]): P[] {
+  return papers.filter((p) => fitLabel(d, p.w, p.h).fits);
 }
 
 /** 書き出す前に字を用意しておく（無い端末ではほかの字になる） */
@@ -93,9 +130,18 @@ async function fontsReady(): Promise<void> {
 }
 
 /** 600dpi の PNG（用紙の大きさつき） */
-export async function labelPng(d: LabelData, w: number, h: number): Promise<Blob> {
+/** 入りきらないラベルの書き出し方：stretch＝下に伸ばして全部入れる（字は下限のまま）、cut＝用紙の大きさで下が切れる */
+export type Overflow = "stretch" | "cut";
+
+function layoutFor(d: LabelData, w: number, h: number, overflow: Overflow): Layout {
+  const fit = fitLabel(d, w, h);
+  return layout(d, w, !fit.fits && overflow === "stretch" ? fit.needH : h, fit.pt, measurer());
+}
+
+export async function labelPng(d: LabelData, w: number, h: number, overflow: Overflow = "cut"): Promise<Blob> {
   await fontsReady();
-  const L = layout(d, w, h, measurer());
+  const L = layoutFor(d, w, h, overflow);
+  h = L.h;
   const k = LABEL_DPI / 25.4;
   const c = document.createElement("canvas");
   c.width = Math.round(w * k);
@@ -122,9 +168,10 @@ const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replac
 const n = (v: number) => Math.round(v * 1000) / 1000;
 
 /** SVG（Illustrator で開くと字を直せる。大きさは mm） */
-export async function labelSvg(d: LabelData, w: number, h: number): Promise<Blob> {
+export async function labelSvg(d: LabelData, w: number, h: number, overflow: Overflow = "cut"): Promise<Blob> {
   await fontsReady();
-  const L = layout(d, w, h, measurer());
+  const L = layoutFor(d, w, h, overflow);
+  h = L.h;
   const lines = L.lines.map(([x1, y1, x2, y2]) => `<line x1="${n(x1)}" y1="${n(y1)}" x2="${n(x2)}" y2="${n(y2)}"/>`).join("");
   const texts = L.texts.map((t) => `<text x="${n(t.x)}" y="${n(t.y)}" font-size="${n(t.size)}">${esc(t.s)}</text>`).join("");
   const svg = `<?xml version="1.0" encoding="UTF-8"?>

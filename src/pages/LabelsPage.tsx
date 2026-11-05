@@ -19,6 +19,8 @@ import { ui } from "../components/common/ui";
 import { useConfirm } from "../components/common/ConfirmDialog";
 import { LabelSheet, PaperPicker, PrintGrid, printCss, sheetSlots, usePrinting } from "../components/label/LabelSheet";
 import { LabelExport } from "../components/label/LabelExport";
+import { FitNotice } from "../components/label/FitNotice";
+import { fitLabel } from "../lib/labelImage";
 import { LabelItemPicker, type LabelItem } from "../components/label/LabelItemPicker";
 import { keepPaper, readPaper, today } from "./LabelPage";
 
@@ -107,6 +109,16 @@ export function LabelsPage() {
     preview = d;
     if (live.some((i) => i.problems.length) || labelMissing(assort).length || !live.length) blocked = true;
     labels = Array.from({ length: copies }, () => d);
+  }
+  const pick = (v: string) => { setPaperId(v); keepPaper(v); };
+  const previewFit = preview ? fitLabel(preview, paper.w, paper.h) : null;
+  async function printNow() {
+    // 入りきらないラベル（商品ごとなら、どれか1つでも）があれば聞いてから刷る
+    const over = mode === "each"
+      ? shown.filter((it) => !fitLabel(labelData(it.info!, it.built!, made), paper.w, paper.h).fits).map((it) => it.name)
+      : previewFit && !previewFit.fits ? [assort?.productName ?? "詰合せ"] : [];
+    if (over.length && !(await confirm({ title: "ラベルに入りきりません", body: `${over.join("、")}は、下が切れて印刷されます。大きい用紙にするか、文を短くするのがおすすめです。`, ok: "切れたまま印刷", cancel: "やめる" }))) return;
+    print();
   }
   const setA = (p: Partial<LabelInfo>) => assort && setAssort({ ...assort, ...p });
 
@@ -253,10 +265,11 @@ export function LabelsPage() {
             )}
           </div>
           <label className="block space-y-1"><span className={ui.label}>ラベル用紙</span>
-            <PaperPicker paperId={paper.id} papers={LABEL_PAPERS} onChange={(v) => { setPaperId(v); keepPaper(v); }} /></label>
+            <PaperPicker paperId={paper.id} papers={LABEL_PAPERS} onChange={pick} /></label>
           {mode === "assort" && paper.w * paper.h < 3500 && <p className="text-xs text-warn-strong">詰め合わせは原材料が長くなります。62×100mm や自由な大きさなど、大きめの用紙がおすすめです。</p>}
           {preview && <div className="flex justify-center overflow-x-auto rounded-2xl bg-sand p-4"><LabelSheet d={preview} w={paper.w} h={paper.h} /></div>}
-          <button disabled={blocked} className={`w-full ${ui.primary} flex items-center justify-center gap-2`} onClick={print}>
+          {mode === "assort" && preview && previewFit && <FitNotice d={preview} w={paper.w} h={paper.h} fit={previewFit} onPaper={pick} />}
+          <button disabled={blocked} className={`w-full ${ui.primary} flex items-center justify-center gap-2`} onClick={printNow}>
             <Icon name="printer" />{blocked ? (shown.length ? "赤い項目を済ませると印刷できます" : "商品を足してください") : `${labels.length}枚を印刷する`}
           </button>
           <p className="text-xs text-muted">印刷の画面で「余白なし」「倍率100%」を選んでください。</p>
