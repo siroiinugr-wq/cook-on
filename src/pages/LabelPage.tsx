@@ -14,6 +14,9 @@ import { Icon } from "../components/common/Icon";
 import { ui } from "../components/common/ui";
 import { LabelSheet, PaperPicker, PrintGrid, printCss, sheetSlots, usePrinting } from "../components/label/LabelSheet";
 import { LabelExport } from "../components/label/LabelExport";
+import { FitNotice } from "../components/label/FitNotice";
+import { useConfirm } from "../components/common/ConfirmDialog";
+import { fitLabel } from "../lib/labelImage";
 import { AdditiveBox } from "../components/label/AdditiveBox";
 import { numText } from "../lib/num";
 
@@ -37,6 +40,7 @@ export function LabelPage() {
   const [info, setInfo] = useState<LabelInfo | null>(null);
   const [msg, setMsg] = useState("");
   const [printing, print] = usePrinting();
+  const confirm = useConfirm();
   const paper = paperOf(paperId);
 
   useEffect(() => {
@@ -52,6 +56,12 @@ export function LabelPage() {
   const blocked = missing.length > 0 || built.unconfirmed.length > 0 || built.unlinked.length > 0;
   const data = labelData(info, built, made);
   const outdated = textOutdated(info, built.ingredientsText);
+  const fit = fitLabel(data, paper.w, paper.h);
+  const pick = (v: string) => { setPaperId(v); keepPaper(v); };
+  async function printNow() {
+    if (!fit.fits && !(await confirm({ title: "ラベルに入りきりません", body: `下が約${Math.ceil(fit.needH - paper.h)}mm切れて印刷されます。大きい用紙にするか、文を短くするのがおすすめです。`, ok: "切れたまま印刷", cancel: "やめる" }))) return;
+    print();
+  }
 
   async function remember() {
     setMsg("");
@@ -75,6 +85,7 @@ export function LabelPage() {
 
       <div className="no-print space-y-4">
         <div className="flex justify-center rounded-2xl bg-sand p-4"><LabelSheet d={data} w={paper.w} h={paper.h} /></div>
+        <FitNotice d={data} w={paper.w} h={paper.h} fit={fit} onPaper={pick} />
         {built.unconfirmed.length > 0 && (
           <div className="space-y-1 rounded-xl bg-ng/10 p-3 text-sm text-ng">
             <p className="font-bold">アレルゲンをまだ確かめていない材料があります。確かめるまで印刷できません。</p>
@@ -129,7 +140,7 @@ export function LabelPage() {
         </section>
         <section className={`${ui.card} space-y-2`}>
           <label className="block space-y-1"><span className={ui.label}>ラベル用紙</span>
-            <PaperPicker paperId={paper.id} papers={LABEL_PAPERS} onChange={(v) => { setPaperId(v); keepPaper(v); }} /></label>
+            <PaperPicker paperId={paper.id} papers={LABEL_PAPERS} onChange={pick} /></label>
           {paper.sheet?.cut && <p className="text-xs text-muted">86.4×42.3mm の1面に2個分を並べます。貼る前に、はさみで1面を縦に半分に切ってください。</p>}
           <div className="flex flex-wrap items-center gap-4 text-sm">
             <label className="flex items-center gap-2">枚数<input className={`${inputSm} w-20`} inputMode="numeric" value={copies} onChange={(e) => setCopies(Math.max(1, Math.min(200, Number(numText(e.target.value)) || 1)))} /></label>
@@ -142,7 +153,7 @@ export function LabelPage() {
             )}
           </div>
           {paper.sheet && start > 1 && <p className="text-xs text-muted">使いかけのシートの {start} 面目から刷ります（左上から右へ数えます）。</p>}
-          <button disabled={blocked} className={`w-full ${ui.primary} flex items-center justify-center gap-2`} onClick={print}><Icon name="printer" />{blocked ? "上の赤い項目を済ませると印刷できます" : "印刷する"}</button>
+          <button disabled={blocked} className={`w-full ${ui.primary} flex items-center justify-center gap-2`} onClick={printNow}><Icon name="printer" />{blocked ? "上の赤い項目を済ませると印刷できます" : "印刷する"}</button>
           <p className="text-xs text-muted">印刷の画面で「余白なし」「倍率100%」を選んでください。PDFに保存もできます。</p>
           <LabelExport d={data} w={paper.w} h={paper.h} name={recipe!.name} disabled={blocked} />
           <Link to={`/labels?add=${recipe!.id}`} className="block text-sm text-clay-strong underline">ほかの商品とまとめて印刷する・詰め合わせのラベルを作る</Link>

@@ -1,15 +1,15 @@
 // ラベル1枚の見た目。画面のプレビューと印刷で同じ部品を使う（大きさは mm で指定）
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { flushSync } from "react-dom";
 import type { LabelPaper } from "@shared/label";
 import type { LabelData } from "../../lib/labelBuild";
-import { LABEL_FONT, labelPt, labelRows } from "../../lib/labelImage";
+import { fitLabel, LABEL_FONT, labelRows } from "../../lib/labelImage";
 
 export type { LabelData };
 
 export function LabelSheet({ d, w, h }: { d: LabelData; w: number; h: number }) {
-  // 字の大きさと欄は画像の書き出し（lib/labelImage.ts）と共通
-  const pt = labelPt(d, w, h);
+  // 字の大きさと欄は画像の書き出し（lib/labelImage.ts）と共通。入りきるまで下限（5.5pt など）まで縮める
+  const pt = useMemo(() => fitLabel(d, w, h).pt, [d, w, h]);
   const rows = labelRows(d);
   // 枠外に日付を書くときは、下に日付の場所を空ける（印刷しない設定でもスタンプ用に空ける）
   const foot = d.dateOutside ? Math.max(3.2, pt * 0.55) : 0;
