@@ -1,0 +1,100 @@
+# release ブランチの内容を本番へ出す（ig-saas と同じ仕組み）。
+#
+# 毎日 日本時間 3:00 に起動するが、前回出したものと同じなら何もしない。
+# つまり「予約した変更があった日の深夜だけ出る」。急ぐときは Actions タブから手で起動すれば、その場で出る。
+name: 本番に出す
+
+on:
+  schedule:
+    # UTC 18:00 = 日本時間 翌日 3:00
+    - cron: "0 18 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: release
+          fetch-depth: 0
+
+      # 前回出した版には deployed という印を付けてある。それと同じなら、出すものが無い
+      - name: 出すものがあるか確かめる
+        id: check
+        run: |
+          if ! git rev-parse --verify HEAD >/dev/null 2>&1; then echo "release ブランチがありません。先に「公開を予約する」を押してください"; exit 1; fi
+          git fetch origin "refs/tags/deployed:refs/tags/deployed" --force || true
+          NOW=$(git rev-parse HEAD)
+          LAST=$(git rev-parse deployed 2>/dev/null || echo "none")
+          echo "いまの release: $NOW"
+          echo "前回出した版  : $LAST"
+          if [ "$NOW" = "$LAST" ]; then
+            echo "skip=yes" >> "$GITHUB_OUTPUT"
+            echo "前回と同じなので何もしません。"
+          else
+            echo "skip=no" >> "$GITHUB_OUTPUT"
+            echo "--- 今回出る変更 ---"
+            if [ "$LAST" != "none" ]; then git log --oneline deployed..HEAD || true; fi
+          fi
+
+      - uses: actions/setup-node@v4
+        if: steps.check.outputs.skip == 'no'
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: 部品を入れる（画面）
+        if: steps.check.outputs.skip == 'no'
+        run: npm ci
+
+      - name: 部品を入れる（サーバー）
+        if: steps.check.outputs.skip == 'no'
+        run: npm ci --prefix functions
+
+      # 画面の接続設定は Mac の .env.local にだけある。無いまま組み立てると本番が「デモモード」や
+      # 真っ白になる（ig-saas 2026-10-14）。Mac の中身を Secrets に預けて、同じものを書き出す
+      - name: 接続設定（Mac の .env.local・functions/.env と同じもの）を用意する
+        if: steps.check.outputs.skip == 'no'
+        env:
+          APP_ENV: ${{ secrets.APP_ENV }}
+          FUNCTIONS_ENV: ${{ secrets.FUNCTIONS_ENV }}
+        run: |
+          if [ -z "$APP_ENV" ]; then echo "GitHub の Secrets に APP_ENV がありません（docs/release.md の「初回だけの準備」の 3）"; exit 1; fi
+          printf '%s\n' "$APP_ENV" > .env.local
+          if [ -z "$FUNCTIONS_ENV" ]; then echo "GitHub の Secrets に FUNCTIONS_ENV がありません（docs/release.md の「初回だけの準備」の 3）"; exit 1; fi
+          if [ -n "$FUNCTIONS_ENV" ]; then printf '%s\n' "$FUNCTIONS_ENV" > functions/.env; fi
+
+      - name: テスト
+        if: steps.check.outputs.skip == 'no'
+        run: npm test
+
+      - name: 画面を組み立てる
+        if: steps.check.outputs.skip == 'no'
+        run: npm run build
+
+      - name: Firebase にログインする
+        if: steps.check.outputs.skip == 'no'
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+
+      # --non-interactive なので、関数の削除が必要な場面では黙って消さずに失敗する。消したいときは手元から出す
+      - name: 本番へ出す
+        if: steps.check.outputs.skip == 'no'
+        run: >
+          npx -y firebase-tools@latest deploy
+          --only hosting,functions,firestore:rules,firestore:indexes,storage
+          --project cook-on-plaz --non-interactive
+
+      - name: 出した版に印をつける
+        if: steps.check.outputs.skip == 'no'
+        run: |
+          git tag -f deployed
+          git push -f origin "refs/tags/deployed"

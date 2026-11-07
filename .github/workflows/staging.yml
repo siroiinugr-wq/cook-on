@@ -1,0 +1,54 @@
+# main に押し上げるたびに、確認用URLへ出す（ig-saas と同じ仕組み）。
+# 本番には影響しない。MASAが自分で確かめる場所。
+name: 確認用に出す
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# 続けて押し上げたときは、古い方を取り消して最後のものだけ出す
+concurrency:
+  group: staging
+  cancel-in-progress: true
+
+jobs:
+  staging:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: 部品を入れる
+        run: npm ci
+
+      # 画面の接続設定は Mac の .env.local にだけある。無いまま組み立てると本番が「デモモード」や
+      # 真っ白になる（ig-saas 2026-10-14）。Mac の中身を Secrets に預けて、同じものを書き出す
+      - name: 接続設定（Mac の .env.local・functions/.env と同じもの）を用意する
+        env:
+          APP_ENV: ${{ secrets.APP_ENV }}
+          FUNCTIONS_ENV: ${{ secrets.FUNCTIONS_ENV }}
+        run: |
+          if [ -z "$APP_ENV" ]; then echo "GitHub の Secrets に APP_ENV がありません（docs/release.md の「初回だけの準備」の 3）"; exit 1; fi
+          printf '%s\n' "$APP_ENV" > .env.local
+          if [ -z "$FUNCTIONS_ENV" ]; then echo "GitHub の Secrets に FUNCTIONS_ENV がありません（docs/release.md の「初回だけの準備」の 3）"; exit 1; fi
+          if [ -n "$FUNCTIONS_ENV" ]; then printf '%s\n' "$FUNCTIONS_ENV" > functions/.env; fi
+
+      - name: 画面を組み立てる
+        run: npm run build
+
+      - name: Firebase にログインする
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+
+
+      # 確認用URLは画面だけを差し替える。関数とルールは本番と共用なので、ここでは触らない
+      - name: 確認用URLへ出す
+        run: >
+          npx -y firebase-tools@latest hosting:channel:deploy staging
+          --project cook-on-plaz --expires 30d --non-interactive

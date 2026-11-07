@@ -20,5 +20,7 @@
     <script type="module" src="/src/main.tsx"></script>
     <!-- スマホのブラウザで開いたときだけ「ホーム画面に追加」ボタン（public/a2hs.js）。下の5つの入口・保存バーをよけて上に出す -->
     <script src="/a2hs.js" data-bottom="80" defer></script>
+    <!-- 新しい版が公開されたら上に「読み込み直す」を出す（public/update-check.js。版は vite.config.ts が入れる） -->
+    <script src="/update-check.js" data-version="%VITE_APP_VERSION%" defer></script>
   </body>
 </html>

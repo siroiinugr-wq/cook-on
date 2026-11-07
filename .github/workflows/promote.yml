@@ -1,0 +1,35 @@
+# いまの main を「公開していい」印の release ブランチへ進める（ig-saas と同じ仕組み）。
+# これを押しても本番には出ない。次の深夜3時に出る。
+#
+# GitHub の Actions タブ →「公開を予約する」→ Run workflow
+name: 公開を予約する
+
+on:
+  workflow_dispatch:
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 何が公開されるかを並べる
+        run: |
+          git fetch origin main release || true
+          echo "--- 次の深夜に出る変更 ---"
+          if git rev-parse --verify origin/release >/dev/null 2>&1; then
+            git log --oneline origin/release..origin/main || true
+          else
+            echo "（release ブランチを新しく作ります。main の全部が対象です）"
+          fi
+
+      # 早送りだけを許す。release が main と枝分かれしていたら失敗させる（異常に気づけるように）
+      - name: release を main に進める
+        run: git push origin origin/main:refs/heads/release
+
+      - name: 結果
+        run: echo "予約しました。次の深夜3時に本番へ出ます。急ぐ場合は「本番に出す」を手で起動してください。"
