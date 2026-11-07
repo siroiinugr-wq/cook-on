@@ -10,6 +10,7 @@ import { CreditToastProvider } from "./components/common/useCreditAction";
 import { Layout } from "./components/common/Layout";
 import { LoginPage } from "./pages/LoginPage";
 import { VerifyEmailPage } from "./pages/VerifyEmailPage";
+import { NicknameGate } from "./components/common/Nickname";
 import { OnboardingPage } from "./pages/OnboardingPage";
 import { InvitePage } from "./pages/InvitePage";
 import { RecipesPage } from "./pages/RecipesPage";
@@ -53,12 +54,16 @@ export default function App() {
   if (pending) return <Navigate to={`/invite/${pending}`} replace />;
   if (!current) return <OnboardingPage onCreated={select} />;
 
+  const role = s.orgs[current];
   return (
-    <OrgProvider orgId={current} uid={s.user.uid} email={s.user.email} orgs={s.orgs} select={select}>
-      <CreditToastProvider>
-        <Main orgId={current} onCreated={select} />
-      </CreditToastProvider>
-    </OrgProvider>
+    // ニックネームがまだの人は、入る前に1回だけ決めてもらう（メールアドレスはほかの人に見せない決まり）
+    <NicknameGate orgId={current} uid={s.user.uid} isAdmin={role === "owner" || role === "admin"}>
+      <OrgProvider orgId={current} uid={s.user.uid} email={s.user.email} orgs={s.orgs} select={select}>
+        <CreditToastProvider>
+          <Main orgId={current} onCreated={select} />
+        </CreditToastProvider>
+      </OrgProvider>
+    </NicknameGate>
   );
 }
 

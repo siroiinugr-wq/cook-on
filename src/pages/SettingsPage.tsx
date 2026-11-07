@@ -15,6 +15,7 @@ import { MembersSection } from "../components/settings/MembersSection";
 import { StoreSection } from "../components/settings/StoreSection";
 import { StoresSection } from "../components/settings/StoresSection";
 import { KeiriLinkSection } from "../components/settings/KeiriLinkSection";
+import { NicknameSection } from "../components/settings/NicknameSection";
 import { creditText } from "../components/common/CreditBadge";
 import { useHashScroll } from "../hooks/useHashScroll";
 
@@ -25,6 +26,7 @@ export function SettingsPage({ brand }: { brand: Branding }) {
   const confirm = useConfirm();
   useHashScroll();
   const toc = [
+    { id: "me", label: "ニックネーム" },
     { id: "store", label: "お店・ラベル" },
     ...(isAdmin ? [{ id: "keiri", label: "AI経理と連携" }, { id: "brand", label: "ブランド" }] : []),
     { id: "members", label: "メンバー" },
@@ -58,6 +60,7 @@ export function SettingsPage({ brand }: { brand: Branding }) {
           </Link>
         ))}
       </div>
+      <div id="me" className="scroll-mt-20"><NicknameSection /></div>
       <div id="store" className="scroll-mt-20"><StoreSection orgId={orgId} org={org} canManage={isAdmin} /></div>
       {isAdmin && <div id="keiri" className="scroll-mt-20"><KeiriLinkSection orgId={orgId} org={org} /></div>}
       {isAdmin && <div id="brand" className="scroll-mt-20"><BrandSection key={JSON.stringify(brand)} orgId={orgId} brand={brand} /></div>}

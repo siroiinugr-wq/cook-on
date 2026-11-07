@@ -84,7 +84,7 @@ export const createOrganization = onCall({ region: REGION }, async (req) => {
   batch.set(orgRef.collection("members").doc(uid), {
     uid,
     role: "owner",
-    email: req.auth.token.email ?? null,
+    // メールアドレスは members に置かない（同じ店舗のメンバーが読めるため。表示はニックネーム。core/profile.ts）
     displayName: req.auth.token.name ?? null,
     joinedAt: FieldValue.serverTimestamp(),
   });
