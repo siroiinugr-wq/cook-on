@@ -85,6 +85,15 @@ productSizes/{照合キー}                     ネットで確かめた商品�
 - **ラベル（2026-11-04）**：組み立ては `src/lib/labelBuild.ts`（1枚の `/recipes/:id/label` とまとめて印刷 `/labels` で共通）。添加物は材料の `isAdditive` に加えて名前からも見分ける（`shared/additives.ts` の `ADDITIVE_RULES`：一括名＝膨張剤・香料など、用途名併記＝ゲル化剤（ペクチン）など）。見分けた材料はラベル画面の「添加物の書き方」で選んで材料に覚える（labelName＋isAdditive）。お店で作った材料（`madeFrom`）は「タルト生地（小麦粉、バター…）」と中身を開き、中身の添加物は外の「／」のあとへ。用紙は `LABEL_PAPERS`（`sheet` があるのは A4 面付け。`a4-12-half`＝86.4×42.3 の1面に2個、はさみで半分）＋自由な大きさ `custom:幅x高さ`、A4 は「何面目から」。ラベルの初期値（期限の種類・日数・保存方法・日付は枠外）は設定 `settings.label*`、レシピの `labelInfo` が先。枠外の日付は `dateOutside`（枠内は「枠外下部に記載」）・`datePrint`（false＝スタンプ用に空ける）。内容量・原材料名の手直しも `labelInfo`（`content`・`ingredientsText`＋元の自動文 `ingredientsBase`、材料が変わると注意を出す）。詰め合わせ（箱の外に貼るラベル）は品目ごとに【名前】で原材料（`assortText`）と内容量（`assortContent`、品目の内容量があれば「コーヒー豆100g」）。レシピの無い品目（コーヒー豆など）は名前・原材料・内容量を手で入れる。よく使う詰め合わせは `organizations/{orgId}/labelSets/{id}`（name・rows・info、画面から書ける）。品目は打って探して足す（`components/label/LabelItemPicker.tsx`、ひらがなでも）。レシピの無い品目は `labelItems/{id}`（name・text・content）に保存して次から探せる。よく使う詰め合わせは名前・中の品目で探せる一覧（2026-11-05）
 - **ラベルの印刷と画像（2026-11-05）**：印刷用のラベル（`PrintGrid`）は印刷するときだけ作る（`usePrinting`、beforeprint でも）。ラベルの字は端末の字（`LABEL_FONT`：ヒラギノ→游ゴシック→Noto）。画像の書き出しは `lib/labelImage.ts`（画面の表と同じ並びを mm で組み直し、PNG は600dpi で pHYs に大きさを書く＝Word・Illustrator に実寸で入る。SVG は字を直せる。コピーは ClipboardItem）。字の大きさ・欄は `labelPt`・`labelRows` を画面と共通。**入りきらないとき**（2026-11-05）：`fitLabel` が字を 0.25pt ずつ下限（食品表示基準：ラベルが150cm²以下は5.5pt、それより大きいと8pt＝`minLabelPt`）まで縮め、それでも入らなければ `FitNotice` で入る用紙（`papersThatFit`）・必要な高さを出す。印刷は「切れたまま印刷」を確認、画像は「下に伸ばして保存（字は下限のまま）／切れたまま／やめる」を選ぶ
 
+## 全アプリ共通の仕組み（2026-11-07 MASA決定。詳しくはスキル firebase-saas-dev）
+
+- **ホーム画面に追加ボタン**：`public/a2hs.js`（全アプリで同じファイル）。スマホのブラウザで開いたときだけ出し、スクロール中は消える。位置は読み込みタグの `data-bottom`・`data-side`・`data-z` で調整。manifest の `related_applications` で Android のインストール済みを判定
+- **新しい版の知らせ**：`public/update-check.js`（全アプリで同じファイル）＋ `scripts/stamp-version.mjs`（ビルドのたびに `public/version.json` に版＝コミットID）。index.html の `data-version="%VITE_APP_VERSION%"` と公開中の版を5分ごと・画面に戻ったときに比べ、違えば上に「読み込み直す」。OMNI の帯と同じ仕様
+- **夜間の公開**：`.github/workflows/`（`staging.yml` main に入ると確認用URL／`promote.yml`「公開を予約する」／`release.yml` 毎日3時に予約分だけ本番へ）。手順と初回の準備（サービスアカウント・Secrets の `APP_ENV`・`FUNCTIONS_ENV`）は `docs/release.md`。Mac の .env を変えたら Secrets も貼り直す
+- **ニックネーム**：メンバーどうし（管理者も）に見せるのはニックネームだけ。メールアドレスは members に置かず、画面にも出さない（自分のアドレスを自分に見せるのは可）。ニックネームが無い人は入る前に1回だけ決めてもらい、設定の「ニックネーム」（`components/settings/NicknameSection.tsx`、`/settings#me`）で変えられる。保存はサーバーの関数だけ（members は画面から書けないまま）。新しく members を作る処理に email を書かない
+  - 判定は `shared/nickname.ts`、保存は `core/profile.ts` の `setNickname`、以前の members のメールは管理者が開いたときに `hideMemberEmails` が消す（端末ごとに1回）。画面は `components/common/Nickname.tsx`・`lib/profile.ts`
+  - 夜間の公開とは別に、手元の `npm run release` も今までどおり使える
+
 ## よく使うコマンド
 Mac で触る前に必ず `git pull`。
 

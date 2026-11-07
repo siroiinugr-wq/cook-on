@@ -1,5 +1,6 @@
 // 設定画面の「メンバー」欄：いまのメンバーと、招待リンクの作成・コピー・取り消し（管理者だけ）
 import { useEffect, useState } from "react";
+import { memberLabel } from "@shared/nickname";
 import { INVITE_EXPIRE_DAYS, INVITE_ROLES, ROLE_HELP, ROLE_LABEL, type InviteRole } from "@shared/roles";
 import { createInvite, inviteUrl, revokeInvite, subscribeInvites, subscribeMembers, type Member, type PendingInvite } from "../../lib/invite";
 import { errorText } from "../../lib/store";
@@ -58,7 +59,7 @@ export function MembersSection({ orgId, canManage }: { orgId: string; canManage:
         <ul className="mt-2 divide-y divide-line">
           {members.map((m) => (
             <li key={m.uid} className="flex items-center justify-between gap-3 py-2">
-              <span className="truncate">{m.displayName || m.email || m.uid}</span>
+              <span className="truncate">{memberLabel(m)}</span>
               <span className="shrink-0 rounded-full bg-sand px-2 py-0.5 text-xs text-ink-soft">{ROLE_LABEL[m.role as Role] ?? m.role}</span>
             </li>
           ))}

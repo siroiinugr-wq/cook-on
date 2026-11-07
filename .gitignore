@@ -9,3 +9,6 @@ functions/.secret.local
 .DS_Store
 coverage
 *.tsbuildinfo
+
+# 版の印（scripts/stamp-version.mjs がビルドのたびに書く）
+public/version.json

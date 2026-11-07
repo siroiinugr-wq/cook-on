@@ -117,7 +117,7 @@ export function seedDemo(): [string, Record<string, unknown>][] {
     ["operators/demo-user", { note: "デモ" }],
     ["globalSuggestions/other_ing1", { source: "shop", kind: "new", status: "pending", orgId: "other", orgName: "ほかのお店（見本）", ingredientId: "ing1", globalId: null, globalName: "", name: "ピスタチオペースト", aliases: ["ピスタチオペ"], allergens: [], labelName: "ピスタチオペースト", price: { price: 4200, qty: 1, unit: "kg", supplier: "製菓材料店" }, note: "", sig: "x", updatedAt: at }],
     ["globalSuggestions/other_ing2", { source: "shop", kind: "update", status: "pending", orgId: "other", orgName: "ほかのお店（見本）", ingredientId: "ing2", globalId: "base_butter_unsalted", globalName: "無塩バター", name: "よつ葉バター 食塩不使用", aliases: ["よつ葉バター 食塩不使用"], allergens: null, labelName: "バター", price: { price: 1180, qty: 450, unit: "g" }, note: "", sig: "y", updatedAt: at }],
-    [`${O}/members/demo-user`, { uid: "demo-user", role: "owner", email: "demo@example.com", displayName: "デモ" }],
+    [`${O}/members/demo-user`, { uid: "demo-user", role: "owner", nickname: "デモ", displayName: "デモ" }],
     [`${O}/public/branding`, { ...DEFAULT_BRANDING }],
     [`${O}/creditLedger/welcome`, { kind: "welcome", amount: WELCOME_CREDITS, status: "done", createdAt: at }],
     [`${O}/alerts/a1`, { kind: "costOverTarget", recipeId: "gateau", recipeName: "ガトーショコラ", ingredientId: "choco", ingredientName: "チョコレート（ビター）", oldRate: 0.29, newRate: 0.34, target: 0.32, read: false, createdAt: at }],

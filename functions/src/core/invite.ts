@@ -94,7 +94,7 @@ export const acceptInvite = onCall({ region: REGION }, async (req) => {
     tx.set(memberRef, {
       uid,
       role: d.role,
-      email: req.auth!.token.email ?? null,
+      // メールアドレスは members に置かない（同じ店舗のメンバーが読めるため。表示はニックネーム。core/profile.ts）
       displayName: req.auth!.token.name ?? null,
       invitedBy: d.createdBy ?? null,
       joinedAt: FieldValue.serverTimestamp(),

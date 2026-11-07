@@ -55,7 +55,8 @@ export const createInvite = (orgId: string, role: string, label: string) =>
 export const revokeInvite = (orgId: string, token: string) => call("revokeInvite", { orgId, token });
 
 export interface PendingInvite { token: string; role: string; label: string; expiresAt: number }
-export interface Member { uid: string; role: string; email: string | null; displayName: string | null }
+/** メンバー。メールアドレスは持たない（ほかの人には見せない決まり。表示は @shared/nickname の memberLabel） */
+export interface Member { uid: string; role: string; nickname: string | null; displayName: string | null }
 
 /** まだ使われていない招待（管理者だけ読める） */
 export function subscribeInvites(orgId: string, cb: (list: PendingInvite[]) => void): () => void {
@@ -74,10 +75,10 @@ export function subscribeInvites(orgId: string, cb: (list: PendingInvite[]) => v
 
 export function subscribeMembers(orgId: string, cb: (list: Member[]) => void): () => void {
   if (isDemo || !db) {
-    cb([{ uid: "demo-user", role: "owner", email: "demo@example.com", displayName: null }]);
+    cb([{ uid: "demo-user", role: "owner", nickname: "デモ", displayName: null }]);
     return () => undefined;
   }
   return onSnapshot(collection(db, `organizations/${orgId}/members`),
-    (s) => cb(s.docs.map((d) => ({ uid: d.id, role: String(d.data().role ?? ""), email: d.data().email ?? null, displayName: d.data().displayName ?? null }))),
+    (s) => cb(s.docs.map((d) => ({ uid: d.id, role: String(d.data().role ?? ""), nickname: d.data().nickname ?? null, displayName: d.data().displayName ?? null }))),
     () => cb([]));
 }

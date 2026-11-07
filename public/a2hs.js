@@ -11,6 +11,7 @@
  *      ・Android インストール済み → 「インストール済み」表示＋アイコンから開く案内
  *      ・iPhone                  → 追加手順の案内（※インストール済みかは判定できない）
  *      ・LINE/Instagram内ブラウザ → 「Safari/Chromeで開いて」案内
+ *  - スクロール中は消え、止まると浮き出る
  *
  * アプリごとの調整（読み込みタグに書く。書かなければ右下16px・重なり順35）
  *   data-bottom="80"  … 画面の下から何pxの高さに出すか（下のタブバーや保存バーをよける）
@@ -72,8 +73,11 @@
     '.btn{position:fixed;' + side + ':16px;bottom:calc(' + bottomPx + 'px + env(safe-area-inset-bottom));z-index:' + zIndex + ';' +
     'display:flex;align-items:center;gap:6px;padding:10px 14px;border:0;border-radius:999px;' +
     'background:#111;color:#fff;font:600 13px/1 -apple-system,BlinkMacSystemFont,"Hiragino Sans",sans-serif;' +
-    'box-shadow:0 4px 14px rgba(0,0,0,.25);cursor:pointer;-webkit-tap-highlight-color:transparent}' +
+    'box-shadow:0 4px 14px rgba(0,0,0,.25);cursor:pointer;-webkit-tap-highlight-color:transparent;' +
+    'transition:opacity .35s ease,transform .35s ease}' +
     '.btn.done{background:#2e7d32}' +
+    // スクロール中は消して、止まったら浮き上がる
+    '.btn.away{opacity:0;transform:translateY(12px);pointer-events:none;transition-duration:.15s}' +
     '.mask{position:fixed;inset:0;z-index:2147483001;background:rgba(0,0,0,.45);display:none}' +
     '.sheet{position:fixed;left:0;right:0;bottom:0;z-index:2147483002;background:#fff;color:#111;' +
     'border-radius:16px 16px 0 0;padding:20px 20px calc(20px + env(safe-area-inset-bottom));' +
@@ -94,6 +98,15 @@
   root.querySelector('.close').addEventListener('click', closeSheet);
 
   function showGuide(html) { body.innerHTML = html; wrap.classList.add('open'); }
+
+  // スクロール中は隠し、止まって0.6秒たったら浮き出す。
+  // 画面の中の箱（一覧など）のスクロールも拾えるよう、捕まえる段階（capture）で聞く
+  var idle = null;
+  document.addEventListener('scroll', function () {
+    btn.classList.add('away');
+    clearTimeout(idle);
+    idle = setTimeout(function () { btn.classList.remove('away'); }, 600);
+  }, { capture: true, passive: true });
 
   function render() {
     btn.classList.toggle('done', installed);
