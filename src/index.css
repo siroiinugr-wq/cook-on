@@ -68,6 +68,4 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 @media print {
   body { background: #fff; }
   .no-print { display: none !important; }
-  .print-only { display: block !important; }
 }
-.print-only { display: none; }

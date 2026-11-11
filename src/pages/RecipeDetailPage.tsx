@@ -19,6 +19,7 @@ import { CostPanel } from "../components/recipe/CostPanel";
 import { ItemsTable } from "../components/recipe/ItemsTable";
 import { ScaleControl } from "../components/recipe/ScaleControl";
 import { VersionHistory } from "../components/recipe/VersionHistory";
+import { NutritionCard } from "../components/recipe/NutritionCard";
 import { UseAsIngredient } from "../components/recipe/UseAsIngredient";
 
 export function RecipeDetailPage() {
@@ -81,6 +82,8 @@ export function RecipeDetailPage() {
         <p className="mb-1 text-sm font-bold">アレルゲン（材料の一覧から）</p>
         <p className="text-sm">{recipe.allergens.length ? recipe.allergens.map(allergenName).join("・") : "登録された材料には含まれていません"}</p>
       </section>
+
+      <NutritionCard recipe={recipe} byId={ings.byId} canEdit={canEdit} />
 
       {recipe.steps.length > 0 && (
         <section className={`${ui.card} space-y-2`}>
