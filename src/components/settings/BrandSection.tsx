@@ -11,7 +11,7 @@ export function BrandSection({ orgId, brand }: { orgId: string; brand: Branding 
   const [b, setB] = useState<Branding>(brand);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
-  const set = (p: Partial<Branding>) => setB({ ...b, ...p });
+  const set = (p: Partial<Branding>) => setB((cur) => ({ ...cur, ...p }));
 
   async function logo(f: File | undefined) {
     if (!f) return;

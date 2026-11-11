@@ -10,9 +10,10 @@ import { Icon } from "../../common/Icon";
 import { ui } from "../../common/ui";
 import { ApplyRecipesSheet, PickTemplateSheet, SaveTemplateSheet, StepThumb, useStepTemplates } from "./StepTemplates";
 
-export function StepsEditor({ steps, set, photoDir, orgId, uid, recipeId }: {
-  steps: RecipeStep[]; set: (s: RecipeStep[]) => void; photoDir: string; orgId: string; uid: string; recipeId: string | null;
+export function StepsEditor({ steps, set: update, photoDir, orgId, uid, recipeId }: {
+  steps: RecipeStep[]; set: (f: (cur: RecipeStep[]) => RecipeStep[]) => void; photoDir: string; orgId: string; uid: string; recipeId: string | null;
 }) {
+  const set = (s: RecipeStep[]) => update(() => s);
   const [busy, setBusy] = useState(-1);
   const [err, setErr] = useState("");
   const [picking, setPicking] = useState(false);
@@ -26,7 +27,7 @@ export function StepsEditor({ steps, set, photoDir, orgId, uid, recipeId }: {
 
   // 空の工程が1つだけなら、呼び出した工程で置き換える
   const addTemplate = (t: StepTemplate) => set([...steps.filter((s) => s.text.trim() || s.photoPath), ...stepsFromTemplate(t)]);
-  const patch = (i: number, p: Partial<RecipeStep>) => set(steps.map((s, j) => (j === i ? { ...s, ...p } : s)));
+  const patch = (i: number, p: Partial<RecipeStep>) => update((cur) => cur.map((s, j) => (j === i ? { ...s, ...p } : s)));
   const move = (i: number, d: number) => {
     const next = [...steps];
     [next[i], next[i + d]] = [next[i + d], next[i]];

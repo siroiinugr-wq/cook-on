@@ -69,7 +69,14 @@ export const onIngredientWritten = onDocumentWritten(
     if (after?.madeFrom && after.madeFrom !== before?.madeFrom) {
       await syncMadeFrom(orgId, [after.madeFrom], ingredientId);
     }
-    if (!before || !after) return; // 新しく作った・消したときは、使っているレシピがまだ無い／保存時に計算し直す
+    if (!before) return; // 新しく作ったときは、使っているレシピがまだ無い
+    const org0 = getFirestore().doc(`organizations/${orgId}`);
+    if (!after) {
+      // 消したとき：使っていたレシピの原価・アレルゲンから外す（以前は計算し直さず、一覧に前の原価が残った。2026-11-12）
+      const used = await org0.collection("recipes").where("ingredientIds", "array-contains", ingredientId).get();
+      await recalcRecipes(orgId, used.docs, { id: ingredientId, name: before.name });
+      return;
+    }
     if (!WATCH.some((k) => JSON.stringify(before[k] ?? null) !== JSON.stringify(after[k] ?? null))) return;
 
     const org = getFirestore().doc(`organizations/${orgId}`);

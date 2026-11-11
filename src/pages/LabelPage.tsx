@@ -58,7 +58,7 @@ export function LabelPage() {
   const nut = useMemo(() => (recipe ? recipeNutrition(recipe.items, ings.byId, nutOf, recipe.yield) : null), [recipe, ings.byId, nutOf]);
 
   if (loading || !info || !built) return <p className="p-10 text-center text-muted">{loading ? "読み込み中…" : "レシピが見つかりません。"}</p>;
-  const set = (p: Partial<LabelInfo>) => setInfo({ ...info, ...p });
+  const set = (p: Partial<LabelInfo>) => setInfo((cur) => (cur ? { ...cur, ...p } : cur));
   const missing = labelMissing(info);
   const blocked = missing.length > 0 || built.unconfirmed.length > 0 || built.unlinked.length > 0;
   const nutText = nut ? nutritionLabelText(nut) : null;

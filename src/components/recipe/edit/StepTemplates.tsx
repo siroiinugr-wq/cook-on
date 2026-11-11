@@ -123,7 +123,7 @@ function EditTemplateSheet({ orgId, uid, template, recipes, currentRecipeId, onS
   const [busy, setBusy] = useState(-2);
   const [err, setErr] = useState("");
   const [saved, setSaved] = useState<StepTemplate | null>(null);
-  const patch = (i: number, p: Partial<(typeof rows)[number]>) => setRows(rows.map((r, j) => (j === i ? { ...r, ...p } : r)));
+  const patch = (i: number, p: Partial<(typeof rows)[number]>) => setRows((cur) => cur.map((r, j) => (j === i ? { ...r, ...p } : r)));
   const clean = rows.filter((r) => r.text.trim()).slice(0, 20);
 
   async function addPhoto(i: number, f: File | undefined) {

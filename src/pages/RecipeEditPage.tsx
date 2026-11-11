@@ -82,7 +82,10 @@ export function RecipeEditPage() {
   }
 
   const d = draft;
-  const set = (p: Partial<Draft>) => setDraft({ ...d, ...p });
+  // 「いまの下書き」に足す。写真を上げている間に打った字が、上げ終わったときに消えないように（2026-11-12）
+  const set = (p: Partial<Draft>) => setDraft((cur) => (cur ? { ...cur, ...p } : cur));
+  const setPhotos = (f: (cur: string[]) => string[]) => setDraft((cur) => (cur ? { ...cur, photos: f(cur.photos ?? []) } : cur));
+  const setSteps = (f: (cur: Draft["steps"]) => Draft["steps"]) => setDraft((cur) => (cur ? { ...cur, steps: f(cur.steps) } : cur));
   const pieces = d.yield.pieces || 1;
   const cost = calcCost(rows, ings.byId);
   const packCost = calcPackaging(d.packaging, pack.ctx);
@@ -113,7 +116,7 @@ export function RecipeEditPage() {
       <PageHead title={id ? "レシピを編集" : "新しいレシピ"} back={id ? `/recipes/${id}` : "/"} />
       <section className="space-y-3">
         {field("レシピ名", <input className={ui.input} value={d.name} maxLength={60} onChange={(e) => set({ name: e.target.value })} />)}
-        <RecipePhotos photos={d.photos ?? []} set={(photos) => set({ photos })} photoDir={photoDir} />
+        <RecipePhotos photos={d.photos ?? []} set={setPhotos} photoDir={photoDir} />
         <div className="space-y-1">
           {field("分類（焼菓子・料理・ドリンクなど）", <input className={ui.input} value={d.category} placeholder="焼菓子" onChange={(e) => set({ category: e.target.value })} />)}
           <Chips items={usedCats} on={(c) => c === d.category} onTap={(c) => set({ category: c === d.category ? "" : c, subcategory: c === d.category ? d.subcategory : "" })} />
@@ -151,7 +154,7 @@ export function RecipeEditPage() {
       </section>
       <section className="space-y-2">
         <h2 className="font-bold">作り方</h2>
-        <StepsEditor steps={d.steps} set={(steps) => set({ steps })} photoDir={photoDir} orgId={orgId} uid={uid} recipeId={id ?? null} />
+        <StepsEditor steps={d.steps} set={setSteps} photoDir={photoDir} orgId={orgId} uid={uid} recipeId={id ?? null} />
       </section>
       {field("メモ（お店の中だけ）", <textarea className={`${ui.input} h-20`} value={d.memo ?? ""} onChange={(e) => set({ memo: e.target.value })} />)}
       {id && field("何を変えたか（履歴に残ります・任意）", <input className={ui.input} value={note} maxLength={100} placeholder="例：砂糖を10g減らした" onChange={(e) => setNote(e.target.value)} />)}

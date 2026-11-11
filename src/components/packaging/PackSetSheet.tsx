@@ -29,7 +29,7 @@ export function PackSetSheet({ orgId, uid, set, materials, usedIn, onClose }: Pr
   const total = setCost({ items }, matById);
   const left = materials.filter((m) => !items.some((it) => it.packagingId === m.id));
 
-  const patch = (i: number, p: Partial<PackSetItem>) => setItems(items.map((it, j) => (j === i ? { ...it, ...p } : it)));
+  const patch = (i: number, p: Partial<PackSetItem>) => setItems((cur) => cur.map((it, j) => (j === i ? { ...it, ...p } : it)));
   const add = (id: string) => {
     const m = matById.get(id);
     if (m) setItems([...items, { packagingId: m.id, name: m.name, qty: 1 }]);
