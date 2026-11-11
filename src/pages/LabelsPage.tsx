@@ -17,7 +17,10 @@ import { PageHead } from "../components/common/Layout";
 import { Icon } from "../components/common/Icon";
 import { ui } from "../components/common/ui";
 import { useConfirm } from "../components/common/ConfirmDialog";
-import { LabelSheet, PaperPicker, PrintGrid, printCss, sheetSlots, usePrinting } from "../components/label/LabelSheet";
+import { LabelSheet, PaperPicker, PrintGrid, sheetSlots, usePrintAdjust, usePrinting } from "../components/label/LabelSheet";
+import { nutritionLabelText, recipeNutrition } from "@shared/nutrition";
+import { useNutritionOf } from "../hooks/useRecipeNutrition";
+import { PrintHelp } from "../components/label/PrintHelp";
 import { LabelExport } from "../components/label/LabelExport";
 import { FitNotice } from "../components/label/FitNotice";
 import { fitLabel } from "../lib/labelImage";
@@ -57,9 +60,12 @@ export function LabelsPage() {
   const [setName, setSetName] = useState("");
   const [msg, setMsg] = useState("");
   const [rowMsg, setRowMsg] = useState<{ at: number; text: string } | null>(null);
-  const [printing, print] = usePrinting();
+  const { printing, test, print, printTest } = usePrinting();
+  const [adjust, setAdjust] = usePrintAdjust();
   const paper = paperOf(paperId);
 
+  const rowRecipes = useMemo(() => rows.map((r) => (r.recipeId ? recipeById.get(r.recipeId) : null)), [rows, recipeById]);
+  const { nutOf } = useNutritionOf(rowRecipes, ings.byId);
   const items = useMemo(() => rows.flatMap((row, at) => {
     if (row.free) {
       const problems = row.free.name.trim() && row.free.text.trim() ? [] : ["品目の名前と原材料を入れてください"];
@@ -67,10 +73,10 @@ export function LabelsPage() {
     }
     const r = row.recipeId ? recipeById.get(row.recipeId) : undefined;
     if (!r) return [];
-    const built = buildRecipeLabel(r, ings.byId, recipeById, org.settings);
+    const built: BuiltLabel = { ...buildRecipeLabel(r, ings.byId, recipeById, org.settings), nutritionText: nutritionLabelText(recipeNutrition(r.items, ings.byId, nutOf, r.yield)) };
     const info = labelInfoFor(r, org.settings);
     return [{ at, row, name: r.name, text: info.ingredientsText || built.ingredientsText, content: row.content ?? info.content, info, recipe: r, built, problems: problemsOf(info, built) }];
-  }), [rows, recipeById, ings.byId, org.settings]);
+  }), [rows, recipeById, ings.byId, org.settings, nutOf]);
   const shown = mode === "each" ? items.filter((i) => i.recipe) : items;
 
   // 詰め合わせの初めの値：期限は一番短い商品に合わせ、どれかが消費期限なら消費期限
@@ -171,7 +177,6 @@ export function LabelsPage() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-4 p-4">
-      <style>{`@media print { ${printCss(paper)} }`}</style>
       <div className="no-print space-y-4">
         <PageHead title="ラベルをまとめて印刷" back={params.get("add") ? `/recipes/${params.get("add")}/label` : "/"} />
         <div className="grid grid-cols-2 gap-1 rounded-xl bg-sand p-1 text-sm">
@@ -272,12 +277,12 @@ export function LabelsPage() {
           <button disabled={blocked} className={`w-full ${ui.primary} flex items-center justify-center gap-2`} onClick={printNow}>
             <Icon name="printer" />{blocked ? (shown.length ? "赤い項目を済ませると印刷できます" : "商品を足してください") : `${labels.length}枚を印刷する`}
           </button>
-          <p className="text-xs text-muted">印刷の画面で「余白なし」「倍率100%」を選んでください。</p>
+          <PrintHelp paper={paper} adjust={adjust} onAdjust={setAdjust} onTest={printTest} />
           {mode === "assort" && preview && <LabelExport d={preview} w={paper.w} h={paper.h} name={assort?.productName || "詰合せ"} disabled={blocked} />}
           {mode === "each" && shown.length > 0 && <p className="text-xs text-muted">画像（PNG・SVG）は、上の商品ごとのボタンで書き出せます。</p>}
         </section>
       </div>
-      {printing && <PrintGrid labels={labels} paper={paper} start={start} />}
+      {printing && <PrintGrid labels={labels} paper={paper} start={start} adjust={adjust} test={test} />}
     </div>
   );
 }

@@ -34,6 +34,8 @@ export interface LabelInfo {
   /** 期限の日付は枠の外に書く（枠の中は「枠外下部に記載」）。datePrint が false なら日付は印刷せず、スタンプや手書きで入れる */
   dateOutside?: boolean;
   datePrint?: boolean;
+  /** 栄養成分表示（成分表からの推定値）をラベルに出す */
+  nutrition?: boolean;
 }
 
 /** 枠外に日付を書くときの、枠の中の文 */

@@ -27,6 +27,7 @@ export function labelRows(d: LabelData): [string, string][] {
     ["名称", d.productName],
     ["原材料名", d.ingredientsText],
     ["内容量", d.contentText],
+    ...(d.nutritionText ? [["栄養成分表示", d.nutritionText] as [string, string]] : []),
     [d.expiryKind, d.expiry],
     ["保存方法", d.storage],
     ["製造者", [d.manufacturer, d.manufacturerAddress].filter((x) => x?.trim()).join("　")],

@@ -1,6 +1,6 @@
 // ラベル1枚の見た目。画面のプレビューと印刷で同じ部品を使う（大きさは mm で指定）
 import { useEffect, useMemo, useState } from "react";
-import { flushSync } from "react-dom";
+import { createPortal, flushSync } from "react-dom";
 import type { LabelPaper } from "@shared/label";
 import type { LabelData } from "../../lib/labelBuild";
 import { fitLabel, LABEL_FONT, labelRows } from "../../lib/labelImage";
@@ -34,19 +34,44 @@ export function LabelSheet({ d, w, h }: { d: LabelData; w: number; h: number }) 
   );
 }
 
+/** 端末ごとの印刷のずれ直し（mm。右・下が＋）。プリンターや端末で少しずつ違うので、この端末に覚える */
+export interface PrintAdjust { dx: number; dy: number }
+const ADJ_KEY = "cookon-printAdjust";
+const clampAdj = (v: unknown) => Math.max(-15, Math.min(15, Math.round((Number(v) || 0) * 10) / 10));
+export function readAdjust(): PrintAdjust {
+  try { const j = JSON.parse(localStorage.getItem(ADJ_KEY) ?? "{}"); return { dx: clampAdj(j.dx), dy: clampAdj(j.dy) }; } catch { return { dx: 0, dy: 0 }; }
+}
+export function usePrintAdjust(): [PrintAdjust, (a: PrintAdjust) => void] {
+  const [adj, setAdj] = useState(readAdjust);
+  return [adj, (a) => {
+    const next = { dx: clampAdj(a.dx), dy: clampAdj(a.dy) };
+    setAdj(next);
+    try { localStorage.setItem(ADJ_KEY, JSON.stringify(next)); } catch { /* 覚えられなくても今回は効く */ }
+  }];
+}
+
 /**
- * 印刷するときだけ使う用紙の設定。A4 の面付けは sheet の cols×rows を余白から並べる。
- * ラベルプリンター（ロール）は1枚＝1ページ
+ * 印刷するときだけ使う用紙の設定。画面のほかの部品（#root）は丸ごと隠し、ラベルを用紙の左上ぴったりから置く。
+ * 以前は画面の余白（16px）の内側に置いていて、ラベルが約4mm右下にずれ、ロール紙では最後の行が2枚目にはみ出した（2026-11-11）。
+ * A4 の面付けは1ページ分ずつの箱に入れて余白をとる（@page の余白はブラウザで扱いが違うので使わない）
  */
-export function printCss(paper: LabelPaper): string {
+export function printCss(paper: LabelPaper, adj: PrintAdjust = { dx: 0, dy: 0 }): string {
+  const base = `html, body { margin: 0 !important; padding: 0 !important; background: #fff !important; }
+#root { display: none !important; }
+.label-print { display: block !important; }
+.label-print .label-page { break-after: page; overflow: hidden; box-sizing: border-box; }
+.label-print .label-page:last-child { break-after: auto; }`;
   if (paper.sheet) {
     const s = paper.sheet;
-    return `@page { size: A4; margin: ${s.top}mm ${s.left}mm; }
-.print-only .label-grid { display: grid !important; grid-template-columns: repeat(${s.cols}, ${paper.w}mm); grid-auto-rows: ${paper.h}mm; }
-.print-only .label-grid > div { break-inside: avoid; }`;
+    return `@page { size: A4; margin: 0; }
+${base}
+.label-print .label-page { width: 210mm; height: 296mm; padding: ${s.top + adj.dy}mm 0 0 ${s.left + adj.dx}mm; display: grid; grid-template-columns: repeat(${s.cols}, ${paper.w}mm); grid-auto-rows: ${paper.h}mm; align-content: start; justify-content: start; }`;
   }
+  // ロール紙：高さを少しだけ小さくして、端数で次のラベルにはみ出さないようにする
   return `@page { size: ${paper.w}mm ${paper.h}mm; margin: 0; }
-.print-only .label-grid > div { break-after: page; }`;
+${base}
+.label-print .label-page { width: ${paper.w}mm; height: ${Math.round((paper.h - 0.4) * 10) / 10}mm; }
+.label-print .label-page > div { transform: translate(${adj.dx}mm, ${adj.dy}mm); }`;
 }
 
 /** A4 の面付けで、何面目から貼るか（使いかけのシートの続きに刷る）。前を空けるための数 */
@@ -58,28 +83,58 @@ export function sheetSlots(paper: LabelPaper): number {
  * 印刷するときだけラベルを並べる。以前は隠したまま何百枚分も毎回作り直していて、入力や印刷が重かった（2026-11-05）。
  * 印刷ボタンのほか、ブラウザのメニューから印刷したとき（beforeprint）も並べる
  */
-export function usePrinting(): [boolean, () => void] {
+export function usePrinting(): { printing: boolean; test: boolean; print: () => void; printTest: () => void } {
   const [on, setOn] = useState(false);
+  const [test, setTest] = useState(false);
   useEffect(() => {
     const before = () => flushSync(() => setOn(true));
-    const after = () => setOn(false);
+    const after = () => { setOn(false); setTest(false); };
     window.addEventListener("beforeprint", before);
     window.addEventListener("afterprint", after);
     return () => { window.removeEventListener("beforeprint", before); window.removeEventListener("afterprint", after); };
   }, []);
-  return [on, () => { flushSync(() => setOn(true)); window.print(); }];
+  const go = (t: boolean) => { flushSync(() => { setTest(t); setOn(true); }); window.print(); };
+  return { printing: on, test, print: () => go(false), printTest: () => go(true) };
 }
 
-/** 印刷するラベルを並べる（A4 の面付けは start 面目から。前は空ける） */
-export function PrintGrid({ labels, paper, start = 1 }: { labels: LabelData[]; paper: LabelPaper; start?: number }) {
-  const blanks = paper.sheet ? Math.max(0, Math.min(sheetSlots(paper) - 1, start - 1)) : 0;
+/** テスト印刷の1枚：枠・真ん中の十字・10mm の線。位置と倍率を確かめる */
+function TestLabel({ w, h }: { w: number; h: number }) {
+  const line = "0.2mm solid #000";
   return (
-    <div className="print-only">
-      <div className="label-grid">
-        {Array.from({ length: blanks }, (_, i) => <div key={`b${i}`} />)}
-        {labels.map((d, i) => <div key={i}><LabelSheet d={d} w={paper.w} h={paper.h} /></div>)}
+    <div className="relative bg-white text-black" style={{ width: `${w}mm`, height: `${h}mm`, fontFamily: LABEL_FONT, fontSize: "6pt", lineHeight: 1.3 }}>
+      <div className="absolute" style={{ inset: "1.5mm", border: line }} />
+      <div className="absolute" style={{ left: "50%", top: "1.5mm", bottom: "1.5mm", borderLeft: "0.1mm dashed #000" }} />
+      <div className="absolute" style={{ top: "50%", left: "1.5mm", right: "1.5mm", borderTop: "0.1mm dashed #000" }} />
+      <div className="absolute" style={{ left: "3mm", top: "3mm" }}>テスト印刷 {w}×{h}mm<br />枠が用紙のふちから1.5mm</div>
+      <div className="absolute" style={{ left: "3mm", bottom: "3mm" }}>
+        <div style={{ width: "10mm", borderTop: "0.3mm solid #000", borderLeft: line, borderRight: line, height: "1.5mm" }} />
+        この線が10mm
       </div>
     </div>
+  );
+}
+
+/** 印刷するラベルを並べる（A4 の面付けは start 面目から。前は空ける）。画面の外（body の直下）に置く */
+export function PrintGrid({ labels, paper, start = 1, adjust, test = false }: { labels: LabelData[]; paper: LabelPaper; start?: number; adjust?: PrintAdjust; test?: boolean }) {
+  const per = paper.sheet ? sheetSlots(paper) : 1;
+  const blanks = paper.sheet && !test ? Math.max(0, Math.min(per - 1, start - 1)) : 0;
+  const cells: (LabelData | null | "test")[] = test
+    ? Array.from({ length: per }, () => "test" as const)
+    : [...Array.from({ length: blanks }, () => null), ...labels];
+  const pages: (typeof cells)[] = [];
+  for (let i = 0; i < cells.length; i += per) pages.push(cells.slice(i, i + per));
+  return createPortal(
+    <div className="label-print" style={{ display: "none" }}>
+      <style>{`@media print { ${printCss(paper, adjust)} }`}</style>
+      {pages.map((page, p) => (
+        <div key={p} className="label-page">
+          {page.map((d, i) => (
+            <div key={i}>{d === "test" ? <TestLabel w={paper.w} h={paper.h} /> : d ? <LabelSheet d={d} w={paper.w} h={paper.h} /> : null}</div>
+          ))}
+        </div>
+      ))}
+    </div>,
+    document.body,
   );
 }
 

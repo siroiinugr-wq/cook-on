@@ -84,6 +84,8 @@ productSizes/{照合キー}                     ネットで確かめた商品�
 - 食品表示は「重い順・添加物は／のあと・アレルゲンは最後に一括」まで自動。複合原材料の細かい決まりは対象外で、画面に「お店で確かめて」と出す
 - **ラベル（2026-11-04）**：組み立ては `src/lib/labelBuild.ts`（1枚の `/recipes/:id/label` とまとめて印刷 `/labels` で共通）。添加物は材料の `isAdditive` に加えて名前からも見分ける（`shared/additives.ts` の `ADDITIVE_RULES`：一括名＝膨張剤・香料など、用途名併記＝ゲル化剤（ペクチン）など）。見分けた材料はラベル画面の「添加物の書き方」で選んで材料に覚える（labelName＋isAdditive）。お店で作った材料（`madeFrom`）は「タルト生地（小麦粉、バター…）」と中身を開き、中身の添加物は外の「／」のあとへ。用紙は `LABEL_PAPERS`（`sheet` があるのは A4 面付け。`a4-12-half`＝86.4×42.3 の1面に2個、はさみで半分）＋自由な大きさ `custom:幅x高さ`、A4 は「何面目から」。ラベルの初期値（期限の種類・日数・保存方法・日付は枠外）は設定 `settings.label*`、レシピの `labelInfo` が先。枠外の日付は `dateOutside`（枠内は「枠外下部に記載」）・`datePrint`（false＝スタンプ用に空ける）。内容量・原材料名の手直しも `labelInfo`（`content`・`ingredientsText`＋元の自動文 `ingredientsBase`、材料が変わると注意を出す）。詰め合わせ（箱の外に貼るラベル）は品目ごとに【名前】で原材料（`assortText`）と内容量（`assortContent`、品目の内容量があれば「コーヒー豆100g」）。レシピの無い品目（コーヒー豆など）は名前・原材料・内容量を手で入れる。よく使う詰め合わせは `organizations/{orgId}/labelSets/{id}`（name・rows・info、画面から書ける）。品目は打って探して足す（`components/label/LabelItemPicker.tsx`、ひらがなでも）。レシピの無い品目は `labelItems/{id}`（name・text・content）に保存して次から探せる。よく使う詰め合わせは名前・中の品目で探せる一覧（2026-11-05）
 - **ラベルの印刷と画像（2026-11-05）**：印刷用のラベル（`PrintGrid`）は印刷するときだけ作る（`usePrinting`、beforeprint でも）。ラベルの字は端末の字（`LABEL_FONT`：ヒラギノ→游ゴシック→Noto）。画像の書き出しは `lib/labelImage.ts`（画面の表と同じ並びを mm で組み直し、PNG は600dpi で pHYs に大きさを書く＝Word・Illustrator に実寸で入る。SVG は字を直せる。コピーは ClipboardItem）。字の大きさ・欄は `labelPt`・`labelRows` を画面と共通。**入りきらないとき**（2026-11-05）：`fitLabel` が字を 0.25pt ずつ下限（食品表示基準：ラベルが150cm²以下は5.5pt、それより大きいと8pt＝`minLabelPt`）まで縮め、それでも入らなければ `FitNotice` で入る用紙（`papersThatFit`）・必要な高さを出す。印刷は「切れたまま印刷」を確認、画像は「下に伸ばして保存（字は下限のまま）／切れたまま／やめる」を選ぶ
+- **印刷の位置（2026-11-11）**：印刷用のラベル（`PrintGrid`）は body の直下に置き（createPortal）、印刷のあいだは `#root` を丸ごと隠して用紙の左上ぴったりから並べる（`printCss`）。以前は画面の余白の内側にあり、約4mm右下にずれ、ロール紙では最後の行が2枚目にはみ出した。A4 の面付けは1ページずつの箱（`.label-page`、余白は padding。@page の余白は使わない）。ずれ直し（mm）は端末ごとに `cookon-printAdjust`（`usePrintAdjust`）、枠だけの「テスト印刷」と案内は `components/label/PrintHelp.tsx`。iPad の Safari は @page の用紙の大きさを見ないことがあるので、合わないときは PNG をプリンターのアプリから刷る案内を出す。実機（QL-820NWBc・A4 12面）での確認は MASA
+- **栄養成分（2026-11-11）**：レシピの1個あたり・100gあたり（熱量・たんぱく質・脂質・炭水化物・食塩相当量）は `shared/nutrition.ts` の `recipeNutrition`（材料の100gあたり×重さの合計÷個数。画面が計算、保存しない）。材料の成分は、お店で作る材料は `Ingredient.nutrition`、ほかは結んだ共有の材料から1回読む（`hooks/useRecipeNutrition.ts`）。レシピの画面に `NutritionCard`、ラベルは `labelInfo.nutrition` がオンで「栄養成分表示」の行（`nutritionLabelText`、「（推定値）」つき）。**成分の分からない材料が1つでもあるとラベルには出さない**。詰め合わせのラベルには出さない。本番で値が出るには成分表の取り込み（`scripts/import-mext.mjs`）と、材料を共有の材料に結ぶことが要る
 
 ## 全アプリ共通の仕組み（2026-11-07 MASA決定。詳しくはスキル firebase-saas-dev）
 
@@ -123,6 +125,5 @@ cd ~/cook-on && firebase functions:log --only <関数名> --project cook-on-plaz
 - まだ本番で動かしていない（Firebase プロジェクト未作成）。SETUP.md の B〜E
 - Stripe は `BILLING_ENABLED = false`（購入ボタンは「準備中」）
 - 食品成分表と参考価格の取り込みスクリプトはあるが、本番にはまだ書いていない（MASA の Mac で --dry-run → 書く。e-Stat のアプリケーションIDが要る）
-- 栄養成分を食品表示ラベルに出す計算は未作成（成分表の値は globalIngredients.nutrition にある）
 - 画面のJSが1ファイル約790KB。重い画面の `React.lazy` 分割は未実施
 - `grantCredits` の画面は無い

@@ -12,13 +12,16 @@ import { call } from "../lib/store";
 import { buildRecipeLabel, labelData, labelInfoFor, textOutdated } from "../lib/labelBuild";
 import { Icon } from "../components/common/Icon";
 import { ui } from "../components/common/ui";
-import { LabelSheet, PaperPicker, PrintGrid, printCss, sheetSlots, usePrinting } from "../components/label/LabelSheet";
+import { LabelSheet, PaperPicker, PrintGrid, sheetSlots, usePrintAdjust, usePrinting } from "../components/label/LabelSheet";
+import { PrintHelp } from "../components/label/PrintHelp";
 import { LabelExport } from "../components/label/LabelExport";
 import { FitNotice } from "../components/label/FitNotice";
 import { useConfirm } from "../components/common/ConfirmDialog";
 import { fitLabel } from "../lib/labelImage";
 import { AdditiveBox } from "../components/label/AdditiveBox";
 import { numText } from "../lib/num";
+import { nutritionLabelText, recipeNutrition } from "@shared/nutrition";
+import { useNutritionOf } from "../hooks/useRecipeNutrition";
 
 const PAPER_KEY = "cookon-labelPaper";
 export const readPaper = () => { try { return localStorage.getItem(PAPER_KEY); } catch { return null; } };
@@ -39,7 +42,8 @@ export function LabelPage() {
   const [start, setStart] = useState(1);
   const [info, setInfo] = useState<LabelInfo | null>(null);
   const [msg, setMsg] = useState("");
-  const [printing, print] = usePrinting();
+  const { printing, test, print, printTest } = usePrinting();
+  const [adjust, setAdjust] = usePrintAdjust();
   const confirm = useConfirm();
   const paper = paperOf(paperId);
 
@@ -50,11 +54,15 @@ export function LabelPage() {
 
   const built = useMemo(() => (recipe ? buildRecipeLabel(recipe, ings.byId, recipeById, org.settings) : null), [recipe, ings.byId, recipeById, org.settings]);
 
+  const { nutOf } = useNutritionOf(useMemo(() => [recipe], [recipe]), ings.byId);
+  const nut = useMemo(() => (recipe ? recipeNutrition(recipe.items, ings.byId, nutOf, recipe.yield) : null), [recipe, ings.byId, nutOf]);
+
   if (loading || !info || !built) return <p className="p-10 text-center text-muted">{loading ? "読み込み中…" : "レシピが見つかりません。"}</p>;
   const set = (p: Partial<LabelInfo>) => setInfo({ ...info, ...p });
   const missing = labelMissing(info);
   const blocked = missing.length > 0 || built.unconfirmed.length > 0 || built.unlinked.length > 0;
-  const data = labelData(info, built, made);
+  const nutText = nut ? nutritionLabelText(nut) : null;
+  const data = labelData(info, { ...built, nutritionText: nutText }, made);
   const outdated = textOutdated(info, built.ingredientsText);
   const fit = fitLabel(data, paper.w, paper.h);
   const pick = (v: string) => { setPaperId(v); keepPaper(v); };
@@ -77,7 +85,6 @@ export function LabelPage() {
   const input = `w-full ${inputSm}`;
   return (
     <div className="mx-auto max-w-3xl space-y-4 p-4">
-      <style>{`@media print { ${printCss(paper)} }`}</style>
       <div className="no-print flex items-center gap-2">
         <Link to={`/recipes/${recipe!.id}`} className="-ml-2 rounded-lg p-1.5 text-muted" aria-label="戻る"><Icon name="back" /></Link>
         <h1 className="flex-1 font-serif text-2xl">ラベル：{recipe!.name}</h1>
@@ -131,6 +138,16 @@ export function LabelPage() {
               <input className={input} value={info.content ?? ""} placeholder={built.contentText} onChange={(e) => set({ content: e.target.value || undefined })} /></label>
             <label className="space-y-1"><span className={ui.label}>保存方法</span><input className={input} value={info.storage} onChange={(e) => set({ storage: e.target.value })} /></label>
           </div>
+          <label className="flex items-start gap-2 text-sm">
+            <input type="checkbox" className="mt-0.5 h-4 w-4 accent-clay" disabled={!nutText} checked={!!info.nutrition && !!nutText} onChange={(e) => set({ nutrition: e.target.checked })} />
+            <span>栄養成分表示（熱量・たんぱく質・脂質・炭水化物・食塩相当量）を入れる
+              <span className="block text-xs text-muted">
+                {nutText ? "材料の成分表から計算した推定値です。" : "成分の分からない材料があるので、まだ入れられません（少ない値を刷らないため）。"}
+                {nut && nut.missing.length > 0 && <span className="text-warn-strong">成分か重さが分からない材料：{nut.missing.join("、")}。</span>}
+                {nut && nut.missing.length > 0 && canEdit && <Link to="/tidy#link" className="underline">共有の材料に結ぶ</Link>}
+              </span>
+            </span>
+          </label>
           <div className="grid grid-cols-2 gap-2">
             <label className="space-y-1"><span className={ui.label}>製造者の名前</span><input className={input} value={info.manufacturer} onChange={(e) => set({ manufacturer: e.target.value })} /></label>
             <label className="space-y-1"><span className={ui.label}>製造者の住所（必須）</span><input className={input} value={info.manufacturerAddress ?? ""} placeholder="都道府県から" onChange={(e) => set({ manufacturerAddress: e.target.value })} /></label>
@@ -154,17 +171,17 @@ export function LabelPage() {
           </div>
           {paper.sheet && start > 1 && <p className="text-xs text-muted">使いかけのシートの {start} 面目から刷ります（左上から右へ数えます）。</p>}
           <button disabled={blocked} className={`w-full ${ui.primary} flex items-center justify-center gap-2`} onClick={printNow}><Icon name="printer" />{blocked ? "上の赤い項目を済ませると印刷できます" : "印刷する"}</button>
-          <p className="text-xs text-muted">印刷の画面で「余白なし」「倍率100%」を選んでください。PDFに保存もできます。</p>
+          <PrintHelp paper={paper} adjust={adjust} onAdjust={setAdjust} onTest={printTest} />
           <LabelExport d={data} w={paper.w} h={paper.h} name={recipe!.name} disabled={blocked} />
           <Link to={`/labels?add=${recipe!.id}`} className="block text-sm text-clay-strong underline">ほかの商品とまとめて印刷する・詰め合わせのラベルを作る</Link>
         </section>
         <p className="text-xs leading-relaxed text-muted">
           表示は食品表示基準にそって自動で作っています（原材料は重い順、添加物は「／」のあと、アレルゲンは最後にまとめて、お店で作った材料は「（ ）」の中に中身）。
-          複合原材料の省略のしかた・栄養成分表示などは対象外です。販売の前に、お店の責任で必ず内容を確かめてください。
+          複合原材料の省略のしかたなどは対象外です。栄養成分表示は成分表から計算した推定値で、焼いて減る水分などは見ていません。販売の前に、お店の責任で必ず内容を確かめてください。
         </p>
       </div>
 
-      {printing && <PrintGrid labels={Array.from({ length: copies }, () => data)} paper={paper} start={start} />}
+      {printing && <PrintGrid labels={Array.from({ length: copies }, () => data)} paper={paper} start={start} adjust={adjust} test={test} />}
     </div>
   );
 }

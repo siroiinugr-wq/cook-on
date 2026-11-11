@@ -20,6 +20,8 @@ export interface BuiltLabel extends LabelResult {
   unconfirmed: string[];
   /** 名前から添加物と見分けたが、材料にはまだ「添加物」と覚えていないもの・書き方を選べるもの */
   additives: AdditiveHint[];
+  /** 栄養成分表示の文（計算できたとき。出すかどうかは LabelInfo.nutrition） */
+  nutritionText?: string | null;
 }
 
 function linesOf(recipe: Pick<Recipe, "id" | "items">, ingById: Map<string, Ingredient>, recipeById: Map<string, Recipe>, acc: BuiltLabel, seen: Set<string>): LabelLine[] {
@@ -82,15 +84,18 @@ export interface LabelData extends LabelInfo {
   expiry: string;
   /** 枠の外に印刷する日付（無ければ出さない） */
   outsideDate: string | null;
+  /** 栄養成分表示の文（出さないときは null） */
+  nutritionText?: string | null;
 }
 
-export function labelData(info: LabelInfo, built: Pick<LabelResult, "ingredientsText" | "contentText">, made: string): LabelData {
+export function labelData(info: LabelInfo, built: Pick<LabelResult, "ingredientsText" | "contentText"> & { nutritionText?: string | null }, made: string): LabelData {
   const date = expiryDate(new Date(`${made}T00:00:00+09:00`), info.expiryDays);
   return {
     ...info,
     ingredientsText: info.ingredientsText || built.ingredientsText,
     contentText: info.content?.trim() || built.contentText,
     expiry: info.dateOutside ? DATE_OUTSIDE_TEXT : date,
+    nutritionText: info.nutrition ? built.nutritionText ?? null : null,
     outsideDate: info.dateOutside && info.datePrint !== false ? `${info.expiryKind} ${date}` : null,
   };
 }
