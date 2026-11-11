@@ -26,7 +26,7 @@
 - `core/` 権限 `auth.ts`（`requireRole`）、クレジットの予約→確定→返金 `credits.ts`（`runWithCredits`）、招待 `invite.ts`
 - `ai/` Gemini（`gemini.ts`・`prompts.ts`）、名寄せ `normalize.ts`・`resolve.ts`、取り込み `importRecipes.ts`、既製品の下書き・相談 `assist.ts`
 - `recipes/` 保存と版 `save.ts`、取り込みの保存 `importSave.ts`、原価アラート `costAlert.ts`（材料のトリガ）
-- `ugc/products.ts` 既製品の登録と票（昇格）、`billing/credits.ts` 購入（準備中）と付与
+- `ugc/products.ts` 既製品の登録と票（昇格）、`billing/credits.ts` 購入の決済ページと付与、`billing/stripe.ts` Stripe の知らせ（Webhook。クレジットを足すのはここだけ、判定は `shared/purchase.ts`）
 
 Firestore
 ```
@@ -38,6 +38,7 @@ organizations/{orgId}                     名前・plan・credits・settings（c
   recipes/{id}  └ versions/{n}             レシピ（saveRecipe だけが書く）と前の版
   alerts/{id}                              原価が目標を超えたお知らせ（read だけ画面から）
   imports/{id}  creditLedger/{id}  aliases/{照合キー}  ugcVotes/{productId}
+  purchases/{決済ID}                       買ったクレジットの記録（Functions だけ。二重に渡さないため）
 globalIngredients/{id}                     共有の材料（base_* ＝はじめの材料、ugc_* ＝昇格した既製品）
 ugcProducts/{id}                           既製品（お店どうしで確認）
 tenantDomains/{ドメイン}                   独自ドメイン → orgId
@@ -47,6 +48,8 @@ productSizes/{照合キー}                     ネットで確かめた商品�
 
 ## このアプリだけの決まり
 - **クレジットの単価・上限は `functions/src/shared/credits.ts` の1か所だけ。** 画面の「押す前の表示」とサーバーの「実際に引く量」が同じファイルを読む（ig-saas で2か所に分かれて食い違った反省）
+- **AIの原価の目安（2026-11-11、`ai/config.ts` の `costYen`）**：文字や写真を読むだけの機能は1クレジット（10円）に対して0.5〜2円。Google 検索つきは検索1回ごとに約2円が別にかかり、1品3〜7円（月5,000回までは無料）。だからネットで調べる機能（`sizeSearch`・`priceSearch`・`priceCompare`）は**1品1クレジット**。5品で1クレジットに戻さない。検索の回数は `aiRequests` の `usage.searches`
+- **購入（Stripe）**：値段とクレジット数は `CREDIT_PACKS` の1か所（Stripe 側に商品は作らない）。残高を足すのは Webhook だけ、決済IDごとに `purchases/{決済ID}` で二重に渡さない
 - **無制限の店舗**：`organizations/{orgId}.unlimited = true`（運営が Firebase コンソールで付け外しする。ルールで画面からは変えられない）。`runWithCredits` は残高を見ず0クレジットで記録、取り込みの上限は `IMPORT_MAX_CHARS_UNLIMITED`（30万字。時間切れと保存の上限のため）。画面は残高を `Infinity`＝「無制限」と出し、確認を出さずに実行する
 - クレジットを使う操作は必ず `runWithCredits`（予約→確定、失敗なら全額返す、`requestId` で二重に引かない）。画面は `useCreditAction` で使う数を先に見せ（確認のポップアップに「使う量」と「残り 前→後」、無制限の店舗にも出す）、終わったら `CreditToastProvider` が実際に使った量と残りを下に出す。`newRequestId()` を毎回付ける
 - **AIの原価（トークン・円・モデル）は店舗が読める `creditLedger` に書かない。** `aiRequests` だけ。お客さまに見せる文にもAIの料金・トークンを書かない
@@ -68,8 +71,8 @@ productSizes/{照合キー}                     ネットで確かめた商品�
 - **AI経理から自動で届く**（`link/keiri.ts`）：設定「AI経理と連携」で `createLinkCode`（管理者、コードは1回だけ表示、ハッシュを `linkCodes/{hash}` に）→ AI経理の設定に貼る → AI経理が承認のたびに `receivePurchaseLines`（HTTPS・公開、`https://asia-northeast1-cook-on-plaz.cloudfunctions.net/receivePurchaseLines`）へレシート1枚ずつ送る。`organizations/{orgId}/purchaseInbox` に置くだけ（同じレシートは上書き、300件まで）。画面の「AI経理から届いた明細」で読み込むと消す。状態は `organizations.keiriLink`（画面から変えられない）。この URL は AI経理の `integrations/cookon.ts` にも書いてある
 - **品名からAIが判断**（写真もファイルも）：AIが一般名（`generic`：ﾊｸﾘｷｺ→薄力粉）も返し、お店に無い材料は `attachGlobals`（`ai/invoices.ts`、`resolveNames`）で共有の材料（成分表の成分・アレルゲン・参考価格）を探す。画面は「新しく登録：薄力粉（成分表・アレルゲンつき）」を選んでおき、`globalRef` 付きで作る。各行に100gあたりの税抜の値段と前との差（`per100`）
 - **量・重さ・入り数もAIが判断**（`shared/invoice.ts`）：品名の量は `sizeFromName`（450g・200ml×3・10個入・6P）で無料で読む。AIは量と根拠 `size`（printed＝書いてある／known＝商品の決まった量／price＝値段から推定）・理由 `sizeNote`・個で買うものの1つの重さ `gramsPerPiece` を返す（プロンプトは `prompts.ts` の `SIZE_RULES`）。「AIで判断する」（`matchPurchaseLines`、`aiMatch` 20行で1クレジット）は結び先の無い行に加え、`sizeDoubt`＝量が分からない・1つの重さが分からない・今の材料の100gあたりと2.5倍以上違う行も `fixed` で量だけ確かめる（手がかりは `sizeHint`）。推定は黄色で出し、人が量を直すと `edited`。反映で材料に無い `gramsPerPiece` を写す
-- **量をネットで確かめる**（`searchPackSizes`、`ai/invoices.ts`）：「AIで判断する」のあとも量が決まらない行（`needsWebSize`）を、Google 検索つきのAI（`callGeminiSearchJson`、`SIZE_SEARCH_SYSTEM`）が1品ずつ調べる（`sizeSearch`＝`SIZE_SEARCH_BATCH` 5品で1クレジット、1回20品）。見たページと検索の候補は `components/common/WebSources.tsx` で出す（利用の条件）。調べた量は共有の表 `productSizes/{productSizeKey}`（Functions だけ）に覚え、値段が近い（`sameSizePrice`）同じ商品はほかのお店でも検索せず無料
-- **仕入れ値が空の材料に自動で値段**（`global/refPrices.ts`）：共有の材料に参考価格が入る・変わると `onGlobalRefPrice` が結んでいるお店の材料（仕入れ値が空か参考価格のまま）に入れる（collectionGroup `ingredients` の `globalRef`、索引は fieldOverrides）。それより前に結んだ材料や取りこぼしは、画面が開いたときに `hooks/useAutoRefPrice.ts`（`useTodo` から、無料）が入れる。データの整理の仕入れ値・材料一覧から「AIがネットで調べて入れる」（`fillPricesFromWeb`）：共有の参考価格で入るものは無料、残りは Google 検索つきのAI（`searchRefPrice`、運営の `estimateRefPrices` と共通）が1品ずつ（`priceSearch`＝5品で1クレジット、1回20品）。`includeRef` を付けると、参考価格のままでネットの記録（日付つき）が無い材料（`needsWebRefresh`）も今のネットの値段に入れ替える（データの整理の仕入れ値のボタン）。`priceSource: "ref"` と記録 `refWeb`（調べた日 `at`・税込の値段と量・入れた税抜 `exPrice`・見たページ・検索の候補。型は `shared/offers.ts` の `RefWeb`）を付け（**お店が仕入れ値を直しても refWeb は消さない**。材料の編集の「AIがネットで調べた値段」で今の仕入れ値と比べる。今の値段がネットの値段のままかは `webPriceInUse`）、結んでいる共有の材料に参考価格が無ければ運営の精査への提案（`globalSuggestions/ai_{id}`）にもする
+- **量をネットで確かめる**（`searchPackSizes`、`ai/invoices.ts`）：「AIで判断する」のあとも量が決まらない行（`needsWebSize`）を、Google 検索つきのAI（`callGeminiSearchJson`、`SIZE_SEARCH_SYSTEM`）が1品ずつ調べる（`sizeSearch`＝1品1クレジット、1回20品）。見たページと検索の候補は `components/common/WebSources.tsx` で出す（利用の条件）。調べた量は共有の表 `productSizes/{productSizeKey}`（Functions だけ）に覚え、値段が近い（`sameSizePrice`）同じ商品はほかのお店でも検索せず無料
+- **仕入れ値が空の材料に自動で値段**（`global/refPrices.ts`）：共有の材料に参考価格が入る・変わると `onGlobalRefPrice` が結んでいるお店の材料（仕入れ値が空か参考価格のまま）に入れる（collectionGroup `ingredients` の `globalRef`、索引は fieldOverrides）。それより前に結んだ材料や取りこぼしは、画面が開いたときに `hooks/useAutoRefPrice.ts`（`useTodo` から、無料）が入れる。データの整理の仕入れ値・材料一覧から「AIがネットで調べて入れる」（`fillPricesFromWeb`）：共有の参考価格で入るものは無料、残りは Google 検索つきのAI（`searchRefPrice`、運営の `estimateRefPrices` と共通）が1品ずつ（`priceSearch`＝1品1クレジット、1回20品）。`includeRef` を付けると、参考価格のままでネットの記録（日付つき）が無い材料（`needsWebRefresh`）も今のネットの値段に入れ替える（データの整理の仕入れ値のボタン）。`priceSource: "ref"` と記録 `refWeb`（調べた日 `at`・税込の値段と量・入れた税抜 `exPrice`・見たページ・検索の候補。型は `shared/offers.ts` の `RefWeb`）を付け（**お店が仕入れ値を直しても refWeb は消さない**。材料の編集の「AIがネットで調べた値段」で今の仕入れ値と比べる。今の値段がネットの値段のままかは `webPriceInUse`）、結んでいる共有の材料に参考価格が無ければ運営の精査への提案（`globalSuggestions/ai_{id}`）にもする
 - **ネットで値段を比べる**（`ai/compare.ts` の `compareWebPrices`、材料の編集の `WebOfferList`）：AIが Google 検索で売り場を最大6件（店・商品・税込の値段・量・送料など）探し、材料の `offers` に残す（`priceCompare`＝1回1クレジット）。調べ直すと前の結果を `offers.past`（日時・売り場・値段・選んだ候補、5回まで、`withPast`）に移し、画面の「前に調べた結果」で見られる。リンクは検索で見たページからドメインで探す（`sourceFor`、AIの書いた URL は使わない）。`shared/offers.ts` の `rankOffers` が100gあたりの安い順に並べ今の仕入れ値と比べる。「仕入れ候補」（`picked`）と「この値段を仕入れ値にする」（`offerPatch`、税込8%）。レシートの画面でも、比べてあれば最安とレシートを比べる（`cheapestPer100`）
 - 既製品は材料の編集からも登録できる（`ProductForm` の `from`：材料はそのまま、ラベルの名前・アレルゲン（確認済み）・写真を既製品の表示にする）
 - 仕入れ値は税抜で持つ（`purchasePrice`）。税込で入れたら `priceTax`（0・0.08・0.1）に印を残し、`toExTax`/`fromExTax`（`shared/cost.ts`）で直す
@@ -121,7 +124,7 @@ cd ~/cook-on && firebase functions:log --only <関数名> --project cook-on-plaz
 ## 今の状態と次にやること
 - 実装済み：全画面・全関数・ルールと索引・デモモード。ブラウザ（デモ）で一覧→詳細→AI相談→作業モード→ラベル→編集と履歴→新規作成→値上がりアラート→既製品の票→取り込み→クレジット→設定まで通ることを確認（2026-10-19）
 - まだ本番で動かしていない（Firebase プロジェクト未作成）。SETUP.md の B〜E
-- Stripe は `BILLING_ENABLED = false`（購入ボタンは「準備中」）
+- Stripe：クレジットのまとめ買い（`createCheckout`・`stripeWebhook`）は作ってある。鍵2つ（`STRIPE_SECRET_KEY`・`STRIPE_WEBHOOK_SECRET`）を入れてから出す。テストの鍵の間は運営スタッフだけが買える。手順は `docs/stripe.md`
 - 食品成分表と参考価格の取り込みスクリプトはあるが、本番にはまだ書いていない（MASA の Mac で --dry-run → 書く。e-Stat のアプリケーションIDが要る）
 - 栄養成分を食品表示ラベルに出す計算は未作成（成分表の値は globalIngredients.nutrition にある）
 - 画面のJSが1ファイル約790KB。重い画面の `React.lazy` 分割は未実施

@@ -23,4 +23,5 @@ export { compareWebPrices } from "./ai/compare";
 export { onPackagingWritten, onPackagingSetWritten } from "./recipes/packagingAlert";
 export { submitUgcProduct, onUgcVoteWritten } from "./ugc/products";
 export { createCheckout, grantCredits } from "./billing/credits";
+export { stripeWebhook } from "./billing/stripe";
 export { createLinkCode, receivePurchaseLines, revokeLinkCode } from "./link/keiri";

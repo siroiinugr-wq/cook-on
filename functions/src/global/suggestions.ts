@@ -120,7 +120,7 @@ export const estimateRefPrices = onCall({ region: REGION, timeoutSeconds: 540, s
     }));
   }
   // AIの原価は aiRequests だけに残す（お店の記録には出さない）。検索は1回ごとに別の料金がかかる
-  await db.collection("aiRequests").add({ kind: "estimateRefPrices", by: uid, usage, searches: targets.length, costYen: costYen(usage), model: GEMINI_MODEL, at: FieldValue.serverTimestamp() });
+  await db.collection("aiRequests").add({ kind: "estimateRefPrices", by: uid, usage, items: targets.length, costYen: costYen(usage), model: GEMINI_MODEL, at: FieldValue.serverTimestamp() });
   return { made, checked: targets.length, left: all.length - targets.length };
 });
 

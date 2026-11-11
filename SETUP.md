@@ -214,7 +214,7 @@ cd ~/cook-on && node scripts/set-domain.mjs recipe.お店のドメイン.jp 店�
 
 ## G. あとでやること
 
-- **クレジットの購入（Stripe）**：今は「準備中」と出ます。つなぐときは `functions/src/ai/config.ts` の `BILLING_ENABLED` と `functions/src/billing/credits.ts` の `createCheckout` を Claude と一緒に作ります（Webhook を受けた関数だけが残高を足す設計）
+- **クレジットの購入（Stripe）**：決済ページと Webhook は作ってあります。Stripe のアカウント・Webhook・鍵2つを用意してから出します。手順は `docs/stripe.md`
 - **テストでクレジットを足す**：運営スタッフ（C-3）が `grantCredits` を呼べます。画面はまだないので、必要になったら Claude に頼んでください
 - **文科省の食品成分表**：今は「はじめの材料」約60件だけです。成分表（Excel）を取り込むスクリプトは、公式ファイルの形を確かめてから作ります
 - **AIのモデル**：`gemini-3.5-flash-lite`（`functions/src/ai/config.ts` の `GEMINI_MODEL`）。料金の前提（入力 $0.25・出力 $1.25 / 100万トークン、1ドル150円）も同じファイルにあります。Google の料金表で確かめて違っていたら直してください

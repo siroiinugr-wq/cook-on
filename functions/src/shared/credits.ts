@@ -49,13 +49,16 @@ export const ACTION_LABEL: Record<CreditAction | "purchase" | "grant" | "welcome
 };
 
 export const AI_MATCH_BATCH = 20;
-/** 量をネットで確かめる：1クレジットで何品まで（1品ずつ検索する） */
-export const SIZE_SEARCH_BATCH = 5;
+/**
+ * 量をネットで確かめる：1クレジットで何品まで。
+ * 検索は1品ずつで、1品に3〜7円かかる（検索の料金）。5品で1クレジットでは赤字なので1品ごとにした（2026-11-11）
+ */
+export const SIZE_SEARCH_BATCH = 1;
 /** 量をネットで確かめる：1回に頼める品数 */
 export const SIZE_SEARCH_MAX = 20;
 
 /** 仕入れ値をネットで調べる：1クレジットで何品まで・1回に調べる品数 */
-export const PRICE_SEARCH_BATCH = 5;
+export const PRICE_SEARCH_BATCH = 1;
 export const PRICE_SEARCH_MAX = 20;
 
 export function priceSearchCredits(n: number): number {
