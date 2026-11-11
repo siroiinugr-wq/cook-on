@@ -89,10 +89,9 @@ productSizes/{照合キー}                     ネットで確かめた商品�
 
 - **ホーム画面に追加ボタン**：`public/a2hs.js`（全アプリで同じファイル）。スマホのブラウザで開いたときだけ出し、スクロール中は消える。位置は読み込みタグの `data-bottom`・`data-side`・`data-z` で調整。manifest の `related_applications` で Android のインストール済みを判定
 - **新しい版の知らせ**：`public/update-check.js`（全アプリで同じファイル）＋ `scripts/stamp-version.mjs`（ビルドのたびに `public/version.json` に版＝コミットID）。index.html の `data-version="%VITE_APP_VERSION%"` と公開中の版を5分ごと・画面に戻ったときに比べ、違えば上に「読み込み直す」。OMNI の帯と同じ仕様
-- **夜間の公開**：`.github/workflows/`（`staging.yml` main に入ると確認用URL／`promote.yml`「公開を予約する」／`release.yml` 毎日3時に予約分だけ本番へ）。手順と初回の準備（サービスアカウント・Secrets の `APP_ENV`・`FUNCTIONS_ENV`）は `docs/release.md`。Mac の .env を変えたら Secrets も貼り直す
+- **公開は手で**：MASA が Mac から都度出す。夜間の自動公開は入れない（2026-11-11 MASA判断で取りやめ）。出すと、開いたままの画面に上の「読み込み直す」が出る
 - **ニックネーム**：メンバーどうし（管理者も）に見せるのはニックネームだけ。メールアドレスは members に置かず、画面にも出さない（自分のアドレスを自分に見せるのは可）。ニックネームが無い人は入る前に1回だけ決めてもらい、設定の「ニックネーム」（`components/settings/NicknameSection.tsx`、`/settings#me`）で変えられる。保存はサーバーの関数だけ（members は画面から書けないまま）。新しく members を作る処理に email を書かない
   - 判定は `shared/nickname.ts`、保存は `core/profile.ts` の `setNickname`、以前の members のメールは管理者が開いたときに `hideMemberEmails` が消す（端末ごとに1回）。画面は `components/common/Nickname.tsx`・`lib/profile.ts`
-  - 夜間の公開とは別に、手元の `npm run release` も今までどおり使える
 
 ## よく使うコマンド
 Mac で触る前に必ず `git pull`。
