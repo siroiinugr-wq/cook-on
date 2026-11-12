@@ -4,7 +4,8 @@ import { RECIPE_LIMITS } from "@shared/recipe";
 import { uploadPhoto, usePhotoUrl } from "../../../lib/photos";
 import { Icon } from "../../common/Icon";
 
-export function RecipePhotos({ photos, set, photoDir }: { photos: string[]; set: (p: string[]) => void; photoDir: string }) {
+export function RecipePhotos({ photos, set: update, photoDir }: { photos: string[]; set: (f: (cur: string[]) => string[]) => void; photoDir: string }) {
+  const set = (p: string[]) => update(() => p);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
 
@@ -16,7 +17,8 @@ export function RecipePhotos({ photos, set, photoDir }: { photos: string[]; set:
       const room = RECIPE_LIMITS.photos - photos.length;
       const added: string[] = [];
       for (const f of [...files].slice(0, room)) added.push(await uploadPhoto(photoDir, f));
-      set([...photos, ...added]);
+      // 上げている間にほかを直していても消さないよう、いまの一覧に足す
+      update((cur) => [...cur, ...added].slice(0, RECIPE_LIMITS.photos));
       if (files.length > room) setErr(`写真は${RECIPE_LIMITS.photos}枚までです。`);
     } catch (e) {
       setErr(e instanceof Error ? e.message : "写真を上げられませんでした。");

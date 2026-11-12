@@ -3,7 +3,7 @@
 // レシピの無い品目（コーヒー豆など）は名前・原材料・内容量を手で入れる。よく使う詰め合わせは labelSets に保存して呼び出す。
 // レシピは打って探して足す（LabelItemPicker）。レシピの無い品目は labelItems に保存して次から探せる。よく使う詰め合わせは一覧で探す（2026-11-05）。
 // それぞれの商品の名称・期限・内容量などは、1枚ずつのラベル画面で「レシピに覚える」を押した内容を使う
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { assortContent, assortName, assortText, labelMissing, LABEL_PAPERS, paperOf, type LabelInfo } from "@shared/label";
 import type { Recipe } from "@shared/types";
@@ -79,23 +79,42 @@ export function LabelsPage() {
   }), [rows, recipeById, ings.byId, org.settings, nutOf]);
   const shown = mode === "each" ? items.filter((i) => i.recipe) : items;
 
-  // 詰め合わせの初めの値：期限は一番短い商品に合わせ、どれかが消費期限なら消費期限
-  useEffect(() => {
-    if (mode !== "assort" || assort || !items.length) return;
-    const withInfo = items.filter((i) => i.info);
+  // 詰め合わせの名称・期限の「自動の値」：期限は一番短い商品に合わせ、どれかが消費期限なら消費期限
+  const auto = useMemo(() => {
+    const withInfo = items.filter((i) => i.info && i.row.count > 0);
     const first = withInfo[0]?.info;
-    setAssort({
+    return {
+      first,
       productName: assortName(first?.productName, items.filter((i) => i.row.free).map((i) => i.name)),
-      expiryDays: withInfo.length ? Math.min(...withInfo.map((i) => i.info!.expiryDays || 7)) : org.settings.labelExpiryDays,
-      expiryKind: withInfo.some((i) => i.info!.expiryKind === "消費期限") ? "消費期限" : (first?.expiryKind ?? org.settings.labelExpiryKind),
-      storage: org.settings.labelStorage || first?.storage || "直射日光・高温多湿を避けて保存してください",
-      dateOutside: org.settings.labelDateOutside, datePrint: org.settings.labelDatePrint,
-      manufacturer: org.settings.manufacturer, manufacturerAddress: org.settings.manufacturerAddress,
-    });
-  }, [mode, assort, items, org.settings]);
+      expiryDays: withInfo.length ? Math.min(...withInfo.map((i) => i.info!.expiryDays || 7)) : null,
+      expiryKind: withInfo.some((i) => i.info!.expiryKind === "消費期限") ? "消費期限" as const : first?.expiryKind ?? null,
+    };
+  }, [items]);
+  // 人が直した項目（直したものは自動で書き換えない）
+  const touched = useRef(new Set<string>());
+  useEffect(() => {
+    if (mode !== "assort" || !items.length) return;
+    if (!assort) {
+      setAssort({
+        productName: auto.productName,
+        expiryDays: auto.expiryDays ?? org.settings.labelExpiryDays,
+        expiryKind: auto.expiryKind ?? org.settings.labelExpiryKind,
+        storage: org.settings.labelStorage || auto.first?.storage || "直射日光・高温多湿を避けて保存してください",
+        dateOutside: org.settings.labelDateOutside, datePrint: org.settings.labelDatePrint,
+        manufacturer: org.settings.manufacturer, manufacturerAddress: org.settings.manufacturerAddress,
+      });
+      return;
+    }
+    // あとから品目を足した・外したとき：直していない項目は自動の値に合わせ直す（以前は最初の品目のまま変わらなかった）
+    const p: Partial<LabelInfo> = {};
+    if (!touched.current.has("productName") && assort.productName !== auto.productName) p.productName = auto.productName;
+    if (!touched.current.has("expiryDays") && auto.expiryDays !== null && assort.expiryDays !== auto.expiryDays) p.expiryDays = auto.expiryDays;
+    if (!touched.current.has("expiryKind") && auto.expiryKind && assort.expiryKind !== auto.expiryKind) p.expiryKind = auto.expiryKind;
+    if (Object.keys(p).length) setAssort({ ...assort, ...p });
+  }, [mode, assort, items.length, auto, org.settings]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const unused = recipes.filter((r) => !rows.some((x) => x.recipeId === r.id));
-  const setRow = (i: number, p: Partial<Row>) => setRows(rows.map((x, j) => (j === i ? { ...x, ...p } : x)));
+  const setRow = (i: number, p: Partial<Row>) => setRows((cur) => cur.map((x, j) => (j === i ? { ...x, ...p } : x)));
 
   let labels: LabelData[] = [];
   let blocked = shown.length === 0;
@@ -126,9 +145,10 @@ export function LabelsPage() {
     if (over.length && !(await confirm({ title: "ラベルに入りきりません", body: `${over.join("、")}は、下が切れて印刷されます。大きい用紙にするか、文を短くするのがおすすめです。`, ok: "切れたまま印刷", cancel: "やめる" }))) return;
     print();
   }
-  const setA = (p: Partial<LabelInfo>) => assort && setAssort({ ...assort, ...p });
+  const setA = (p: Partial<LabelInfo>) => { Object.keys(p).forEach((k) => touched.current.add(k)); setAssort((cur) => (cur ? { ...cur, ...p } : cur)); };
 
   function load(s: LabelSet) {
+    touched.current = new Set(Object.keys(s.info ?? {}));
     setRows(s.rows);
     setAssort({ ...(assort ?? labelInfoForOrg(org.settings)), ...s.info, manufacturer: org.settings.manufacturer, manufacturerAddress: org.settings.manufacturerAddress });
     setSetId(s.id);
@@ -241,6 +261,18 @@ export function LabelsPage() {
                 <select className={input} value={assort.expiryKind} onChange={(e) => setA({ expiryKind: e.target.value as LabelInfo["expiryKind"] })}><option>賞味期限</option><option>消費期限</option></select></label>
               <label className="space-y-1"><span className={ui.label}>製造日から何日</span><input className={input} inputMode="numeric" value={assort.expiryDays} onChange={(e) => setA({ expiryDays: num(e.target.value, 3650) })} /></label>
             </div>
+            {auto.expiryDays !== null && assort.expiryDays > auto.expiryDays && (
+              <p className="rounded-lg bg-warn-soft p-2 text-xs text-warn-strong">
+                中の品目でいちばん短い期限は{auto.expiryDays}日です。詰め合わせの期限がそれより長くなっています。
+                <button className="ml-1 underline" onClick={() => setA({ expiryDays: auto.expiryDays! })}>{auto.expiryDays}日に合わせる</button>
+              </p>
+            )}
+            {auto.expiryKind === "消費期限" && assort.expiryKind !== "消費期限" && (
+              <p className="rounded-lg bg-warn-soft p-2 text-xs text-warn-strong">
+                消費期限の品目が入っています。
+                <button className="ml-1 underline" onClick={() => setA({ expiryKind: "消費期限" })}>消費期限にする</button>
+              </p>
+            )}
             <label className="block space-y-1"><span className={ui.label}>保存方法</span><input className={input} value={assort.storage} onChange={(e) => setA({ storage: e.target.value })} /></label>
             <label className="flex items-center gap-2 text-sm"><input type="checkbox" className="h-4 w-4 accent-clay" checked={!!assort.dateOutside} onChange={(e) => setA({ dateOutside: e.target.checked })} />日付は枠の外に書く</label>
             <label className="flex items-center gap-2 text-sm">枚数<input className={`${inputSm} w-20`} inputMode="numeric" value={copies} onChange={(e) => setCopies(Math.max(1, num(e.target.value)))} /></label>

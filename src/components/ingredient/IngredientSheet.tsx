@@ -43,7 +43,8 @@ export function IngredientSheet({ orgId, uid, ing, usedIn, usedBy = [], recipes 
   // 既製品として登録する（パッケージの裏を撮るとAIが原材料・アレルゲンを読む）。この材料はそのまま残る
   const [asProduct, setAsProduct] = useState(false);
   const hist = useCol<Hist>(ing ? `organizations/${orgId}/ingredients/${ing.id}/priceHistory` : null, { orderBy: ["at", "desc"], limit: 10 });
-  const set = (p: Partial<Ingredient>) => setD({ ...d, ...p });
+  // 前の値は「いまの値」から作る（写真を上げている間に打った字が、上げ終わったときに消えないように）
+  const set = (p: Partial<Ingredient>) => setD((cur) => ({ ...cur, ...p }));
   const num = (v: string) => (v.trim() === "" ? null : Number(numText(v)));
   // 値段の欄は「入れた形」（税込なら税込）で出し、保存する purchasePrice は税抜に直す
   const tax = d.priceTax ?? 0;

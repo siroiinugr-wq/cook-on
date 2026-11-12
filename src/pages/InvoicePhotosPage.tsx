@@ -300,7 +300,7 @@ export function InvoicePhotosPage() {
     }
   }
 
-  const set = (k: number, p: Partial<Row>) => setRows(rows.map((r, j) => (j === k ? { ...r, ...p } : r)));
+  const set = (k: number, p: Partial<Row>) => setRows((cur) => cur.map((r, j) => (j === k ? { ...r, ...p } : r)));
   const picked = rows.filter((r) => r.use && r.target).length;
   if (!canEdit) return <p className="py-10 text-center text-muted">仕入れ値の更新には編集の権限が必要です。</p>;
   return (

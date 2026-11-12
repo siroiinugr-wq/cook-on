@@ -42,6 +42,7 @@ export function AdminSuggestionsPage() {
     <div className="space-y-3 pb-10">
       <PageHead title="共有の材料の精査" back="/settings" />
       <p className="text-sm text-ink-soft">採用したものだけが、すべてのお店の共有の材料に入ります。お店の名前と仕入れ先は、ここ以外には出ません。</p>
+      <MextStatus />
       <section className={`${ui.card} space-y-2`}>
         <p className="font-bold">ネットの値段を調べて参考価格の案を作る</p>
         <p className="text-xs text-muted">統計に無い共有の材料（はじめの材料・お店から入った材料・既製品）の今の販売価格を、AIが Google 検索で調べて、いくつかのお店の真ん中くらいを案にします。見たページも残すので、確かめてから採用してください。1回40件まで（数分かかります）。運営の費用で、お店のクレジットは使いません。</p>
@@ -140,5 +141,22 @@ function Card({ s }: { s: GlobalSuggestion }) {
         <button disabled={busy || (s.kind === "new" && !name.trim())} onClick={() => decide(true)} className={ui.primary}>{busy ? "保存しています…" : "採用"}</button>
       </div>
     </li>
+  );
+}
+
+/** 食品成分表（栄養成分の元）が本番に入っているか。薄力粉（食品番号 01015）があるかで見る */
+function MextStatus() {
+  const { data, loading } = useDoc<GlobalIngredient>("globalIngredients/mext_01015");
+  if (loading) return null;
+  const ok = typeof data?.nutrition?.kcal === "number";
+  return (
+    <section className={`${ui.card} space-y-1 text-sm`}>
+      <p className="font-bold">食品成分表（栄養成分の元）：{ok ? "入っています" : "まだ入っていません"}</p>
+      <p className="text-xs text-muted">
+        {ok
+          ? "材料が成分表に結ばれると、レシピの栄養成分とラベルの栄養成分表示が出ます。名前が同じ材料は自動で結びます。"
+          : "入れるまで、レシピの栄養成分は出ません。運営の Mac で scripts/import-mext.mjs を1回実行します（文部科学省の Excel が要ります）。"}
+      </p>
+    </section>
   );
 }
