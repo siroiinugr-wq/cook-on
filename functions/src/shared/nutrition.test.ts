@@ -20,12 +20,14 @@ describe("recipeNutrition", () => {
     expect(r.missing).toEqual(["謎"]);
     expect(nutritionLabelText(r)).toBeNull();
     const all = recipeNutrition([item("粉", 100), item("バター", 100), item("謎", 10)].slice(0, 2), byId, nutOf, { pieces: 10 });
-    expect(nutritionLabelText(all)).toBe("1個（20g）当たり　熱量 105kcal、たんぱく質 0.9g、脂質 8.2g、炭水化物 7.5g、食塩相当量 0.19g（推定値）");
+    expect(nutritionLabelText(all, "piece")).toBe("1個（20g）当たり　熱量 105kcal、たんぱく質 0.9g、脂質 8.2g、炭水化物 7.5g、食塩相当量 0.19g（推定値）");
   });
 
   it("1個の重さが入っていれば、100gあたりは焼き上がりの重さで出す", () => {
     const r = recipeNutrition([item("粉", 100), item("バター", 100)], byId, nutOf, { pieces: 10, gramsPerPiece: 15 });
     expect(r.per100?.kcal).toBeCloseTo(700);
+    expect(nutritionLabelText(r)).toMatch(/^100g当たり　熱量 700kcal、/);
+    expect(nutritionLabelText(r, "piece")).toMatch(/^1個（15g）当たり　熱量 105kcal、/);
   });
 
   it("どれも分からなければ null", () => {

@@ -19,6 +19,7 @@ export function StoreSection({ orgId, org, canManage }: { orgId: string; org: Or
   const [outside, setOutside] = useState(org.settings.labelDateOutside);
   const [datePrint, setDatePrint] = useState(org.settings.labelDatePrint);
   const [nutrition, setNutrition] = useState(org.settings.labelNutrition);
+  const [basis, setBasis] = useState(org.settings.labelNutritionBasis);
   const [msg, setMsg] = useState("");
   useEffect(() => {
     setKind(org.settings.labelExpiryKind);
@@ -27,7 +28,8 @@ export function StoreSection({ orgId, org, canManage }: { orgId: string; org: Or
     setOutside(org.settings.labelDateOutside);
     setDatePrint(org.settings.labelDatePrint);
     setNutrition(org.settings.labelNutrition);
-  }, [org.settings.labelNutrition, org.settings.labelExpiryKind, org.settings.labelExpiryDays, org.settings.labelStorage, org.settings.labelDateOutside, org.settings.labelDatePrint]);
+    setBasis(org.settings.labelNutritionBasis);
+  }, [org.settings.labelNutrition, org.settings.labelNutritionBasis, org.settings.labelExpiryKind, org.settings.labelExpiryDays, org.settings.labelStorage, org.settings.labelDateOutside, org.settings.labelDatePrint]);
   useEffect(() => {
     setName(org.name);
     setRate(String(Math.round(org.settings.targetCostRate * 1000) / 10));
@@ -45,7 +47,7 @@ export function StoreSection({ orgId, org, canManage }: { orgId: string; org: Or
     if (!maker.trim() || !address.trim()) return setMsg("ラベルの製造者は、名前と住所の両方を入れてください（食品表示に必要です）。");
     try {
       await saveDoc(`organizations/${orgId}`, { name: name.trim().slice(0, 40), settings: { ...org.settings, targetCostRate: r, manufacturer: maker.trim(), manufacturerAddress: address.trim(), includeRecommendedAllergens: rec, shareProducts: share || (org.settings.shareProducts === null ? null : false), shareIngredients: shareIng,
-        labelExpiryKind: kind, labelExpiryDays: Math.max(1, Math.min(3650, Number(days) || 7)), labelStorage: storage.trim().slice(0, 120), labelDateOutside: outside, labelDatePrint: datePrint, labelNutrition: nutrition } });
+        labelExpiryKind: kind, labelExpiryDays: Math.max(1, Math.min(3650, Number(days) || 7)), labelStorage: storage.trim().slice(0, 120), labelDateOutside: outside, labelDatePrint: datePrint, labelNutrition: nutrition, labelNutritionBasis: basis } });
       setMsg("保存しました。");
     } catch {
       setMsg("保存できませんでした。");
@@ -95,6 +97,13 @@ export function StoreSection({ orgId, org, canManage }: { orgId: string; org: Or
               <span className="block text-xs text-muted">材料の成分表から計算した推定値を「（推定値）」と書いて入れます。レシピごとにも外せます。</span>
             </span>
           </label>
+          {nutrition && (
+            <label className="ml-7 block space-y-1"><span className={ui.label}>何あたりで書くか</span>
+              <select className={ui.input} value={basis} onChange={(e) => setBasis(e.target.value === "piece" ? "piece" : "100g")}>
+                <option value="100g">100gあたり（ほかの商品と比べやすい）</option>
+                <option value="piece">1個あたり（1個の重さも書きます）</option>
+              </select></label>
+          )}
           {!nutrition && <NutritionExempt />}
         </div>
         <label className="flex items-start gap-2 text-sm">
