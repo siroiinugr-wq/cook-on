@@ -6,6 +6,7 @@ import { fromExTax, PRICE_TAX_OPTIONS, toExTax, unitCostPerGram, yen } from "@sh
 import type { Ingredient, Recipe } from "@shared/types";
 import { madeFromCandidates, madeFromPartial, madeFromPatch, usesIngredient } from "@shared/madeFrom";
 import { NUTRIENT_LABELS } from "@shared/mext";
+import { NUTRITION_KEYS } from "@shared/ugc";
 import { UNITS, type Unit } from "@shared/units";
 import { useCol } from "../../hooks/useData";
 import { removeDoc, saveDoc, toDate } from "../../lib/store";
@@ -45,6 +46,8 @@ export function IngredientSheet({ orgId, uid, ing, usedIn, usedBy = [], recipes 
   const hist = useCol<Hist>(ing ? `organizations/${orgId}/ingredients/${ing.id}/priceHistory` : null, { orderBy: ["at", "desc"], limit: 10 });
   // 前の値は「いまの値」から作る（写真を上げている間に打った字が、上げ終わったときに消えないように）
   const set = (p: Partial<Ingredient>) => setD((cur) => ({ ...cur, ...p }));
+  // 100gあたりの成分を手で入れる欄（袋の裏の表示を写す）。空なら結んだ共有の材料（成分表）の値を使う
+  const [nutText, setNutText] = useState<Record<string, string>>(() => (ing && !ing.madeFrom ? Object.fromEntries(Object.entries(ing.nutrition ?? {}).map(([k, v]) => [k, String(v)])) : {}));
   const num = (v: string) => (v.trim() === "" ? null : Number(numText(v)));
   // 値段の欄は「入れた形」（税込なら税込）で出し、保存する purchasePrice は税抜に直す
   const tax = d.priceTax ?? 0;
@@ -76,8 +79,8 @@ export function IngredientSheet({ orgId, uid, ing, usedIn, usedBy = [], recipes 
         refWeb: d.refWeb ?? null,
         madeFrom: d.madeFrom ?? null,
         ...(made ? madeData : {}),
-        // レシピから外したら、レシピから計算した成分も消す（仕入れる材料は共有の材料の成分を使う）
-        ...(!d.madeFrom && ing?.madeFrom ? { nutrition: null, nutritionMissing: null } : {}),
+        // レシピから外したら、レシピから計算した成分も消す（仕入れる材料は共有の材料の成分か、手で入れた成分を使う）
+        ...(!d.madeFrom ? { nutrition: nutritionOut(nutText), ...(ing?.madeFrom ? { nutritionMissing: null } : {}) } : {}),
       };
       if (ing) await saveDoc(`organizations/${orgId}/ingredients/${ing.id}`, data);
       else await createIngredient(orgId, uid, data);
@@ -153,6 +156,7 @@ export function IngredientSheet({ orgId, uid, ing, usedIn, usedBy = [], recipes 
         </div>}
         {!made && <>
         {ing && <WebOfferList ing={{ ...ing, ...d, id: ing.id }} onUse={(o) => { const p = offerPatch(o); setPriceText(String(o.price)); set(p); }} />}
+        <NutritionInput text={nutText} set={setNutText} hasGlobal={!!d.globalRef} />
         {d.globalRef && <GlobalInfo globalRef={d.globalRef} onApply={(p) => { setPriceText(String(p.price)); set({ purchasePrice: p.price, priceTax: 0, purchaseQty: p.qty, purchaseUnit: p.unit, priceSource: "ref" }); }} />}
         <div className="grid grid-cols-2 gap-2">
           <label className="space-y-1"><span className={ui.label}>1個・1枚・1本の重さ g{PIECE.includes(d.purchaseUnit) ? "（必要）" : ""}</span>
@@ -321,3 +325,32 @@ function WebPriceRecord({ w, ing }: { w: RefWeb; ing: Omit<Ingredient, "id"> }) 
   );
 }
 
+
+/** 手で入れた100gあたりの成分を保存の形に（どれも空なら null＝共有の材料の値を使う）。熱量が無ければ使えないので null */
+function nutritionOut(t: Record<string, string>): Record<string, number> | null {
+  const out = Object.fromEntries(NUTRITION_KEYS.flatMap((k) => {
+    const v = t[k]?.trim();
+    return v && Number.isFinite(Number(v)) && Number(v) >= 0 ? [[k, Number(v)]] : [];
+  }));
+  return typeof out.kcal === "number" ? out : null;
+}
+
+/** 100gあたりの成分。成分表に無い材料（チョコレートなどの既製品）は袋の裏の栄養成分表示を写す */
+function NutritionInput({ text, set, hasGlobal }: { text: Record<string, string>; set: (t: Record<string, string>) => void; hasGlobal: boolean }) {
+  const filled = NUTRITION_KEYS.some((k) => text[k]?.trim());
+  const units: Record<string, string> = { kcal: "kcal", protein: "g", fat: "g", carbohydrate: "g", salt: "g" };
+  return (
+    <Accordion title="栄養成分（100gあたり）" summary={filled ? `手で入れた値：熱量 ${text.kcal || "—"}kcal` : hasGlobal ? "成分表の値を使っています。袋の値で上書きできます" : "成分表に結んでいません。袋の裏の値を入れるとラベルに使えます"} defaultOpen={false}>
+      <div className="space-y-2">
+        <p className="text-xs text-muted">袋の裏の「栄養成分表示」を写します。1枚・1袋あたりで書いてあるときは、100gあたりに直して入れてください（例：1枚12gで60kcal → 500kcal）。熱量は必ず入れてください。空にすると成分表の値に戻ります。</p>
+        <div className="grid grid-cols-3 gap-2">
+          {NUTRITION_KEYS.map((k) => (
+            <label key={k} className="space-y-1"><span className={ui.label}>{NUTRIENT_LABELS[k]}（{units[k]}）</span>
+              <input className={ui.input} inputMode="decimal" value={text[k] ?? ""} onChange={(e) => set({ ...text, [k]: numText(e.target.value) })} /></label>
+          ))}
+        </div>
+        {filled && !text.kcal?.trim() && <p className="text-xs text-warn-strong">熱量が空だと使えません。</p>}
+      </div>
+    </Accordion>
+  );
+}

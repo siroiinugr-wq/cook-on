@@ -33,7 +33,7 @@ export function IngredientsPage() {
   // ほかの画面（レシピの材料の行など）から「?open=材料のid」で来たら、その材料を開く
   const [params, setParams] = useSearchParams();
   const openId = params.get("open");
-  // レシピから来たときは、保存・閉じたらそのレシピに戻る（自分のアプリの中のレシピの画面だけ）
+  // レシピ・ラベルの画面から来たときは、保存・閉じたらそこへ戻る（自分のアプリの中のレシピの画面だけ）
   const [from, setFrom] = useState<string | null>(null);
   const nav = useNavigate();
   const close = () => {
@@ -46,7 +46,7 @@ export function IngredientsPage() {
     if (hit && canEdit) {
       setEdit(hit);
       const f = params.get("from");
-      setFrom(f && /^\/recipes\/[^/]+$/.test(f) ? f : null);
+      setFrom(f && /^\/recipes\/[^/]+(\/label)?$/.test(f) ? f : null);
     }
     setParams({}, { replace: true });
   }, [openId, loading, list, setParams, canEdit]);

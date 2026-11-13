@@ -19,6 +19,8 @@ export interface RecipeNutrition {
   gramsPerPiece: number | null;
   /** 成分か重さが分からず、0 として数えた材料の名前 */
   missing: string[];
+  /** そのうち、お店の材料に結んであるもの（材料の編集で成分を入れられる） */
+  missingIngs: { id: string; name: string }[];
 }
 
 export function recipeNutrition(
@@ -27,6 +29,7 @@ export function recipeNutrition(
 ): RecipeNutrition {
   const sum = Object.fromEntries(LABEL_NUTRIENTS.map((k) => [k, 0])) as Record<NutrientKey, number>;
   const missing: string[] = [];
+  const missingIngs: { id: string; name: string }[] = [];
   let grams = 0;
   let known = 0;
   for (const it of items) {
@@ -35,15 +38,19 @@ export function recipeNutrition(
     const g = toGrams(it.qty, it.unit, ing ?? {});
     const n = ing ? nutOf(ing) : null;
     if (g !== null && g > 0) grams += g;
-    if (g === null || g <= 0 || !n || typeof n.kcal !== "number") { if (!missing.includes(it.name)) missing.push(it.name); continue; }
+    if (g === null || g <= 0 || !n || typeof n.kcal !== "number") {
+      if (!missing.includes(it.name)) missing.push(it.name);
+      if (ing && !missingIngs.some((m) => m.id === ing.id)) missingIngs.push({ id: ing.id, name: ing.name });
+      continue;
+    }
     known += 1;
     for (const k of LABEL_NUTRIENTS) if (typeof n[k] === "number" && Number.isFinite(n[k])) sum[k] += (n[k] * g) / 100;
   }
   const pieces = y.pieces && y.pieces > 0 ? y.pieces : 1;
   const gpp = y.gramsPerPiece && y.gramsPerPiece > 0 ? y.gramsPerPiece : grams > 0 ? grams / pieces : null;
-  if (!known) return { perPiece: null, per100: null, gramsPerPiece: gpp, missing };
+  if (!known) return { perPiece: null, per100: null, gramsPerPiece: gpp, missing, missingIngs };
   const map = (f: (v: number) => number) => Object.fromEntries(LABEL_NUTRIENTS.map((k) => [k, f(sum[k])])) as Record<NutrientKey, number>;
-  return { perPiece: map((v) => v / pieces), per100: gpp ? map((v) => (v / pieces / gpp) * 100) : null, gramsPerPiece: gpp, missing };
+  return { perPiece: map((v) => v / pieces), per100: gpp ? map((v) => (v / pieces / gpp) * 100) : null, gramsPerPiece: gpp, missing, missingIngs };
 }
 
 /** 表示の丸め：熱量は整数、ほかは小数1桁（食塩相当量は1g未満なら2桁） */
