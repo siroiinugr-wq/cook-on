@@ -61,7 +61,7 @@ export function LabelPage() {
   const set = (p: Partial<LabelInfo>) => setInfo((cur) => (cur ? { ...cur, ...p } : cur));
   const missing = labelMissing(info);
   const blocked = missing.length > 0 || built.unconfirmed.length > 0 || built.unlinked.length > 0;
-  const nutText = nut ? nutritionLabelText(nut) : null;
+  const nutText = nut ? nutritionLabelText(nut, org.settings.labelNutritionBasis) : null;
   const data = labelData(info, { ...built, nutritionText: nutText }, made);
   const outdated = textOutdated(info, built.ingredientsText);
   const fit = fitLabel(data, paper.w, paper.h);

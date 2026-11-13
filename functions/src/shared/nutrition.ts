@@ -60,12 +60,18 @@ export function nutrientText(k: NutrientKey, v: number): string {
   return `${Math.round(v * d) / d}g`;
 }
 
+/** ラベルの栄養成分を何あたりで書くか（設定 settings.labelNutritionBasis。既定は100gあたり） */
+export type NutritionBasis = "100g" | "piece";
+
 /**
- * ラベルの栄養成分表示（横に並べる書き方）。「1個（45g）当たり　熱量 210kcal、たんぱく質 3.1g、…（推定値）」。
+ * ラベルの栄養成分表示（横に並べる書き方）。「100g当たり　熱量 450kcal、…（推定値）」か「1個（45g）当たり　…」。
+ * 100gあたりで1個の重さが分からないときは1個あたりで書く。
  * 成分の分からない材料が1つでもあれば出さない（少なく出た値をラベルに刷らせない）
  */
-export function nutritionLabelText(n: RecipeNutrition): string | null {
+export function nutritionLabelText(n: RecipeNutrition, basis: NutritionBasis = "100g"): string | null {
   if (!n.perPiece || n.missing.length) return null;
-  const unit = n.gramsPerPiece ? `1個（${Math.round(n.gramsPerPiece)}g）当たり` : "1個当たり";
-  return `${unit}　${LABEL_NUTRIENTS.map((k) => `${LABEL_NUTRIENT_NAMES[k]} ${nutrientText(k, n.perPiece![k])}`).join("、")}（推定値）`;
+  const use100 = basis === "100g" && !!n.per100;
+  const vals = use100 ? n.per100! : n.perPiece;
+  const unit = use100 ? "100g当たり" : n.gramsPerPiece ? `1個（${Math.round(n.gramsPerPiece)}g）当たり` : "1個当たり";
+  return `${unit}　${LABEL_NUTRIENTS.map((k) => `${LABEL_NUTRIENT_NAMES[k]} ${nutrientText(k, vals[k])}`).join("、")}（推定値）`;
 }

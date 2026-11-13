@@ -73,7 +73,7 @@ export function LabelsPage() {
     }
     const r = row.recipeId ? recipeById.get(row.recipeId) : undefined;
     if (!r) return [];
-    const built: BuiltLabel = { ...buildRecipeLabel(r, ings.byId, recipeById, org.settings), nutritionText: nutritionLabelText(recipeNutrition(r.items, ings.byId, nutOf, r.yield)) };
+    const built: BuiltLabel = { ...buildRecipeLabel(r, ings.byId, recipeById, org.settings), nutritionText: nutritionLabelText(recipeNutrition(r.items, ings.byId, nutOf, r.yield), org.settings.labelNutritionBasis) };
     const info = labelInfoFor(r, org.settings);
     return [{ at, row, name: r.name, text: info.ingredientsText || built.ingredientsText, content: row.content ?? info.content, info, recipe: r, built, problems: problemsOf(info, built) }];
   }), [rows, recipeById, ings.byId, org.settings, nutOf]);

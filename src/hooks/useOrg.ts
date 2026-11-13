@@ -25,6 +25,8 @@ export interface OrgSettings {
   labelDatePrint: boolean;
   /** ラベルに栄養成分表示を入れる（既定は入れる。小規模事業者などで省略できるお店は外せる。レシピごとの選択が先） */
   labelNutrition: boolean;
+  /** 栄養成分を何あたりで書くか（既定は100gあたり。"piece"＝1個あたり） */
+  labelNutritionBasis: "100g" | "piece";
 }
 
 export interface Org {
@@ -62,6 +64,7 @@ export function useOrg(orgId: string) {
       labelDateOutside: s.labelDateOutside === true,
       labelDatePrint: s.labelDatePrint !== false,
       labelNutrition: s.labelNutrition !== false,
+      labelNutritionBasis: s.labelNutritionBasis === "piece" ? "piece" : "100g",
     },
   };
   return { org, loading };
