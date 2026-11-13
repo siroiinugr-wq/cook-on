@@ -5,6 +5,8 @@ import { GEMINI_API_KEY, GEMINI_MODEL, REQUEST_TIMEOUT_MS } from "./config";
 export interface Usage {
   in: number;
   out: number;
+  /** Google 検索の回数（検索つきの呼び出しだけ。1回ごとに別の料金がかかる） */
+  searches?: number;
 }
 
 export class EmptyResponseError extends Error {
@@ -45,12 +47,18 @@ export async function callGeminiJson<T>(o: {
   }
   return {
     output,
-    usage: { in: res.usageMetadata?.promptTokenCount ?? 0, out: res.usageMetadata?.candidatesTokenCount ?? 0 },
+    usage: { in: res.usageMetadata?.promptTokenCount ?? 0, out: outTokens(res.usageMetadata) },
   };
 }
 
+/** 出力のトークン。考えた分（thoughts）も出力の料金でかかるので足す */
+function outTokens(u: { candidatesTokenCount?: number; thoughtsTokenCount?: number } | undefined): number {
+  return (u?.candidatesTokenCount ?? 0) + (u?.thoughtsTokenCount ?? 0);
+}
+
 export function addUsage(a: Usage, b: Usage): Usage {
-  return { in: a.in + b.in, out: a.out + b.out };
+  const searches = (a.searches ?? 0) + (b.searches ?? 0);
+  return { in: a.in + b.in, out: a.out + b.out, ...(searches ? { searches } : {}) };
 }
 
 /** 検索で見つけた出典（グラウンディングの groundingChunks） */
@@ -87,8 +95,10 @@ export async function callGeminiSearchJson<T>(o: { system: string; prompt: strin
   }
   const meta = res.candidates?.[0]?.groundingMetadata;
   const sources = (meta?.groundingChunks ?? []).flatMap((c) => (c.web?.uri ? [{ uri: c.web.uri, title: c.web.title ?? "" }] : []));
+  // 検索は1回ごとに料金がかかる。AIが検索した回数（検索しなかったら0）を原価の記録に残す
+  const searches = meta?.webSearchQueries?.length ?? (sources.length ? 1 : 0);
   return {
     output, sources, searchHtml: meta?.searchEntryPoint?.renderedContent ?? "",
-    usage: { in: res.usageMetadata?.promptTokenCount ?? 0, out: res.usageMetadata?.candidatesTokenCount ?? 0 },
+    usage: { in: res.usageMetadata?.promptTokenCount ?? 0, out: outTokens(res.usageMetadata), searches },
   };
 }

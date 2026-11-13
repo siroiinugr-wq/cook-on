@@ -1,5 +1,6 @@
 // クレジット：残り・何に何クレジット使うか・使った記録（通帳）・まとめ買い（決済をつなぐまでは準備中）
 import { useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { ACTION_LABEL, CREDIT_COST, CREDIT_PACKS, type CreditAction } from "@shared/credits";
 import { useOrgCtx } from "../contexts/OrgContext";
 import { useCol } from "../hooks/useData";
@@ -17,20 +18,26 @@ export function CreditsPage() {
   const { orgId, org, isAdmin } = useOrgCtx();
   const { list } = useCol<Entry>(`organizations/${orgId}/creditLedger`, { orderBy: ["createdAt", "desc"], limit: 50 });
   const [msg, setMsg] = useState("");
+  const [busy, setBusy] = useState("");
+  // 決済ページから戻ってきたとき。クレジットが入るのは Stripe からの知らせが届いたあと（ふつう数秒。コンビニ払いは支払い後）
+  const paid = useSearchParams()[0].get("paid") === "1";
 
   async function buy(packId: string) {
     setMsg("");
+    setBusy(packId);
     try {
       const r = await call<{ url: string }>("createCheckout", { orgId, packId });
       window.location.href = r.url;
     } catch (e) {
       setMsg(e instanceof Error ? e.message : String(e));
+      setBusy("");
     }
   }
 
   return (
     <div className="space-y-4">
       <PageHead title="クレジット" back="/settings" />
+      {paid && <p className="rounded-xl bg-sand p-3 text-sm">お支払いありがとうございます。クレジットは数秒で「残り」に入ります（コンビニ・銀行振込は、お支払いのあとに入ります）。</p>}
       <section className={`${ui.card} text-center`}>
         <p className="text-sm text-muted">残り</p>
         <p className="font-serif text-4xl"><span className="text-clay"><Icon name="coin" className="mr-1 inline h-8 w-8" /></span>{creditText(org.credits)}</p>
@@ -51,13 +58,14 @@ export function CreditsPage() {
         <h2 className="text-sm font-bold">まとめて買う</h2>
         <div className="grid grid-cols-3 gap-2">
           {CREDIT_PACKS.map((p) => (
-            <button key={p.id} disabled={!isAdmin} onClick={() => buy(p.id)} className={`${ui.card} text-center disabled:opacity-60`}>
+            <button key={p.id} disabled={!isAdmin || !!busy} onClick={() => buy(p.id)} className={`${ui.card} text-center disabled:opacity-60`}>
               <p className="text-lg font-bold">{p.credits.toLocaleString()}</p>
               <p className="text-xs text-muted">クレジット</p>
-              <p className="mt-1 text-sm">{p.priceYen.toLocaleString()}円</p>
+              <p className="mt-1 text-sm">{busy === p.id ? "移動しています…" : `${p.priceYen.toLocaleString()}円`}</p>
             </button>
           ))}
         </div>
+        <p className="text-xs text-muted">値段は税込です。押すと決済ページ（Stripe）へ移ります。</p>
         {!isAdmin && <p className="text-xs text-muted">購入はオーナーか管理者ができます。</p>}
         {msg && <p className="rounded-xl bg-sand p-3 text-sm">{msg}</p>}
       </section>
