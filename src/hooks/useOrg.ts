@@ -23,6 +23,8 @@ export interface OrgSettings {
   labelDateOutside: boolean;
   /** 枠の外の日付も印刷する（false＝スタンプや手書きで入れる） */
   labelDatePrint: boolean;
+  /** ラベルに栄養成分表示を入れる（既定は入れる。小規模事業者などで省略できるお店は外せる。レシピごとの選択が先） */
+  labelNutrition: boolean;
 }
 
 export interface Org {
@@ -59,6 +61,7 @@ export function useOrg(orgId: string) {
       labelStorage: typeof s.labelStorage === "string" ? s.labelStorage : "",
       labelDateOutside: s.labelDateOutside === true,
       labelDatePrint: s.labelDatePrint !== false,
+      labelNutrition: s.labelNutrition !== false,
     },
   };
   return { org, loading };

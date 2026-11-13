@@ -66,6 +66,7 @@ export function labelInfoFor(recipe: Recipe, s: OrgSettings): LabelInfo {
     expiryKind: s.labelExpiryKind,
     dateOutside: s.labelDateOutside,
     datePrint: s.labelDatePrint,
+    nutrition: s.labelNutrition,
     manufacturer: s.manufacturer,
     ...recipe.labelInfo,
     manufacturerAddress: recipe.labelInfo?.manufacturerAddress || s.manufacturerAddress,

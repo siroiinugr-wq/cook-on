@@ -18,6 +18,7 @@ export function StoreSection({ orgId, org, canManage }: { orgId: string; org: Or
   const [storage, setStorage] = useState(org.settings.labelStorage);
   const [outside, setOutside] = useState(org.settings.labelDateOutside);
   const [datePrint, setDatePrint] = useState(org.settings.labelDatePrint);
+  const [nutrition, setNutrition] = useState(org.settings.labelNutrition);
   const [msg, setMsg] = useState("");
   useEffect(() => {
     setKind(org.settings.labelExpiryKind);
@@ -25,7 +26,8 @@ export function StoreSection({ orgId, org, canManage }: { orgId: string; org: Or
     setStorage(org.settings.labelStorage);
     setOutside(org.settings.labelDateOutside);
     setDatePrint(org.settings.labelDatePrint);
-  }, [org.settings.labelExpiryKind, org.settings.labelExpiryDays, org.settings.labelStorage, org.settings.labelDateOutside, org.settings.labelDatePrint]);
+    setNutrition(org.settings.labelNutrition);
+  }, [org.settings.labelNutrition, org.settings.labelExpiryKind, org.settings.labelExpiryDays, org.settings.labelStorage, org.settings.labelDateOutside, org.settings.labelDatePrint]);
   useEffect(() => {
     setName(org.name);
     setRate(String(Math.round(org.settings.targetCostRate * 1000) / 10));
@@ -43,7 +45,7 @@ export function StoreSection({ orgId, org, canManage }: { orgId: string; org: Or
     if (!maker.trim() || !address.trim()) return setMsg("ラベルの製造者は、名前と住所の両方を入れてください（食品表示に必要です）。");
     try {
       await saveDoc(`organizations/${orgId}`, { name: name.trim().slice(0, 40), settings: { ...org.settings, targetCostRate: r, manufacturer: maker.trim(), manufacturerAddress: address.trim(), includeRecommendedAllergens: rec, shareProducts: share || (org.settings.shareProducts === null ? null : false), shareIngredients: shareIng,
-        labelExpiryKind: kind, labelExpiryDays: Math.max(1, Math.min(3650, Number(days) || 7)), labelStorage: storage.trim().slice(0, 120), labelDateOutside: outside, labelDatePrint: datePrint } });
+        labelExpiryKind: kind, labelExpiryDays: Math.max(1, Math.min(3650, Number(days) || 7)), labelStorage: storage.trim().slice(0, 120), labelDateOutside: outside, labelDatePrint: datePrint, labelNutrition: nutrition } });
       setMsg("保存しました。");
     } catch {
       setMsg("保存できませんでした。");
@@ -87,6 +89,13 @@ export function StoreSection({ orgId, org, canManage }: { orgId: string; org: Or
               <span>枠の外の日付も印刷する<span className="block text-xs text-muted">外すと日付は空けておきます（日付スタンプや手書き用）。</span></span>
             </label>
           )}
+          <label className="flex items-start gap-2 text-sm">
+            <input type="checkbox" className="mt-1 h-5 w-5 accent-clay" checked={nutrition} onChange={(e) => setNutrition(e.target.checked)} />
+            <span>栄養成分表示（熱量・たんぱく質・脂質・炭水化物・食塩相当量）を入れる
+              <span className="block text-xs text-muted">材料の成分表から計算した推定値を「（推定値）」と書いて入れます。レシピごとにも外せます。</span>
+            </span>
+          </label>
+          {!nutrition && <NutritionExempt />}
         </div>
         <label className="flex items-start gap-2 text-sm">
           <input type="checkbox" className="mt-1 h-5 w-5 accent-clay" checked={share} onChange={(e) => setShare(e.target.checked)} />
@@ -101,5 +110,21 @@ export function StoreSection({ orgId, org, canManage }: { orgId: string; org: Or
       {!canManage && <p className="text-xs text-muted">変えられるのはオーナーと管理者です。</p>}
       {msg && <p className="text-sm text-ink-soft">{msg}</p>}
     </section>
+  );
+}
+
+/** 栄養成分表示を省略できる場合（食品表示基準。消費者庁・各都道府県の手引き）。外すときに読んでもらう */
+export function NutritionExempt() {
+  return (
+    <div className="ml-7 space-y-1 rounded-lg bg-warn-soft p-2 text-xs text-warn-strong">
+      <p className="font-bold">包装して売る食品は、栄養成分表示が原則として必要です。次のどれかに当てはまるときだけ省略できます。</p>
+      <ul className="list-disc space-y-0.5 pl-4">
+        <li>小規模事業者：消費税の免税事業者（課税売上高1,000万円以下）、または常時使う従業員が20人以下（商業・サービス業は5人以下）</li>
+        <li>包装の表示できる面がおおむね30cm²以下</li>
+        <li>コーヒー豆・茶葉・スパイスなど、栄養の量がごくわずかなもの</li>
+        <li>お店の中で作って、その場で売るもの（そもそも食品表示の対象外）</li>
+      </ul>
+      <p>省略するとき、ラベルに「省略しています」などの注意書きは要りません。ただし、小さなお店が作った品でも、大きなお店が売る場合は表示が必要です。</p>
+    </div>
   );
 }

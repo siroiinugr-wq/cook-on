@@ -143,11 +143,22 @@ export function LabelPage() {
             <span>栄養成分表示（熱量・たんぱく質・脂質・炭水化物・食塩相当量）を入れる
               <span className="block text-xs text-muted">
                 {nutText ? "材料の成分表から計算した推定値です。" : "成分の分からない材料があるので、まだ入れられません（少ない値を刷らないため）。"}
-                {nut && nut.missing.length > 0 && <span className="text-warn-strong">成分か重さが分からない材料：{nut.missing.join("、")}。</span>}
-                {nut && nut.missing.length > 0 && canEdit && <Link to="/tidy#link" className="underline">共有の材料に結ぶ</Link>}
+                {!info.nutrition && <span className="block">省略できるのは小規模事業者などの場合だけです（<Link to="/settings#store" className="underline">設定の「お店」</Link>に条件があります）。</span>}
               </span>
             </span>
           </label>
+          {info.nutrition && nut && nut.missing.length > 0 && (
+            <div className="ml-6 space-y-1 rounded-lg bg-warn-soft p-2 text-xs text-warn-strong">
+              <p>成分か重さが分からない材料があり、栄養成分表示はラベルに入っていません。材料を押すと、100gあたりの成分を入れられます（袋の裏の表示を写す）。</p>
+              <p className="flex flex-wrap gap-x-2 gap-y-1">
+                {nut.missingIngs.map((m) => canEdit
+                  ? <Link key={m.id} to={`/ingredients?open=${m.id}&from=/recipes/${recipe!.id}/label`} className="underline">{m.name}</Link>
+                  : <span key={m.id}>{m.name}</span>)}
+                {nut.missing.filter((n) => !nut.missingIngs.some((m) => m.name === n)).map((n) => <span key={n}>{n}（材料に未登録）</span>)}
+              </p>
+              {canEdit && <p><Link to="/tidy#link" className="underline">データの整理で、成分表（共有の材料）にまとめて結ぶ</Link></p>}
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-2">
             <label className="space-y-1"><span className={ui.label}>製造者の名前</span><input className={input} value={info.manufacturer} onChange={(e) => set({ manufacturer: e.target.value })} /></label>
             <label className="space-y-1"><span className={ui.label}>製造者の住所（必須）</span><input className={input} value={info.manufacturerAddress ?? ""} placeholder="都道府県から" onChange={(e) => set({ manufacturerAddress: e.target.value })} /></label>
