@@ -26,6 +26,7 @@ import { FitNotice } from "../components/label/FitNotice";
 import { fitLabel } from "../lib/labelImage";
 import { LabelItemPicker, type LabelItem } from "../components/label/LabelItemPicker";
 import { keepPaper, readPaper, today } from "./LabelPage";
+import { NumInput } from "../components/common/NumInput";
 
 /** 品目1行：お店のレシピか、レシピの無い品目（コーヒー豆など）。content は詰め合わせでの1つの内容量（100g など） */
 interface Row { recipeId?: string; free?: { name: string; text: string }; count: number; content?: string; /** 保存した品目から足したとき（上書き保存の先） */ itemId?: string }
@@ -34,7 +35,6 @@ interface LabelSet { id: string; name: string; rows: Row[]; info: Partial<LabelI
 
 const inputSm = "rounded-lg border border-line-strong bg-paper px-2 py-1.5 text-sm";
 const input = `w-full ${inputSm}`;
-const num = (v: string, max = 200) => Math.max(0, Math.min(max, Number(v.replace(/\D/g, "")) || 0));
 /** Firestore は undefined を保存できないので落とす */
 const clean = <T extends object>(o: T): T => JSON.parse(JSON.stringify(o)) as T;
 
@@ -222,7 +222,7 @@ export function LabelsPage() {
                 {it.recipe
                   ? <Link to={`/recipes/${it.recipe.id}/label`} className="min-w-0 flex-1 truncate font-medium underline decoration-line-strong">{it.name}</Link>
                   : <input className={`${inputSm} min-w-0 flex-1`} placeholder="品目名（例：コーヒー豆（エチオピア））" value={it.row.free!.name} onChange={(e) => setRow(it.at, { free: { ...it.row.free!, name: e.target.value } })} />}
-                <input className={`${inputSm} w-14 text-right`} inputMode="numeric" value={it.row.count} onChange={(e) => setRow(it.at, { count: num(e.target.value) })} />
+                <NumInput className={`${inputSm} w-14 text-right`} decimal={false} value={it.row.count} fallback={0} onValue={(n) => setRow(it.at, { count: Math.min(200, n ?? 0) })} />
                 <span className="text-sm text-muted">{mode === "each" ? "枚" : "個"}</span>
                 <button className="rounded-lg p-1 text-muted" aria-label="外す" onClick={() => setRows(rows.filter((_, j) => j !== it.at))}><Icon name="close" className="h-4 w-4" /></button>
               </div>
@@ -259,7 +259,7 @@ export function LabelsPage() {
               <label className="space-y-1"><span className={ui.label}>内容量（空なら品目ごと）</span><input className={input} value={assort.content ?? ""} placeholder="自動" onChange={(e) => setA({ content: e.target.value || undefined })} /></label>
               <label className="space-y-1"><span className={ui.label}>期限の種類</span>
                 <select className={input} value={assort.expiryKind} onChange={(e) => setA({ expiryKind: e.target.value as LabelInfo["expiryKind"] })}><option>賞味期限</option><option>消費期限</option></select></label>
-              <label className="space-y-1"><span className={ui.label}>製造日から何日</span><input className={input} inputMode="numeric" value={assort.expiryDays} onChange={(e) => setA({ expiryDays: num(e.target.value, 3650) })} /></label>
+              <label className="space-y-1"><span className={ui.label}>製造日から何日</span><NumInput className={input} decimal={false} value={assort.expiryDays} fallback={0} onValue={(n) => setA({ expiryDays: Math.min(3650, n ?? 0) })} /></label>
             </div>
             {auto.expiryDays !== null && assort.expiryDays > auto.expiryDays && (
               <p className="rounded-lg bg-warn-soft p-2 text-xs text-warn-strong">
@@ -275,7 +275,7 @@ export function LabelsPage() {
             )}
             <label className="block space-y-1"><span className={ui.label}>保存方法</span><input className={input} value={assort.storage} onChange={(e) => setA({ storage: e.target.value })} /></label>
             <label className="flex items-center gap-2 text-sm"><input type="checkbox" className="h-4 w-4 accent-clay" checked={!!assort.dateOutside} onChange={(e) => setA({ dateOutside: e.target.checked })} />日付は枠の外に書く</label>
-            <label className="flex items-center gap-2 text-sm">枚数<input className={`${inputSm} w-20`} inputMode="numeric" value={copies} onChange={(e) => setCopies(Math.max(1, num(e.target.value)))} /></label>
+            <label className="flex items-center gap-2 text-sm">枚数<NumInput className={`${inputSm} w-20`} decimal={false} value={copies} fallback={1} onValue={(n) => n !== null && setCopies(Math.max(1, Math.min(200, n)))} /></label>
             {canEdit && (
               <div className="space-y-1 border-t border-line pt-2">
                 <span className={ui.label}>よく使う詰め合わせとして保存</span>

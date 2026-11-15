@@ -1,7 +1,9 @@
-// レシピの詳細：倍率 → 材料と原価 → 作り方。作業モード・ラベル・履歴・AI相談はここから
+// レシピの詳細：分量（材料の表）→ 単価（原価と売価）→ 作業モードの準備（倍率・作業モード・ラベル）→ 作り方（MASA 2026-11-15）。
+// 試作の印と次の改善点のメモ・履歴・AI相談もここから
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { allergenName } from "@shared/allergens";
 import { calcCost, scaleFactor } from "@shared/cost";
+import { formatQty } from "@shared/units";
 import { needsPieces } from "@shared/tidy";
 import { usePhotoUrl } from "../lib/photos";
 import { useOrgCtx } from "../contexts/OrgContext";
@@ -21,6 +23,8 @@ import { ScaleControl } from "../components/recipe/ScaleControl";
 import { VersionHistory } from "../components/recipe/VersionHistory";
 import { NutritionCard } from "../components/recipe/NutritionCard";
 import { UseAsIngredient } from "../components/recipe/UseAsIngredient";
+import { TrialCard } from "../components/recipe/TrialCard";
+import { RecipeNext } from "../components/recipe/RecipeNext";
 
 export function RecipeDetailPage() {
   const { id } = useParams();
@@ -56,16 +60,14 @@ export function RecipeDetailPage() {
       <PageHead title={recipe.name} back="/" right={canEdit && <Link to={`/recipes/${recipe.id}/edit`} className={`${ui.secondary} py-2 text-sm`}>編集</Link>} />
       {(recipe.photos?.length ?? 0) > 0 && <PhotoStrip paths={recipe.photos!} />}
       <div className="flex flex-wrap gap-1.5 text-xs">
+        {recipe.trial && <span className="rounded-full bg-warn-soft px-2 py-0.5 font-bold text-warn-strong">試作</span>}
         {recipe.category && <span className={ui.chip}>{recipe.category}</span>}
         {recipe.subcategory && <span className={ui.chip}>{recipe.subcategory}</span>}
         {recipe.tags.map((t) => <span key={t} className={ui.chip}>#{t}</span>)}
         <span className="text-muted">第{recipe.version}版</span>
       </div>
-
-      <div className="grid grid-cols-2 gap-2">
-        <Link to={`/recipes/${recipe.id}/work${q}`} className={`${ui.primary} flex items-center justify-center gap-1.5`}><Icon name="play" />作業モード</Link>
-        <Link to={`/recipes/${recipe.id}/label${q}`} className={`${ui.secondary} flex items-center justify-center gap-1.5`}><Icon name="printer" />ラベルを作る</Link>
-      </div>
+      {recipe.trial && <TrialCard orgId={orgId} recipe={recipe} canEdit={canEdit} />}
+      {canEdit && !archived && !ings.loading && <RecipeNext recipe={recipe} byId={ings.byId} money={seeMoney} />}
 
       {noPieces && (
         <p className="rounded-xl bg-warn-soft p-3 text-sm text-warn-strong">
@@ -73,10 +75,31 @@ export function RecipeDetailPage() {
           {canEdit && <> <Link to={`/recipes/${recipe.id}/edit`} className="underline">編集で入れる</Link></>}
         </p>
       )}
-      {seeMoney && <CostPanel recipe={recipe} byId={ings.byId} pack={pack.ctx} defaultTarget={org.settings.targetCostRate} />}
 
-      <ScaleControl mode={mode} set={setMode} pieces={pieces} />
-      <ItemsTable items={recipe.items} byId={ings.byId} factor={factor} />
+      <section className="space-y-2">
+        <div className="flex items-baseline gap-2">
+          <h2 className="font-bold">分量</h2>
+          <span className="text-xs text-muted">{factor === 1 ? `1ロット（${pieces}個分）` : `×${formatQty(Math.round(factor * 1000) / 1000)}（${formatQty(Math.round(pieces * factor * 10) / 10)}個分）`}</span>
+          <a href="#prep" className="ml-auto text-xs text-clay-strong underline">倍率を変える</a>
+        </div>
+        <ItemsTable items={recipe.items} byId={ings.byId} factor={factor} />
+      </section>
+
+      {seeMoney && (
+        <section className="space-y-2">
+          <h2 className="font-bold">単価</h2>
+          <CostPanel recipe={recipe} byId={ings.byId} pack={pack.ctx} defaultTarget={org.settings.targetCostRate} />
+        </section>
+      )}
+
+      <section id="prep" className="scroll-mt-20 space-y-2">
+        <h2 className="font-bold">作業モードの準備</h2>
+        <ScaleControl mode={mode} set={setMode} pieces={pieces} />
+        <div className="grid grid-cols-2 gap-2">
+          <Link to={`/recipes/${recipe.id}/work${q}`} className={`${ui.primary} flex items-center justify-center gap-1.5`}><Icon name="play" />作業モード</Link>
+          <Link to={`/recipes/${recipe.id}/label${q}`} className={`${ui.secondary} flex items-center justify-center gap-1.5`}><Icon name="printer" />ラベルを作る</Link>
+        </div>
+      </section>
 
       <section className={ui.card}>
         <p className="mb-1 text-sm font-bold">アレルゲン（材料の一覧から）</p>
@@ -101,6 +124,7 @@ export function RecipeDetailPage() {
       {recipe.memo && <p className={`${ui.card} whitespace-pre-wrap text-sm text-ink-soft`}>{recipe.memo}</p>}
 
       {!archived && <UseAsIngredient orgId={orgId} uid={uid} recipe={recipe} ings={ings} canEdit={canEdit} />}
+      {!recipe.trial && canEdit && !archived && <TrialCard orgId={orgId} recipe={recipe} canEdit={canEdit} />}
 
       {canRun("aiSuggest") && (
         <Accordion title="AIに相談" summary="原価を下げる案・新しい商品の案">

@@ -1,5 +1,5 @@
 // 「何ごとに何クレジット」の言い方。クレジットの画面と、やること・AIの画面が同じものを使う
-import { AI_MATCH_BATCH, IMPORT_CHUNK_CHARS, LABEL_NAME_BATCH, PRICE_SEARCH_BATCH, SIZE_SEARCH_BATCH, type CreditAction } from "@shared/credits";
+import { AI_MATCH_BATCH, IMPORT_CHUNK_CHARS, LABEL_NAME_BATCH, PRICE_SEARCH_BATCH, RECIPE_CATEGORY_BATCH, SIZE_SEARCH_BATCH, type CreditAction } from "@shared/credits";
 
 export const CREDIT_PER: Record<CreditAction, string> = {
   aiMatch: `${AI_MATCH_BATCH}件ごと`,
@@ -13,4 +13,5 @@ export const CREDIT_PER: Record<CreditAction, string> = {
   productPhoto: "写真1枚",
   aiSuggest: "1回",
   labelName: `${LABEL_NAME_BATCH}件ごと`,
+  recipeCategory: `${RECIPE_CATEGORY_BATCH}レシピごと`,
 };

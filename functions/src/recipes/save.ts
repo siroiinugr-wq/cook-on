@@ -30,7 +30,7 @@ export async function loadPackaging(orgId: string): Promise<PackCtx> {
 }
 
 /** 保存の本体。既存なら今の中身を versions に写してから、版を1つ上げて上書きする */
-export async function writeRecipe(orgId: string, recipeId: string | null, input: RecipeInput, uid: string, note = "") {
+export async function writeRecipe(orgId: string, recipeId: string | null, input: RecipeInput, uid: string, note = "", opts: { trial?: boolean } = {}) {
   const db = getFirestore();
   const col = db.collection(`organizations/${orgId}/recipes`);
   const ref = recipeId ? col.doc(recipeId) : col.doc();
@@ -43,8 +43,14 @@ export async function writeRecipe(orgId: string, recipeId: string | null, input:
     if (cur.exists) {
       tx.set(ref.collection("versions").doc(String(prev)), { ...cur.data(), archivedAt: FieldValue.serverTimestamp() });
     }
+    // 試作の印とメモはレシピの中身とは別に持つ（setRecipeTrial）。保存で消えないよう今の値を写す。新しく作るときは opts.trial
+    const old = cur.data() ?? {};
+    const trial = cur.exists
+      ? Object.fromEntries((["trial", "trialNote", "trialAt"] as const).filter((k) => old[k] !== undefined).map((k) => [k, old[k]]))
+      : opts.trial ? { trial: true } : {};
     tx.set(ref, {
       ...input,
+      ...trial,
       ...derived,
       version: prev + 1,
       archived: false,
@@ -77,7 +83,7 @@ export const saveRecipe = onCall({ region: REGION }, async (req) => {
   const input = sanitizeRecipe(req.data?.recipe);
   if (typeof input === "string") throw new HttpsError("invalid-argument", input);
   const staff = !canSeeMoney(roleOf(req.auth, orgId));
-  return writeRecipe(orgId, recipeId, await keepMoney(orgId, recipeId, input, staff), uid, String(req.data?.note ?? ""));
+  return writeRecipe(orgId, recipeId, await keepMoney(orgId, recipeId, input, staff), uid, String(req.data?.note ?? ""), { trial: req.data?.trial === true });
 });
 
 /** 過去の版に戻す＝その版の中身を新しい版として保存する（戻したことも履歴に残る） */

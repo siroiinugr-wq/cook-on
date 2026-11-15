@@ -113,6 +113,12 @@ export interface Recipe {
   /** 目標原価率（0〜1）。無ければ店舗の既定 */
   targetCostRate: number | null;
   memo?: string;
+  /** 試作中の印。一覧の「試作」でしぼれる（setRecipeTrial。保存しても消えない） */
+  trial?: boolean;
+  /** 試作の次の改善点メモ（試作の印と一緒に setRecipeTrial が書く。版は上げない） */
+  trialNote?: string;
+  /** 試作メモを最後に書いた日時（ISO） */
+  trialAt?: string;
   /** レシピの写真・イラスト（Storage のパス。先頭が一覧と詳細の表紙） */
   photos?: string[];
   /** ラベルの名称・保存方法・期限など（無ければラベル画面の既定） */

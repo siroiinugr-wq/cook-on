@@ -2,6 +2,7 @@
 //   緑＝一致（そのまま）／黄＝たぶん（確かめて）／灰＝新しい材料として作る
 import { matchLevel, type ItemMatch, type ParsedRecipe } from "@shared/importTypes";
 import { formatQty } from "@shared/units";
+import { NumInput } from "../common/NumInput";
 
 const NEW = "__new__";
 const LEVEL = {
@@ -27,8 +28,8 @@ export function ImportRecipeCard({ r, set, readOnly }: { r: ParsedRecipe; set: (
         <input type="checkbox" className="h-5 w-5 accent-clay" checked={!r.skip} disabled={readOnly} onChange={(e) => set({ ...r, skip: !e.target.checked })} aria-label="取り込む" />
         <input className="min-w-0 flex-1 rounded-lg border border-line px-2 py-1 font-bold" value={r.name} disabled={readOnly} onChange={(e) => set({ ...r, name: e.target.value })} />
         <label className="flex shrink-0 items-center gap-1 text-xs text-muted">
-          <input className="w-12 rounded-lg border border-line px-1 py-1 text-right" inputMode="numeric" value={r.pieces ?? ""} placeholder="1" disabled={readOnly}
-            onChange={(e) => set({ ...r, pieces: Number(e.target.value.replace(/\D/g, "")) || null })} />個分
+          <NumInput className="w-12 rounded-lg border border-line px-1 py-1 text-right" decimal={false} value={r.pieces} placeholder="1" disabled={readOnly}
+            onValue={(n) => set({ ...r, pieces: n || null })} />個分
         </label>
       </div>
       {!r.skip && (

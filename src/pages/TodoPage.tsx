@@ -23,6 +23,7 @@ const AI: { to: string; icon: IconName; title: string; sub: string; action: Cred
   { to: "/tidy#price", icon: "search", title: "仕入れ値をネットで調べて入れる", sub: "仕入れ値が空の材料に、今の販売価格を", action: "priceSearch" },
   { to: "/ingredients", icon: "coin", title: "ネットで値段を比べる", sub: "売り場と100gあたりの値段を並べる", action: "priceCompare", where: "材料を開いて" },
   { to: "/tidy#link", icon: "link", title: "共有の材料に結ぶ（AIで探す）", sub: "成分表・アレルゲン・参考価格がつく", action: "aiMatch" },
+  { to: "/tidy#category", icon: "sparkle", title: "レシピの分類の案", sub: "分類・種類と、自家製材料（生地・クリームなど）を見分ける", action: "recipeCategory" },
   { to: "/tidy#label", icon: "tag", title: "ラベルの名前の案", sub: "キビ糖→きび砂糖のような品質表示の名前", action: "labelName" },
   { to: "/products", icon: "box", title: "既製品のパッケージを読む", sub: "裏を撮ると原材料とアレルゲンを下書き", action: "productPhoto" },
   { to: "/", icon: "chat", title: "AIに相談", sub: "原価を下げる案・新しい商品の案", action: "aiSuggest", where: "レシピを開いて" },

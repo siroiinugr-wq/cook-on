@@ -18,6 +18,8 @@ export const CREDIT_COST = {
   productPhoto: 1,
   /** ラベルに出す名前（一般的名称）の案：LABEL_NAME_BATCH 件ごと */
   labelName: 1,
+  /** レシピの分類（分類・種類・自家製材料か）の案：RECIPE_CATEGORY_BATCH 件ごと */
+  recipeCategory: 1,
   /** レシート・納品書の写真から仕入れ値を読む：1枚ごと */
   invoicePhoto: 1,
   /** 仕入れ明細の包装の量を Google 検索つきのAIで確かめる：SIZE_SEARCH_BATCH 品ごと（共有の表で分かった品は数えない） */
@@ -39,6 +41,7 @@ export const ACTION_LABEL: Record<CreditAction | "purchase" | "grant" | "welcome
   productPhoto: "既製品のパッケージを読み取り",
   aiSuggest: "AIに相談",
   labelName: "ラベルの名前をAIで提案",
+  recipeCategory: "レシピの分類をAIで提案",
   invoicePhoto: "レシート・納品書から仕入れ値を読む",
   sizeSearch: "仕入れ品の量をネットで確かめる",
   priceSearch: "仕入れ値をネットで調べる",
@@ -75,6 +78,14 @@ export const LABEL_NAME_MAX = 200;
 
 export function labelNameCredits(n: number): number {
   return Math.ceil(Math.min(n, LABEL_NAME_MAX) / LABEL_NAME_BATCH);
+}
+/** レシピの分類の案：1クレジットで何件まで（名前と材料を読むだけなので多め） */
+export const RECIPE_CATEGORY_BATCH = 30;
+/** レシピの分類の案：1回に頼める件数 */
+export const RECIPE_CATEGORY_MAX = 300;
+
+export function recipeCategoryCredits(n: number): number {
+  return Math.ceil(Math.min(n, RECIPE_CATEGORY_MAX) / RECIPE_CATEGORY_BATCH) * CREDIT_COST.recipeCategory;
 }
 export const IMPORT_CHUNK_CHARS = 6000;
 /** 1回の取り込みの上限（これを超えるファイルは分けてもらう） */
