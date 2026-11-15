@@ -45,7 +45,17 @@ export function useCreditAction(balance: number) {
   const confirm = useConfirm();
   const nav = useNavigate();
   const toast = useContext(ToastCtx);
+  const { canAi, isAdmin } = useOrgCtx();
   return async function run<T>(o: { title: string; credits: number; detail?: string; exec: () => Promise<T> }): Promise<T | null> {
+    // AIを許可されていないスタッフ・見るだけ（サーバーの runWithCredits でも断る）
+    if (!canAi) {
+      await confirm({
+        title: "AIを使う許可がありません",
+        body: isAdmin ? "" : "お店の管理者に、設定の「メンバー」で「AIを使う」をオンにしてもらうと使えます。",
+        ok: "閉じる",
+      });
+      return null;
+    }
     if (balance < o.credits) {
       const go = await confirm({
         title: "クレジットが足りません",

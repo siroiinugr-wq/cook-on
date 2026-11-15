@@ -24,7 +24,7 @@ import { UseAsIngredient } from "../components/recipe/UseAsIngredient";
 
 export function RecipeDetailPage() {
   const { id } = useParams();
-  const { orgId, uid, org, canEdit } = useOrgCtx();
+  const { orgId, uid, org, canEdit, seeMoney, canRun } = useOrgCtx();
   const { recipe, loading } = useRecipe(orgId, id);
   const ings = useIngredients(orgId);
   const pack = usePackaging(orgId);
@@ -69,11 +69,11 @@ export function RecipeDetailPage() {
 
       {noPieces && (
         <p className="rounded-xl bg-warn-soft p-3 text-sm text-warn-strong">
-          材料が合計{Math.round(totalGrams)}gあるのに「1ロット＝1個」になっています。何個分のレシピかを入れると、1個あたりの原価が正しく出ます。
+          材料が合計{Math.round(totalGrams)}gあるのに「1ロット＝1個」になっています。何個分のレシピかを入れると、1個あたりの{seeMoney ? "原価" : "重さ"}が正しく出ます。
           {canEdit && <> <Link to={`/recipes/${recipe.id}/edit`} className="underline">編集で入れる</Link></>}
         </p>
       )}
-      <CostPanel recipe={recipe} byId={ings.byId} pack={pack.ctx} defaultTarget={org.settings.targetCostRate} />
+      {seeMoney && <CostPanel recipe={recipe} byId={ings.byId} pack={pack.ctx} defaultTarget={org.settings.targetCostRate} />}
 
       <ScaleControl mode={mode} set={setMode} pieces={pieces} />
       <ItemsTable items={recipe.items} byId={ings.byId} factor={factor} />
@@ -102,14 +102,15 @@ export function RecipeDetailPage() {
 
       {!archived && <UseAsIngredient orgId={orgId} uid={uid} recipe={recipe} ings={ings} canEdit={canEdit} />}
 
-      {canEdit && (
+      {canRun("aiSuggest") && (
         <Accordion title="AIに相談" summary="原価を下げる案・新しい商品の案">
           <AiSuggest orgId={orgId} recipeId={recipe.id} credits={org.credits} />
         </Accordion>
       )}
-      <Accordion title="変更履歴" summary={`第${recipe.version}版。前の版に戻せます`}>
+      {/* 前の版には売価・原価が入っているので、オーナー・管理者だけ */}
+      {seeMoney && <Accordion title="変更履歴" summary={`第${recipe.version}版。前の版に戻せます`}>
         <VersionHistory orgId={orgId} recipe={recipe} canEdit={canEdit} />
-      </Accordion>
+      </Accordion>}
       {canEdit && <button className={ui.quiet} onClick={toggleArchive}>{archived ? "一覧に戻す" : "このレシピをしまう"}</button>}
     </div>
   );

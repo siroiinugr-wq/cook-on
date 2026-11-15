@@ -17,10 +17,10 @@ import { RateBadge } from "../components/recipe/RateBadge";
 import { applyFilter, categoryTree, EMPTY_FILTER, RecipeFilters, type Filter } from "../components/recipe/RecipeFilters";
 
 export function RecipesPage() {
-  const { orgId, org, canEdit } = useOrgCtx();
+  const { orgId, org, canEdit, recipesPath, seeMoney, canAi } = useOrgCtx();
   const [archived, setArchived] = useState(false);
   const [f, setF] = useState<Filter>(EMPTY_FILTER);
-  const { list, loading } = useCol<Recipe>(`organizations/${orgId}/recipes`, { where: [["archived", "==", archived]], orderBy: ["updatedAt", "desc"] });
+  const { list, loading } = useCol<Recipe>(recipesPath, { where: [["archived", "==", archived]], orderBy: ["updatedAt", "desc"] });
   const ings = useIngredients(orgId);
   const tags = useMemo(() => [...new Set(list.flatMap((r) => r.tags ?? []))].sort((a, b) => a.localeCompare(b, "ja")), [list]);
   const shown = applyFilter(list, f);
@@ -31,12 +31,12 @@ export function RecipesPage() {
       <PageHead title="レシピ" right={canEdit && (
         <div className="flex gap-1.5">
           <Link to="/labels" className={`${ui.secondary} flex items-center gap-1 py-2`} aria-label="ラベルをまとめて印刷"><Icon name="printer" className="h-4 w-4" /><span className="hidden sm:inline">ラベル</span></Link>
-          <Link to="/import" className={`${ui.secondary} flex items-center gap-1 py-2`} aria-label="取り込む"><Icon name="upload" className="h-4 w-4" /><span className="hidden sm:inline">取り込む</span></Link>
+          {canAi && <Link to="/import" className={`${ui.secondary} flex items-center gap-1 py-2`} aria-label="取り込む"><Icon name="upload" className="h-4 w-4" /><span className="hidden sm:inline">取り込む</span></Link>}
           <Link to="/recipes/new" className={`${ui.primary} flex items-center gap-1 py-2`}><Icon name="plus" className="h-4 w-4" />新しく作る</Link>
         </div>
       )} />
-      <AlertList orgId={orgId} canEdit={canEdit} />
-      {canEdit && <TidyBanner list={list} />}
+      {seeMoney && <AlertList orgId={orgId} canEdit={canEdit} />}
+      {seeMoney && <TidyBanner list={list} />}
       <RecipeFilters f={f} set={setF} tags={tags} ingredients={ings.list} cats={cats} />
 
       {loading ? <p className="py-8 text-center text-muted">読み込み中…</p> : !list.length ? (
@@ -45,7 +45,7 @@ export function RecipesPage() {
           {!archived && canEdit && (
             <div className="flex flex-col gap-2 sm:flex-row sm:justify-center">
               <Link to="/recipes/new" className={ui.primary}>ひな形から作る</Link>
-              <Link to="/import" className={ui.secondary}>今までのデータを取り込む</Link>
+              {canAi && <Link to="/import" className={ui.secondary}>今までのデータを取り込む</Link>}
             </div>
           )}
         </div>
@@ -62,12 +62,12 @@ export function RecipesPage() {
                     <span className="min-w-0 flex-1 truncate font-bold">{r.name}</span>
                     <span className="shrink-0 text-xs text-muted">{[r.category, r.subcategory].filter(Boolean).join("・")}</span>
                   </div>
-                  <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                  {seeMoney && <div className="flex flex-wrap items-center gap-1.5 text-xs">
                     <span className="text-ink-soft">1個 {yen(r.costCache?.perPiece)}</span>
                     {r.sellingPrice ? <span className="text-muted">／ 売価 {yen(r.sellingPrice)}</span> : null}
                     <RateBadge rate={r.costCache?.rate ?? null} target={r.targetCostRate ?? org.settings.targetCostRate} />
                     {!!r.costCache?.missing && <span className="rounded-full bg-warn-soft px-2 py-0.5 text-warn-strong">単価なし {r.costCache.missing}</span>}
-                  </div>
+                  </div>}
                   {(r.allergens?.length ?? 0) > 0 && (
                     <p className="truncate text-[11px] text-muted">アレルゲン：{r.allergens.map(allergenName).join("・")}</p>
                   )}

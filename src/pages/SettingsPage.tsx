@@ -20,23 +20,24 @@ import { creditText } from "../components/common/CreditBadge";
 import { useHashScroll } from "../hooks/useHashScroll";
 
 export function SettingsPage({ brand }: { brand: Branding }) {
-  const { orgId, org, orgs, email, select, isAdmin, uid } = useOrgCtx();
+  const { orgId, org, orgs, email, select, isAdmin, uid, seeMoney, canAi } = useOrgCtx();
   // 運営（operators/{uid} がある人）だけに、共有の材料の精査を出す
   const op = useDoc(`operators/${uid}`);
   const confirm = useConfirm();
   useHashScroll();
   const toc = [
     { id: "me", label: "ニックネーム" },
-    { id: "store", label: "お店・ラベル" },
+    ...(seeMoney ? [{ id: "store", label: "お店・ラベル" }] : []),
     ...(isAdmin ? [{ id: "keiri", label: "AI経理と連携" }, { id: "brand", label: "ブランド" }] : []),
     { id: "members", label: "メンバー" },
     { id: "stores", label: "店舗の切り替え" },
   ];
+  // スタッフ・見るだけには、クレジットの記録・データの整理を出さない（取り込みはAIを許可された人だけ）
   const links: { to: string; icon: IconName; title: string; sub: string }[] = [
-    { to: "/credits", icon: "coin", title: `クレジット（残り ${creditText(org.credits)}）`, sub: "使った記録・まとめ買い" },
-    { to: "/import", icon: "upload", title: "データの取り込み", sub: "ほかのアプリや Excel から引っ越す" },
+    ...(seeMoney ? [{ to: "/credits", icon: "coin" as IconName, title: `クレジット（残り ${creditText(org.credits)}）`, sub: "使った記録・まとめ買い" }] : []),
+    ...(canAi ? [{ to: "/import", icon: "upload" as IconName, title: "データの取り込み", sub: "ほかのアプリや Excel から引っ越す" }] : []),
     { to: "/labels", icon: "printer", title: "ラベルをまとめて印刷", sub: "いくつもの商品を1回で・詰め合わせ（ギフト・コーヒー豆）のラベル" },
-    { to: "/tidy", icon: "sparkle", title: "データの整理", sub: "アレルゲンの確認・仕入れ値・何個分・名前・表記ゆれをまとめて見直す" },
+    ...(seeMoney ? [{ to: "/tidy", icon: "sparkle" as IconName, title: "データの整理", sub: "アレルゲンの確認・仕入れ値・何個分・名前・表記ゆれをまとめて見直す" }] : []),
     { to: "/todo", icon: "check", title: "やること・AIでできること", sub: "いま片付けたいことと、AIの機能の一覧" },
     ...(op.data ? [{ to: "/admin/suggestions", icon: "check" as IconName, title: "運営：共有の材料の精査", sub: "お店の提案とAIの推定価格を、採用・却下する" }] : []),
   ];
@@ -61,10 +62,10 @@ export function SettingsPage({ brand }: { brand: Branding }) {
         ))}
       </div>
       <div id="me" className="scroll-mt-20"><NicknameSection /></div>
-      <div id="store" className="scroll-mt-20"><StoreSection orgId={orgId} org={org} canManage={isAdmin} /></div>
+      {seeMoney && <div id="store" className="scroll-mt-20"><StoreSection orgId={orgId} org={org} canManage={isAdmin} /></div>}
       {isAdmin && <div id="keiri" className="scroll-mt-20"><KeiriLinkSection orgId={orgId} org={org} /></div>}
       {isAdmin && <div id="brand" className="scroll-mt-20"><BrandSection key={JSON.stringify(brand)} orgId={orgId} brand={brand} /></div>}
-      <div id="members" className="scroll-mt-20"><MembersSection orgId={orgId} canManage={isAdmin && !isDemo} /></div>
+      <div id="members" className="scroll-mt-20"><MembersSection orgId={orgId} canManage={isAdmin && !isDemo} me={uid} /></div>
       <div id="stores" className="scroll-mt-20"><StoresSection orgs={orgs} current={orgId} email={email} onSelect={select} /></div>
       {isDemo && <button onClick={reset} className={`w-full ${ui.secondary}`}>デモのデータを最初に戻す</button>}
       <p className="pb-4 text-center text-xs text-muted">画面の版 {__BUILD_TIME__}</p>

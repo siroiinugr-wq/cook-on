@@ -48,7 +48,7 @@ const call = async <T = unknown>(name: string, data: object): Promise<T> => {
   return (await httpsCallable(functions, name)(data)).data as T;
 };
 
-export const peekInvite = (orgId: string, token: string) => call<{ orgName: string; role: string }>("peekInvite", { orgId, token });
+export const peekInvite = (orgId: string, token: string) => call<{ orgName: string; role: string; roleName?: string }>("peekInvite", { orgId, token });
 export const acceptInvite = (orgId: string, token: string) => call<{ orgId: string; role: string }>("acceptInvite", { orgId, token });
 export const createInvite = (orgId: string, role: string, label: string) =>
   call<{ token: string; expiresAt: number }>("createInvite", { orgId, role, label });
@@ -56,7 +56,10 @@ export const revokeInvite = (orgId: string, token: string) => call("revokeInvite
 
 export interface PendingInvite { token: string; role: string; label: string; expiresAt: number }
 /** メンバー。メールアドレスは持たない（ほかの人には見せない決まり。表示は @shared/nickname の memberLabel） */
-export interface Member { uid: string; role: string; nickname: string | null; displayName: string | null }
+export interface Member { uid: string; role: string; nickname: string | null; displayName: string | null; ai?: boolean }
+
+/** メンバーの役割・AIを使えるかを変える（管理者だけ。core/members.ts） */
+export const updateMember = (orgId: string, uid: string, p: { role?: string; ai?: boolean }) => call("updateMember", { orgId, uid, ...p });
 
 /** まだ使われていない招待（管理者だけ読める） */
 export function subscribeInvites(orgId: string, cb: (list: PendingInvite[]) => void): () => void {
@@ -79,6 +82,6 @@ export function subscribeMembers(orgId: string, cb: (list: Member[]) => void): (
     return () => undefined;
   }
   return onSnapshot(collection(db, `organizations/${orgId}/members`),
-    (s) => cb(s.docs.map((d) => ({ uid: d.id, role: String(d.data().role ?? ""), nickname: d.data().nickname ?? null, displayName: d.data().displayName ?? null }))),
+    (s) => cb(s.docs.map((d) => ({ uid: d.id, role: String(d.data().role ?? ""), nickname: d.data().nickname ?? null, displayName: d.data().displayName ?? null, ai: d.data().ai === true }))),
     () => cb([]));
 }

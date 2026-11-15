@@ -9,10 +9,12 @@ import type { Ingredient, Recipe } from "@shared/types";
 import { createIngredient } from "../../lib/ingredientLink";
 import { saveDoc } from "../../lib/store";
 import { ui } from "../common/ui";
+import { useOrgCtx } from "../../contexts/OrgContext";
 
 export function UseAsIngredient({ orgId, uid, recipe, ings, canEdit }: {
   orgId: string; uid: string; recipe: Recipe; ings: { list: Ingredient[]; byId: Map<string, Ingredient> }; canEdit: boolean;
 }) {
+  const { seeMoney } = useOrgCtx();
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const linked = ings.list.filter((i) => i.madeFrom === recipe.id);
@@ -28,10 +30,10 @@ export function UseAsIngredient({ orgId, uid, recipe, ings, canEdit }: {
         <p className="font-bold">材料としても使っています</p>
         <p>
           <Link to={`/ingredients?open=${i.id}&from=/recipes/${recipe.id}`} className="text-clay-strong underline">{i.name}</Link>
-          ：{i.purchasePrice === null ? "値段はまだ出ません（中身に値段か重さの無い材料があります）" : `${i.purchaseQty.toLocaleString("ja-JP")}gで${yen(i.purchasePrice)}`}
+          {seeMoney && <>：{i.purchasePrice === null ? "値段はまだ出ません（中身に値段か重さの無い材料があります）" : `${i.purchaseQty.toLocaleString("ja-JP")}gで${yen(i.purchasePrice)}`}</>}
           {n?.kcal !== undefined && <span className="text-muted">・100gあたり {n.kcal}kcal</span>}
         </p>
-        <p className="text-xs text-muted">このレシピを直すと、材料の値段・アレルゲン・成分も自動で入れ直します。</p>
+        <p className="text-xs text-muted">このレシピを直すと、材料の{seeMoney ? "値段・" : ""}アレルゲン・成分も自動で入れ直します。</p>
       </section>
     );
   }
@@ -56,7 +58,7 @@ export function UseAsIngredient({ orgId, uid, recipe, ings, canEdit }: {
       <p className="font-bold">ほかのレシピの材料として使う</p>
       <p className="text-xs text-muted">
         タルト生地・クレームダマンド・りんごのキャラメリゼのように、作ってほかのレシピに使うものなら、材料にできます。
-        値段（材料の合計÷重さ）・アレルゲン・成分（100gあたり）がこのレシピの中身から入り、使うレシピの原価とラベルに反映されます。
+        {seeMoney ? "値段（材料の合計÷重さ）・" : ""}アレルゲン・成分（100gあたり）がこのレシピの中身から入り、使うレシピの{seeMoney ? "原価と" : ""}ラベルに反映されます。
       </p>
       {same.length > 0 ? (
         same.slice(0, 3).map((i) => (

@@ -3,9 +3,12 @@ import { useSearchParams } from "react-router-dom";
 import type { ScaleMode } from "@shared/cost";
 import type { Recipe } from "@shared/types";
 import { useDoc } from "./useData";
+import { useOrgCtx } from "../contexts/OrgContext";
 
-export function useRecipe(orgId: string, id: string | undefined) {
-  const { data, loading } = useDoc<Recipe>(id ? `organizations/${orgId}/recipes/${id}` : null);
+/** スタッフは売価・原価を抜いた写しを読む（lib/paths.ts） */
+export function useRecipe(_orgId: string, id: string | undefined) {
+  const { recipesPath } = useOrgCtx();
+  const { data, loading } = useDoc<Recipe>(id ? `${recipesPath}/${id}` : null);
   return { recipe: data as Recipe | null, loading };
 }
 

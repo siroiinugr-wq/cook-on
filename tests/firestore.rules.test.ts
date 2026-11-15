@@ -20,6 +20,8 @@ beforeEach(async () => {
     await setDoc(doc(db, "organizations/orgA/recipes/r1"), { name: "クッキー", version: 1 });
     await setDoc(doc(db, "organizations/orgA/ingredients/i1"), ingredient);
     await setDoc(doc(db, "organizations/orgA/alerts/a1"), { recipeId: "r1", read: false });
+    await setDoc(doc(db, "organizations/orgA/staffRecipes/r1"), { name: "クッキー", version: 1 });
+    await setDoc(doc(db, "organizations/orgA/staffIngredients/i1"), { name: "薄力粉", purchaseQty: 1, purchaseUnit: "kg", allergens: ["wheat"] });
     await setDoc(doc(db, "organizations/orgA/public/branding"), { appName: "A店", logoUrl: null, primaryColor: "#d97757" });
     await setDoc(doc(db, "aiRequests/orgA_req00001"), { status: "done" });
   });
@@ -28,8 +30,9 @@ beforeEach(async () => {
 const as = (uid: string, orgs: Record<string, string>) => env.authenticatedContext(uid, { orgs }).firestore();
 
 describe("テナント分離", () => {
-  it("A店のメンバーはA店のレシピを読める", async () => {
-    await assertSucceeds(getDoc(doc(as("u1", { orgA: "viewer" }), "organizations/orgA/recipes/r1")));
+  it("A店のメンバーはA店のレシピを読める（見るだけの人は値段を抜いた写し）", async () => {
+    await assertSucceeds(getDoc(doc(as("u1", { orgA: "admin" }), "organizations/orgA/recipes/r1")));
+    await assertSucceeds(getDoc(doc(as("u1", { orgA: "viewer" }), "organizations/orgA/staffRecipes/r1")));
   });
   it("B店のメンバーはA店のレシピも材料も読めない", async () => {
     const db = as("u2", { orgB: "owner" });
@@ -62,35 +65,81 @@ describe("お金とレシピは Functions だけが書く", () => {
 });
 
 describe("材料マスター", () => {
-  it("スタッフは材料を作れる・直せる。見るだけの人はできない", async () => {
-    await assertSucceeds(setDoc(doc(as("u3", { orgA: "editor" }), "organizations/orgA/ingredients/i2"), { ...ingredient, name: "強力粉" }));
-    await assertSucceeds(updateDoc(doc(as("u3", { orgA: "editor" }), "organizations/orgA/ingredients/i1"), { purchasePrice: 350 }));
+  it("管理者は材料を作れる・直せる。見るだけの人はできない", async () => {
+    await assertSucceeds(setDoc(doc(as("u3", { orgA: "admin" }), "organizations/orgA/ingredients/i2"), { ...ingredient, name: "強力粉" }));
+    await assertSucceeds(updateDoc(doc(as("u3", { orgA: "admin" }), "organizations/orgA/ingredients/i1"), { purchasePrice: 350 }));
     await assertFails(updateDoc(doc(as("u4", { orgA: "viewer" }), "organizations/orgA/ingredients/i1"), { purchasePrice: 1 }));
   });
   it("形のおかしい材料は書けない（マイナスの値段・知らない項目）", async () => {
-    const db = as("u3", { orgA: "editor" });
+    const db = as("u3", { orgA: "admin" });
     await assertFails(setDoc(doc(db, "organizations/orgA/ingredients/i3"), { ...ingredient, purchasePrice: -1 }));
     await assertFails(setDoc(doc(db, "organizations/orgA/ingredients/i3"), { ...ingredient, costCache: 1 }));
     await assertFails(setDoc(doc(db, "organizations/orgA/ingredients/i3"), { ...ingredient, priceTax: 0.05 }));
   });
   it("写真と、税込で入れた印は書ける", async () => {
-    const db = as("u3", { orgA: "editor" });
+    const db = as("u3", { orgA: "admin" });
     await assertSucceeds(setDoc(doc(db, "organizations/orgA/ingredients/i4"), { ...ingredient, photoPath: "orgs/orgA/ingredients/1.jpg", priceTax: 0.08 }));
     await assertSucceeds(setDoc(doc(db, "organizations/orgA/ingredients/i5"), { ...ingredient, photoPath: null, priceTax: 0 }));
+  });
+});
+
+describe("スタッフ権限（経営の情報は見えない）", () => {
+  const staff = () => as("u5", { orgA: "editor" });
+  it("スタッフ・見るだけは元のレシピ・材料・前の版・値段の記録を読めない。写しは読める", async () => {
+    for (const db of [staff(), as("u6", { orgA: "viewer" })]) {
+      await assertFails(getDoc(doc(db, "organizations/orgA/recipes/r1")));
+      await assertFails(getDoc(doc(db, "organizations/orgA/recipes/r1/versions/1")));
+      await assertFails(getDoc(doc(db, "organizations/orgA/ingredients/i1")));
+      await assertFails(getDoc(doc(db, "organizations/orgA/ingredients/i1/priceHistory/h1")));
+      await assertFails(getDoc(doc(db, "organizations/orgA/creditLedger/l1")));
+      await assertFails(getDoc(doc(db, "organizations/orgA/purchaseInbox/x1")));
+      await assertSucceeds(getDoc(doc(db, "organizations/orgA/staffRecipes/r1")));
+      await assertSucceeds(getDoc(doc(db, "organizations/orgA/staffIngredients/i1")));
+    }
+  });
+  it("写しは誰も画面から書けない", async () => {
+    await assertFails(setDoc(doc(as("u1", { orgA: "owner" }), "organizations/orgA/staffRecipes/r2"), { name: "x" }));
+    await assertFails(setDoc(doc(staff(), "organizations/orgA/staffIngredients/i2"), { name: "x" }));
+  });
+  it("スタッフは値段なしで材料を作れる。値段を入れて作ることはできない", async () => {
+    const { purchasePrice: _p, ...noPrice } = ingredient;
+    await assertSucceeds(setDoc(doc(staff(), "organizations/orgA/ingredients/i7"), { ...noPrice, purchasePrice: null }));
+    await assertFails(setDoc(doc(staff(), "organizations/orgA/ingredients/i8"), ingredient));
+    await assertFails(setDoc(doc(staff(), "organizations/orgA/ingredients/i8"), { ...noPrice, purchasePrice: null, supplier: "○○商店" }));
+  });
+  it("スタッフは材料の名前・アレルゲンを直せる。値段・仕入れ先は変えられない", async () => {
+    await assertSucceeds(setDoc(doc(staff(), "organizations/orgA/ingredients/i1"), { name: "薄力粉（特宝笠）", allergens: ["wheat"], allergensConfirmed: true }, { merge: true }));
+    await assertFails(updateDoc(doc(staff(), "organizations/orgA/ingredients/i1"), { purchasePrice: 1 }));
+    await assertFails(updateDoc(doc(staff(), "organizations/orgA/ingredients/i1"), { supplier: "x" }));
+    await assertFails(setDoc(doc(staff(), "organizations/orgA/ingredients/i1"), { name: "薄力粉", purchasePrice: null, purchaseQty: 1, purchaseUnit: "kg", allergens: [] }));
+  });
+  it("店長は元のレシピ・材料・包装資材を読めて、値段を直せる。店舗名・ブランドは変えられない", async () => {
+    const db = as("u7", { orgA: "manager" });
+    await assertSucceeds(getDoc(doc(db, "organizations/orgA/recipes/r1")));
+    await assertSucceeds(getDoc(doc(db, "organizations/orgA/alerts/a1")));
+    await assertSucceeds(updateDoc(doc(db, "organizations/orgA/ingredients/i1"), { purchasePrice: 320 }));
+    await assertSucceeds(setDoc(doc(db, "organizations/orgA/packaging/p9"), { name: "袋", purchasePrice: 10, purchaseQty: 1, unit: "枚" }));
+    await assertFails(updateDoc(doc(db, "organizations/orgA"), { name: "x" }));
+    await assertFails(setDoc(doc(db, "organizations/orgA/public/branding"), { appName: "x", logoUrl: null, primaryColor: "#000000" }));
+  });
+  it("管理者でも写しを作り終えた印は画面から付けられない", async () => {
+    await assertFails(updateDoc(doc(as("u1", { orgA: "owner" }), "organizations/orgA"), { staffViewsAt: 1 }));
   });
 });
 
 describe("包装資材とセット", () => {
   const bag = { name: "10cm袋", purchasePrice: 1500, purchaseQty: 100, unit: "枚", priceTax: 0.1 };
   const set = { name: "10cm袋セット", items: [{ packagingId: "p1", name: "10cm袋", qty: 1 }] };
-  it("スタッフは資材とセットを作れる。見るだけの人・ほかの店舗はできない", async () => {
-    await assertSucceeds(setDoc(doc(as("u3", { orgA: "editor" }), "organizations/orgA/packaging/p1"), bag));
-    await assertSucceeds(setDoc(doc(as("u3", { orgA: "editor" }), "organizations/orgA/packagingSets/s1"), set));
+  it("管理者は資材とセットを作れる。スタッフ・見るだけの人・ほかの店舗はできない", async () => {
+    await assertSucceeds(setDoc(doc(as("u3", { orgA: "admin" }), "organizations/orgA/packaging/p1"), bag));
+    await assertSucceeds(setDoc(doc(as("u3", { orgA: "admin" }), "organizations/orgA/packagingSets/s1"), set));
+    await assertFails(setDoc(doc(as("u5", { orgA: "editor" }), "organizations/orgA/packaging/p2"), bag));
+    await assertFails(getDoc(doc(as("u5", { orgA: "editor" }), "organizations/orgA/packaging/p1")));
     await assertFails(setDoc(doc(as("u4", { orgA: "viewer" }), "organizations/orgA/packaging/p2"), bag));
     await assertFails(setDoc(doc(as("u2", { orgB: "owner" }), "organizations/orgA/packagingSets/s2"), set));
   });
   it("形のおかしい資材は書けない（知らない単位・税の形・知らない項目）", async () => {
-    const db = as("u3", { orgA: "editor" });
+    const db = as("u3", { orgA: "admin" });
     await assertFails(setDoc(doc(db, "organizations/orgA/packaging/p3"), { ...bag, unit: "kg" }));
     await assertFails(setDoc(doc(db, "organizations/orgA/packaging/p3"), { ...bag, priceTax: 0.2 }));
     await assertFails(setDoc(doc(db, "organizations/orgA/packagingSets/s3"), { ...set, cost: 1 }));
@@ -110,8 +159,9 @@ describe("ラベルの保存した品目", () => {
 });
 
 describe("アラート・ブランド・票", () => {
-  it("アラートは既読にだけできる", async () => {
-    const db = as("u3", { orgA: "editor" });
+  it("アラートは既読にだけできる（スタッフは読めない）", async () => {
+    await assertFails(getDoc(doc(as("u5", { orgA: "editor" }), "organizations/orgA/alerts/a1")));
+    const db = as("u3", { orgA: "admin" });
     await assertSucceeds(updateDoc(doc(db, "organizations/orgA/alerts/a1"), { read: true }));
     await assertFails(updateDoc(doc(db, "organizations/orgA/alerts/a1"), { recipeId: "x" }));
     await assertFails(deleteDoc(doc(db, "organizations/orgA/alerts/a1")));
