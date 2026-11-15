@@ -26,6 +26,7 @@ import { offerPatch, OFFER_TAX, webPriceInUse, type RefWeb } from "@shared/offer
 import { per100 } from "@shared/invoice";
 import { numText } from "../../lib/num";
 import { fmtAt } from "../../lib/date";
+import { NumInput } from "../common/NumInput";
 
 const BUY_UNITS = UNITS.filter((u) => u !== "適量");
 const PIECE: Unit[] = ["個", "枚", "本"];
@@ -126,7 +127,7 @@ export function IngredientSheet({ orgId, uid, ing, usedIn, usedBy = [], recipes 
             <input type="file" accept="image/*" className="hidden" disabled={busy} onChange={(e) => pickPhoto(e.target.files?.[0])} /></label>
           {d.photoPath && <button type="button" className="text-muted underline" onClick={() => set({ photoPath: null })}>写真を外す</button>}
         </div>
-        {ingById && recipes.length > 0 && (
+        {ingById && (
           <MadeFrom ing={ing} d={d} recipes={recipes} ingById={ingById} made={made} perG={perG} onPick={(madeFrom) => set({ madeFrom })} />
         )}
         {!made && <div className="space-y-1">
@@ -142,7 +143,7 @@ export function IngredientSheet({ orgId, uid, ing, usedIn, usedBy = [], recipes 
           <div className="flex items-center gap-1.5">
             <input className={`${input} w-28`} inputMode="decimal" placeholder="未入力" value={priceText} onChange={(e) => setPrice(e.target.value)} />
             <span className="shrink-0 text-sm">円で</span>
-            <input className={`${input} w-20`} inputMode="decimal" value={d.purchaseQty} onChange={(e) => set({ purchaseQty: num(e.target.value) ?? 1, priceSource: null })} />
+            <NumInput className={`${input} w-20`} value={d.purchaseQty} fallback={1} onValue={(n) => set({ purchaseQty: n ?? 1, priceSource: null })} />
             <select className={`${input} w-24`} value={d.purchaseUnit} onChange={(e) => set({ purchaseUnit: e.target.value as Unit, priceSource: null })}>{BUY_UNITS.map((u) => <option key={u}>{u}</option>)}</select>
           </div>
           {tax > 0 && d.purchasePrice !== null && <p className="text-xs text-muted">税抜 {yen(d.purchasePrice)} で原価を計算します。</p>}
@@ -160,9 +161,9 @@ export function IngredientSheet({ orgId, uid, ing, usedIn, usedBy = [], recipes 
         {d.globalRef && <GlobalInfo globalRef={d.globalRef} onApply={(p) => { setPriceText(String(p.price)); set({ purchasePrice: p.price, priceTax: 0, purchaseQty: p.qty, purchaseUnit: p.unit, priceSource: "ref" }); }} />}
         <div className="grid grid-cols-2 gap-2">
           <label className="space-y-1"><span className={ui.label}>1個・1枚・1本の重さ g{PIECE.includes(d.purchaseUnit) ? "（必要）" : ""}</span>
-            <input className={input} inputMode="decimal" value={d.gramsPerPiece ?? ""} onChange={(e) => set({ gramsPerPiece: num(e.target.value) })} /></label>
+            <NumInput className={input} value={d.gramsPerPiece} onValue={(gramsPerPiece) => set({ gramsPerPiece })} /></label>
           <label className="space-y-1"><span className={ui.label}>1mlの重さ g{LIQUID.includes(d.purchaseUnit) ? "（無ければ1）" : ""}</span>
-            <input className={input} inputMode="decimal" placeholder="1" value={d.gramsPerMl ?? ""} onChange={(e) => set({ gramsPerMl: num(e.target.value) })} /></label>
+            <NumInput className={input} placeholder="1" value={d.gramsPerMl} onValue={(gramsPerMl) => set({ gramsPerMl })} /></label>
         </div>
         </>}
         {!made && <div className="space-y-1">
@@ -234,14 +235,24 @@ function MadeFrom({ ing, d, recipes, ingById, made, perG, onPick }: {
   const rest = ok.filter((r) => !cands.includes(r)).sort((a, b) => a.name.localeCompare(b.name, "ja"));
   const cur = d.madeFrom ? recipes.find((r) => r.id === d.madeFrom) : undefined;
 
+  // 仕入れ値が無い材料は、お店で作っているものかもしれない。レシピを作れば値段（材料の合計÷重さ）がレシピから入る
+  const noPrice = d.purchasePrice === null;
+  const newRecipe = ing ? `/recipes/new?for=${ing.id}&from=${encodeURIComponent(`/ingredients?open=${ing.id}`)}` : "";
   if (!open && !d.madeFrom) {
     return (
-      <div className="rounded-xl bg-sand p-3 text-sm">
+      <div className={`space-y-2 rounded-xl p-3 text-sm ${noPrice ? "border border-clay/40 bg-clay-soft/50" : "bg-sand"}`}>
+        {noPrice && <p className="font-bold">仕入れ値がありません。お店で作る材料ですか？</p>}
         {cands.length > 0 ? (
           <p>{exact.length ? "同じ名前" : "名前の近い"}のレシピ「{cands[0].name}」があります。<button type="button" className="text-clay-strong underline" onClick={() => { onPick(cands[0].id); setOpen(true); }}>このレシピから作る材料にする</button></p>
-        ) : (
-          <button type="button" className="text-clay-strong underline" onClick={() => setOpen(true)}>お店で作る材料（タルト生地・クリームなど）なら、作るレシピを選ぶ</button>
+        ) : ok.length > 0 && (
+          <button type="button" className="block text-left text-clay-strong underline" onClick={() => setOpen(true)}>お店で作る材料（タルト生地・クリームなど）なら、作るレシピを選ぶ</button>
         )}
+        {newRecipe && (
+          <Link to={newRecipe} className={`flex w-full items-center justify-center gap-1 ${noPrice ? ui.primary : ui.secondary} py-2 text-sm`}>
+            この材料のレシピを作る（自家製の材料にする）
+          </Link>
+        )}
+        {newRecipe && noPrice && <p className="text-xs text-muted">レシピに材料と分量を入れて保存すると、この材料の値段（材料の合計÷重さ）・アレルゲン・成分がレシピから入り、使っているレシピの原価にも反映されます。</p>}
       </div>
     );
   }

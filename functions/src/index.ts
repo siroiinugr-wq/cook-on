@@ -11,6 +11,8 @@ export { parseImportPhotos } from "./ai/importPhotos";
 export { guessProduct, aiSuggest } from "./ai/assist";
 export { readProductPhoto } from "./ai/productPhoto";
 export { suggestLabelNames } from "./ai/labelNames";
+export { suggestRecipeCategories } from "./ai/recipeCategories";
+export { setRecipeCategories, setRecipeTrial } from "./recipes/meta";
 export { saveRecipe, restoreRecipeVersion, archiveRecipe } from "./recipes/save";
 export { onIngredientWritten } from "./recipes/costAlert";
 export { refreshMadeFrom } from "./recipes/madeFrom";

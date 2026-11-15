@@ -26,10 +26,10 @@ import { useCreditAction } from "../components/common/useCreditAction";
 import { ui } from "../components/common/ui";
 import { CameraShooter } from "../components/import/CameraShooter";
 import { CaptureTray } from "../components/import/CaptureTray";
-import { numText } from "../lib/num";
 import { WebSources } from "../components/common/WebSources";
 import { IngredientPicker } from "../components/ingredient/IngredientPicker";
 import { cheapestPer100 } from "@shared/offers";
+import { NumInput } from "../components/common/NumInput";
 
 /** tried＝AIで探した（見つからなかった行をもう一度クレジットで探さない）、sizeTried＝AIで量を確かめた、webTried＝ネットで確かめた */
 type Row = InvoiceLine & { use: boolean; target: string; tried?: boolean; sizeTried?: boolean; webTried?: boolean };
@@ -389,17 +389,17 @@ export function InvoicePhotosPage() {
                     <button type="button" className="shrink-0 text-xs text-muted underline" onClick={() => void ignoreRows([k])} title="この品名は次から読み込みません">除外</button>
                   </div>
                   <div className="flex flex-wrap items-center gap-1.5">
-                    <input className={`${input} w-24`} inputMode="decimal" value={r.price} onChange={(e) => set(k, { price: Number(numText(e.target.value)) || 0 })} />
+                    <NumInput className={`${input} w-24`} value={r.price} fallback={0} onValue={(n) => set(k, { price: n ?? 0 })} />
                     <span className="text-sm">円で</span>
-                    <input className={`${input} w-16`} inputMode="decimal" value={r.qty} onChange={(e) => set(k, { qty: Number(numText(e.target.value)) || 0, size: "edited" })} />
+                    <NumInput className={`${input} w-16`} value={r.qty} fallback={0} onValue={(n) => set(k, { qty: n ?? 0, size: "edited" })} />
                     <select className={input} value={r.unit} onChange={(e) => set(k, { unit: e.target.value as Unit, size: "edited" })}>{INVOICE_UNITS.map((u) => <option key={u}>{u}</option>)}</select>
                     <select className={input} value={r.tax} onChange={(e) => set(k, { tax: Number(e.target.value) })}>{PRICE_TAX_OPTIONS.map((o) => <option key={o.rate} value={o.rate}>{o.label}</option>)}</select>
                   </div>
                   {isPieceUnit(r.unit) && (
                     <div className="flex items-center gap-1.5 text-sm">
                       <span className="text-muted">1{r.unit}あたり 約</span>
-                      <input className={`${input} w-16`} inputMode="decimal" placeholder={ing?.gramsPerPiece ? String(ing.gramsPerPiece) : ""} value={r.gramsPerPiece ?? ""}
-                        onChange={(e) => set(k, { gramsPerPiece: Number(numText(e.target.value)) || null })} />
+                      <NumInput className={`${input} w-16`} placeholder={ing?.gramsPerPiece ? String(ing.gramsPerPiece) : ""} value={r.gramsPerPiece}
+                        onValue={(n) => set(k, { gramsPerPiece: n || null })} />
                       <span className="text-muted">g（100gあたりの値段と原価の計算に使います）</span>
                     </div>
                   )}

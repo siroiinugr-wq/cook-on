@@ -19,9 +19,9 @@ import { FitNotice } from "../components/label/FitNotice";
 import { useConfirm } from "../components/common/ConfirmDialog";
 import { fitLabel } from "../lib/labelImage";
 import { AdditiveBox } from "../components/label/AdditiveBox";
-import { numText } from "../lib/num";
 import { nutritionLabelText, recipeNutrition } from "@shared/nutrition";
 import { useNutritionOf } from "../hooks/useRecipeNutrition";
+import { NumInput } from "../components/common/NumInput";
 
 const PAPER_KEY = "cookon-labelPaper";
 export const readPaper = () => { try { return localStorage.getItem(PAPER_KEY); } catch { return null; } };
@@ -116,7 +116,7 @@ export function LabelPage() {
             <label className="space-y-1"><span className={ui.label}>製造日</span><input type="date" className={input} value={made} onChange={(e) => setMade(e.target.value)} /></label>
             <label className="space-y-1"><span className={ui.label}>期限の種類</span>
               <select className={input} value={info.expiryKind} onChange={(e) => set({ expiryKind: e.target.value as LabelInfo["expiryKind"] })}><option>賞味期限</option><option>消費期限</option></select></label>
-            <label className="space-y-1"><span className={ui.label}>製造日から何日</span><input className={input} inputMode="numeric" value={info.expiryDays} onChange={(e) => set({ expiryDays: Number(e.target.value.replace(/\D/g, "")) || 0 })} /></label>
+            <label className="space-y-1"><span className={ui.label}>製造日から何日</span><NumInput className={input} decimal={false} value={info.expiryDays} fallback={0} onValue={(n) => set({ expiryDays: n ?? 0 })} /></label>
           </div>
           <label className="flex items-start gap-2 text-sm">
             <input type="checkbox" className="mt-0.5 h-4 w-4 accent-clay" checked={!!info.dateOutside} onChange={(e) => set({ dateOutside: e.target.checked })} />
@@ -171,7 +171,7 @@ export function LabelPage() {
             <PaperPicker paperId={paper.id} papers={LABEL_PAPERS} onChange={pick} /></label>
           {paper.sheet?.cut && <p className="text-xs text-muted">86.4×42.3mm の1面に2個分を並べます。貼る前に、はさみで1面を縦に半分に切ってください。</p>}
           <div className="flex flex-wrap items-center gap-4 text-sm">
-            <label className="flex items-center gap-2">枚数<input className={`${inputSm} w-20`} inputMode="numeric" value={copies} onChange={(e) => setCopies(Math.max(1, Math.min(200, Number(numText(e.target.value)) || 1)))} /></label>
+            <label className="flex items-center gap-2">枚数<NumInput className={`${inputSm} w-20`} decimal={false} value={copies} fallback={1} onValue={(n) => n !== null && setCopies(Math.max(1, Math.min(200, n)))} /></label>
             {paper.sheet && (
               <label className="flex items-center gap-2">何面目から
                 <select className={`${inputSm} w-20`} value={start} onChange={(e) => setStart(Number(e.target.value))}>

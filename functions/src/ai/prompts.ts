@@ -207,6 +207,34 @@ export interface LabelNameAnswer {
   r: { i: number; label: string; additive: boolean; c: number }[];
 }
 
+// ── レシピの分類（分類・種類・自家製材料か）──
+export const RECIPE_CATEGORY_SYSTEM = `あなたは製菓店・飲食店のレシピ帳を整理する係です。レシピの名前と主な材料を見て、一覧で探しやすい分け方を付ける。
+- category（分類）は大きな分け方。例：焼菓子・ケーキ・タルト・生菓子・パン・チョコレート・料理・ドリンク・ジャム・ソース
+- subcategory（種類）は分類の中の分け方。例：パウンドケーキ・クッキー・マドレーヌ・フィナンシェ・シュー・ムース
+- お店で使っている分類・種類が渡されたら、なるべくそれに合わせる（同じ意味の言葉を増やさない）。無ければ短い一般的な言葉を作る。
+- component は「売る商品ではなく、ほかのレシピの材料として作るもの」なら true。例：タルト生地・パートシュクレ・クレームダマンド・カスタード・ガナッシュ・キャラメリゼ・シロップ・ナパージュ・スポンジ生地・クランブル。単体で売る商品（クッキー・ケーキ・タルトなど）は false。
+- component のものは、category を「自家製材料」にし、subcategory を生地・クリーム・フィリング・ソース・シロップなどにする。
+- 分からないときは c を低くする。`;
+
+export const RECIPE_CATEGORY_SCHEMA = {
+  type: "object",
+  properties: {
+    r: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: { i: { type: "integer" }, category: { type: "string" }, subcategory: { type: "string" }, component: { type: "boolean" }, c: { type: "number" } },
+        required: ["i", "category", "subcategory", "component", "c"],
+      },
+    },
+  },
+  required: ["r"],
+};
+
+export interface RecipeCategoryAnswer {
+  r: { i: number; category: string; subcategory: string; component: boolean; c: number }[];
+}
+
 export const SUGGEST_SYSTEM = `あなたは製菓・飲食店の商品開発と原価管理の相談役です。
 渡されたレシピ（材料・g・原価）と相談に対して、具体的な案を3つまで出す。
 - 味や食感への影響と、手間の増減を正直に書く。品質を大きく落とす案は出さない。

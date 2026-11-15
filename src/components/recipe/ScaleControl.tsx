@@ -2,7 +2,7 @@
 import { scaleFactor, type ScaleMode } from "@shared/cost";
 import { formatQty } from "@shared/units";
 import { Icon } from "../common/Icon";
-import { numText } from "../../lib/num";
+import { NumInput } from "../common/NumInput";
 
 const LOTS = [0.5, 1, 2, 2.5, 3];
 
@@ -25,13 +25,13 @@ export function ScaleControl({ mode, set, pieces }: { mode: ScaleMode; set: (m: 
               className={`rounded-full px-3 py-1 text-sm ${mode.lots === l ? "bg-clay font-bold text-white" : "bg-paper text-ink-soft"}`}>×{l}</button>
           ))}
           <label className="flex items-center gap-1 text-sm">×
-            <input inputMode="decimal" value={mode.lots} onChange={(e) => set({ kind: "lot", lots: Number(numText(e.target.value)) || 1 })}
+            <NumInput value={mode.lots} fallback={1} onValue={(n) => n && set({ kind: "lot", lots: n })}
               className="w-16 rounded-lg border border-line-strong bg-paper px-2 py-1" />
           </label>
         </div>
       ) : (
         <label className="flex items-center gap-2 text-sm">
-          <input inputMode="numeric" value={mode.pieces} onChange={(e) => set({ kind: "pieces", pieces: Number(numText(e.target.value)) || pieces })}
+          <NumInput decimal={false} value={mode.pieces} fallback={pieces} onValue={(n) => n && set({ kind: "pieces", pieces: n })}
             className="w-20 rounded-lg border border-line-strong bg-paper px-2 py-1" />
           個 作りたい
         </label>

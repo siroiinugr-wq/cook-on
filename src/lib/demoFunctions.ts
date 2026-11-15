@@ -1,6 +1,7 @@
 // デモモードの「にせの Cloud Functions」。本番の関数と同じ名前・同じ引数・同じ返り値の形にしてある。
 // レシピの保存と版、原価アラートは shared の同じ計算で本物どおりに動く。AIの部分だけ demoAi.ts の簡易版。
-import { CREDIT_COST, LABEL_NAME_BATCH, type CreditAction } from "@shared/credits";
+import { CREDIT_COST, LABEL_NAME_BATCH, RECIPE_CATEGORY_BATCH, type CreditAction } from "@shared/credits";
+import { HOMEMADE_CATEGORY, HOMEMADE_HINT } from "@shared/madeFrom";
 import { DEFAULT_TARGET_RATE } from "@shared/cost";
 import type { PackCtx } from "@shared/packaging";
 import { deriveRecipe, sanitizeRecipe } from "@shared/recipe";
@@ -30,7 +31,7 @@ export function demoPackaging(): PackCtx {
 }
 
 /** 本番の writeRecipe と同じ：今の中身を versions に写してから版を上げる */
-export function demoWriteRecipe(recipeId: string | null, raw: unknown, note = "") {
+export function demoWriteRecipe(recipeId: string | null, raw: unknown, note = "", trialNew = false) {
   const input = sanitizeRecipe(raw);
   if (typeof input === "string") throw new Error(input);
   const id = recipeId ?? rid();
@@ -39,8 +40,9 @@ export function demoWriteRecipe(recipeId: string | null, raw: unknown, note = ""
   if (recipeId && !cur) throw new Error("レシピが見つかりません。");
   const prev = cur ? Number(cur.version ?? 1) : 0;
   if (cur) demoWrite(`${path}/versions/${prev}`, { ...cur, archivedAt: now() }, false);
+  const keep = cur ? Object.fromEntries((["trial", "trialNote", "trialAt"] as const).filter((k) => cur[k] !== undefined).map((k) => [k, cur[k]])) : trialNew ? { trial: true } : {};
   demoWrite(path, {
-    ...input, ...deriveRecipe(input, demoIngredientMap(), demoPackaging()), version: prev + 1, archived: false,
+    ...input, ...keep, ...deriveRecipe(input, demoIngredientMap(), demoPackaging()), version: prev + 1, archived: false,
     updatedAt: now(), updatedBy: "demo-user", ...(note ? { changeNote: note } : {}),
   });
   return { recipeId: id, version: prev + 1 };
@@ -73,7 +75,34 @@ export async function demoCall<T>(name: string, data: object): Promise<T> {
   const d = data as Data;
   switch (name) {
     case "saveRecipe":
-      return demoWriteRecipe((d.recipeId as string) || null, d.recipe, String(d.note ?? "")) as T;
+      return demoWriteRecipe((d.recipeId as string) || null, d.recipe, String(d.note ?? ""), d.trial === true) as T;
+    case "setRecipeTrial": {
+      const p = `${O}/recipes/${d.recipeId}`;
+      const cur = demoGet(p);
+      if (!cur) throw new Error("レシピが見つかりません。");
+      demoWrite(p, { ...cur, trial: d.trial === true, ...(typeof d.trialNote === "string" ? { trialNote: d.trialNote.slice(0, 1000), trialAt: new Date().toISOString() } : {}) });
+      return { ok: true } as T;
+    }
+    case "setRecipeCategories": {
+      let done = 0;
+      for (const r of (d.rows as { recipeId: string; category: string; subcategory: string }[]) ?? []) {
+        const p = `${O}/recipes/${r.recipeId}`;
+        const cur = demoGet(p);
+        if (!cur) continue;
+        demoWrite(p, { ...cur, category: r.category.slice(0, 30), subcategory: r.subcategory.slice(0, 30) });
+        done++;
+      }
+      return { done } as T;
+    }
+    case "suggestRecipeCategories": {
+      const ids = (d.recipeIds as string[]) ?? [];
+      return demoWithCredits("recipeCategory", Math.ceil(ids.length / RECIPE_CATEGORY_BATCH), async () => ({
+        result: { suggestions: ids.flatMap((id) => {
+          const r = demoGet(`${O}/recipes/${id}`);
+          return r ? [{ recipeId: id, ...demoRecipeCategory(String(r.name)), confidence: 0.7 }] : [];
+        }) },
+      })) as Promise<T>;
+    }
     case "restoreRecipeVersion": {
       const v = demoGet(`${O}/recipes/${d.recipeId}/versions/${d.version}`);
       if (!v) throw new Error("その版は見つかりません。");
@@ -198,3 +227,11 @@ onDemoWrite((path, before, after) => {
   const v = judgeUgc(good, bad);
   demoWrite(p, { ...prod, goodCount: good, badCount: bad, status: v === "promote" ? "promoted" : v === "reject" ? "rejected" : "pending" }, false);
 });
+
+/** デモのにせのAI：名前から分類の案 */
+function demoRecipeCategory(name: string): { category: string; subcategory: string; component: boolean } {
+  if (HOMEMADE_HINT.test(name) && !/タルト$|ケーキ|クッキー/.test(name)) return { category: HOMEMADE_CATEGORY, subcategory: /生地|シュクレ|サブレ|ブリゼ|スポンジ|ジェノワーズ/.test(name) ? "生地" : "クリーム・フィリング", component: true };
+  const rules: [RegExp, string, string][] = [[/クッキー|サブレ/, "焼菓子", "クッキー"], [/パウンド/, "焼菓子", "パウンドケーキ"], [/マドレーヌ|フィナンシェ/, "焼菓子", "フィナンシェ・マドレーヌ"], [/タルト/, "タルト", ""], [/ケーキ|ショート/, "ケーキ", ""]];
+  const hit = rules.find(([re]) => re.test(name));
+  return hit ? { category: hit[1], subcategory: hit[2], component: false } : { category: "焼菓子", subcategory: "", component: false };
+}

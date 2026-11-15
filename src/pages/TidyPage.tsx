@@ -1,5 +1,5 @@
 // データの整理：取り込んだあとの見直しを、上から順に片付ける画面。AIを使うのは「AIで探す」「ラベルの名前」だけ（クレジット）。
-// 共有の材料に結ぶ → お店で作る材料をレシピに結ぶ → 1. アレルゲンの確認 → 2. 仕入れ値 → 3. 何個分 → 4. 名前・レシピでないもの → 5. 同じ材料の行 → 6. 表記ゆれ → 7. ラベルの名前
+// 共有の材料に結ぶ → お店で作る材料をレシピに結ぶ → 1. アレルゲンの確認 → 2. 仕入れ値 → 3. 何個分 → 4. 名前・レシピでないもの → 5. 同じ材料の行 → 6. 表記ゆれ → 7. ラベルの名前 → 8. レシピの分類
 import { useMemo } from "react";
 import { calcCost } from "@shared/cost";
 import { duplicateItems, guessPieces, HEAVY_SINGLE_GRAMS, isPlaceholderName, needsPieces, looksNotRecipe, similarIngredientGroups } from "@shared/tidy";
@@ -23,6 +23,7 @@ import { PriceFill } from "../components/tidy/PriceFill";
 import { PiecesFix, NamesFix, DupRows } from "../components/tidy/RecipeFixes";
 import { MergeGroups } from "../components/tidy/MergeGroups";
 import { LabelNames } from "../components/tidy/LabelNames";
+import { RecipeCategories } from "../components/tidy/RecipeCategories";
 import { LinkCard } from "../components/tidy/LinkCard";
 import { useHashScroll } from "../hooks/useHashScroll";
 
@@ -30,7 +31,7 @@ const HIGH_PER_PIECE = 1000;
 const LOW_PER_PIECE = 10;
 
 export function TidyPage() {
-  const { orgId, canEdit, org } = useOrgCtx();
+  const { orgId, uid, canEdit, org } = useOrgCtx();
   const ings = useIngredients(orgId);
   const recipes = useCol<Recipe>(`organizations/${orgId}/recipes`, { where: [["archived", "==", false]] });
 
@@ -134,6 +135,9 @@ export function TidyPage() {
       </Accordion>
       <Accordion id="label" title={`7. ラベルの名前（${n(ings.list.filter((x) => !x.labelName?.trim()).length)}）`} summary="キビ糖→きび砂糖、薄力粉→小麦粉のように、品質表示に出す名前。AIが案を出し、最後に確かめます">
         <LabelNames orgId={orgId} list={byUse(ings.list)} usedIn={usedIn} credits={org.credits} />
+      </Accordion>
+      <Accordion id="category" title={`8. レシピの分類（${n(recipes.list.filter((r) => !r.category?.trim()).length)}）`} summary="一覧を分類ごとにまとめます。AIが分類・種類と、自家製材料（生地・クリームなど）を見分けます">
+        <RecipeCategories orgId={orgId} uid={uid} recipes={recipes.list} ings={ings} credits={org.credits} />
       </Accordion>
     </div>
   );

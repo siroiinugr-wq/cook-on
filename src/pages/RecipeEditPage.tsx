@@ -1,10 +1,11 @@
 // レシピを作る・直す。新しく作るときはひな形を選んでから（白紙のフォームを最初に見せない）
 // 保存は saveRecipe（Functions）だけ。前の版は自動で履歴に残る
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { calcCost, costRate, yen } from "@shared/cost";
 import { calcPackaging } from "@shared/packaging";
-import type { RecipeInput } from "@shared/recipe";
+import { RECIPE_TEMPLATES, type RecipeInput } from "@shared/recipe";
+import { HOMEMADE_CATEGORY, madeFromPatch } from "@shared/madeFrom";
 import { toMatchKey } from "@shared/matchKey";
 import type { Ingredient, Recipe } from "@shared/types";
 import { guessPieces, needsPieces } from "@shared/tidy";
@@ -15,7 +16,7 @@ import { useOrgCtx } from "../contexts/OrgContext";
 import { useIngredients } from "../hooks/useIngredients";
 import { usePackaging } from "../hooks/usePackaging";
 import { useRecipe } from "../hooks/useRecipe";
-import { call, newId } from "../lib/store";
+import { call, newId, saveDoc } from "../lib/store";
 import { PageHead } from "../components/common/Layout";
 import { ui } from "../components/common/ui";
 import { RateBadge } from "../components/recipe/RateBadge";
@@ -23,6 +24,7 @@ import { ItemsEditor, rowKey, type Row } from "../components/recipe/edit/ItemsEd
 import { PackagingEditor } from "../components/recipe/edit/PackagingEditor";
 import { StepsEditor } from "../components/recipe/edit/StepsEditor";
 import { numText } from "../lib/num";
+import { NumInput } from "../components/common/NumInput";
 
 type Draft = Omit<RecipeInput, "items">;
 
@@ -41,6 +43,10 @@ export function RecipeEditPage() {
   const ings = useIngredients(orgId);
   const pack = usePackaging(orgId);
   const nav = useNavigate();
+  // 材料の編集の「この材料のレシピを作る」から来たとき：for＝その材料。保存したら材料をこのレシピに結ぶ（自家製の材料）
+  const [sp] = useSearchParams();
+  const forIng = !id && sp.get("for") ? ings.byId.get(sp.get("for")!) ?? null : null;
+  const [trial, setTrial] = useState(false);
   // 今までに使った分類とタグ（押すだけで入れられるように）
   const all = useCol<Recipe>(`organizations/${orgId}/recipes`);
   const usedCats = useMemo(() => countSort(all.list.map((r) => r.category)), [all.list]);
@@ -68,10 +74,18 @@ export function RecipeEditPage() {
   useEffect(() => {
     if (id && recipe && !draft && !ings.loading) start(recipe);
   }, [id, recipe, draft, ings.loading]);
+  // 自家製の材料のレシピ：白紙に材料の名前と「自家製材料」の分類を入れて始める
+  useEffect(() => {
+    if (forIng && !draft) {
+      const blank = RECIPE_TEMPLATES.find((t) => t.id === "blank")!.recipe;
+      start({ ...blank, name: forIng.name, category: HOMEMADE_CATEGORY, subcategory: "", tags: [] });
+    }
+  }, [forIng, draft]);
 
   if (!canEdit) return <p className="py-10 text-center text-muted">レシピを編集する権限がありません。</p>;
   if (id && (loading || !draft)) return <p className="py-10 text-center text-muted">{loading || ings.loading ? "読み込み中…" : "レシピが見つかりません。"}</p>;
 
+  if (!draft && sp.get("for") && (ings.loading || forIng)) return <p className="py-10 text-center text-muted">読み込み中…</p>;
   if (!draft) {
     return (
       <div className="space-y-4">
@@ -99,7 +113,12 @@ export function RecipeEditPage() {
     try {
       const tags = tagText.split(/[、,，\s#＃]+/).map((t) => t.trim()).filter(Boolean);
       const items = rows.map(({ _k, ...it }) => it);
-      const r = await call<{ recipeId: string }>("saveRecipe", { orgId, recipeId: id ?? null, recipe: { ...d, tags, items }, note });
+      const r = await call<{ recipeId: string }>("saveRecipe", { orgId, recipeId: id ?? null, recipe: { ...d, tags, items }, note, ...(!id && trial ? { trial: true } : {}) });
+      if (forIng && !forIng.madeFrom && items.length > 0 && !items.some((it) => it.ingredientId === forIng.id)) {
+        // 値段（材料の合計÷重さ）とアレルゲンはこの画面で入れ、成分はサーバーが入れる（UseAsIngredient と同じ）
+        const { missing: _m, ...p } = madeFromPatch(items, ings.byId);
+        await saveDoc(`organizations/${orgId}/ingredients/${forIng.id}`, { madeFrom: r.recipeId, ...p });
+      }
       nav(`/recipes/${r.recipeId}`, { replace: true });
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
@@ -113,7 +132,14 @@ export function RecipeEditPage() {
   const field = (label: string, el: ReactNode, cls = "") => <label className={`block space-y-1 ${cls}`}><span className={ui.label}>{label}</span>{el}</label>;
   return (
     <div className="space-y-5 pb-24">
-      <PageHead title={id ? "レシピを編集" : "新しいレシピ"} back={id ? `/recipes/${id}` : "/"} />
+      <PageHead title={id ? "レシピを編集" : forIng ? "自家製の材料のレシピ" : "新しいレシピ"} back={id ? `/recipes/${id}` : sp.get("from") || "/"} />
+      {forIng && (
+        <p className="rounded-xl bg-clay-soft p-3 text-sm text-clay-strong">
+          保存すると、材料「<Link to={`/ingredients?open=${forIng.id}`} className="underline">{forIng.name}</Link>」をこのレシピから作る材料にします。
+          値段は「材料の合計÷できあがりの重さ（材料の合計g）」で入り、使っているレシピの原価も計算し直します。
+          {rows.some((r) => r.ingredientId === forIng.id) && <b className="block text-ng">この材料自身がレシピの材料に入っているので、結べません。</b>}
+        </p>
+      )}
       <section className="space-y-3">
         {field("レシピ名", <input className={ui.input} value={d.name} maxLength={60} onChange={(e) => set({ name: e.target.value })} />)}
         <RecipePhotos photos={d.photos ?? []} set={setPhotos} photoDir={photoDir} />
@@ -131,14 +157,14 @@ export function RecipeEditPage() {
         </div>
         <div className="grid grid-cols-2 gap-2">
           <div className="space-y-1">
-            {field("1ロットで何個できる？", <input className={ui.input} inputMode="numeric" value={d.yield.pieces} onChange={(e) => set({ yield: { ...d.yield, pieces: Number(e.target.value.replace(/\D/g, "")) || 1 } })} />)}
+            {field("1ロットで何個できる？", <NumInput className={ui.input} decimal={false} value={d.yield.pieces} fallback={1} onValue={(n) => setDraft((cur) => (cur ? { ...cur, yield: { ...cur.yield, pieces: n || 1 } } : cur))} />)}
             {piecesHint && <button className="text-xs text-clay-strong underline" onClick={() => set({ yield: { ...d.yield, pieces: piecesHint } })}>メモや工程に「{piecesHint}個分」とあります。入れる</button>}
             {needsPieces({ ...d, yield: { pieces } }, cost.lines.reduce((t, l) => t + (l.grams ?? 0), 0)) && !piecesHint && <p className="text-xs text-warn-strong">材料が多いのに1個のままです。何個分か入れてください。</p>}
           </div>
-          {field("1個の重さ g（ラベル用・任意）", <input className={ui.input} inputMode="decimal" value={d.yield.gramsPerPiece ?? ""} onChange={(e) => set({ yield: { ...d.yield, gramsPerPiece: numOrNull(e.target.value) } })} />)}
+          {field("1個の重さ g（ラベル用・任意）", <NumInput className={ui.input} value={d.yield.gramsPerPiece} onValue={(n) => setDraft((cur) => (cur ? { ...cur, yield: { ...cur.yield, gramsPerPiece: n || null } } : cur))} />)}
         </div>
         <div className="grid grid-cols-2 gap-2">
-          {field("売価（税抜・円）", <input className={ui.input} inputMode="numeric" value={d.sellingPrice ?? ""} placeholder="未定" onChange={(e) => set({ sellingPrice: numOrNull(e.target.value) })} />)}
+          {field("売価（税抜・円）", <NumInput className={ui.input} decimal={false} value={d.sellingPrice} placeholder="未定" onValue={(n) => set({ sellingPrice: n || null })} />)}
           {field(`目標の原価率 %（空ならお店の${Math.round(org.settings.targetCostRate * 100)}%）`, <input className={ui.input} inputMode="decimal"
             value={d.targetCostRate === null ? "" : Math.round(d.targetCostRate * 1000) / 10} onChange={(e) => { const v = numOrNull(e.target.value); set({ targetCostRate: v ? v / 100 : null }); }} />)}
         </div>
@@ -157,6 +183,10 @@ export function RecipeEditPage() {
         <StepsEditor steps={d.steps} set={setSteps} photoDir={photoDir} orgId={orgId} uid={uid} recipeId={id ?? null} />
       </section>
       {field("メモ（お店の中だけ）", <textarea className={`${ui.input} h-20`} value={d.memo ?? ""} onChange={(e) => set({ memo: e.target.value })} />)}
+      {!id && (
+        <label className="flex items-center gap-2 text-sm"><input type="checkbox" className="h-4 w-4 accent-clay" checked={trial} onChange={(e) => setTrial(e.target.checked)} />
+          試作として保存する（一覧の「試作」にまとまり、次の改善点をメモできます）</label>
+      )}
       {id && field("何を変えたか（履歴に残ります・任意）", <input className={ui.input} value={note} maxLength={100} placeholder="例：砂糖を10g減らした" onChange={(e) => setNote(e.target.value)} />)}
 
       <div className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-paper/95 px-4 py-3 backdrop-blur">
