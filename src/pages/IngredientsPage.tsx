@@ -16,9 +16,9 @@ import { IngredientSheet } from "../components/ingredient/IngredientSheet";
 import { PhotoThumb } from "../components/ingredient/PhotoThumb";
 
 export function IngredientsPage() {
-  const { orgId, uid, canEdit } = useOrgCtx();
+  const { orgId, uid, canEdit, recipesPath, seeMoney } = useOrgCtx();
   const { list, byId, loading } = useIngredients(orgId);
-  const recipes = useCol<Recipe>(`organizations/${orgId}/recipes`, { where: [["archived", "==", false]] });
+  const recipes = useCol<Recipe>(recipesPath, { where: [["archived", "==", false]] });
   const [q, setQ] = useState("");
   const [onlyMissing, setOnlyMissing] = useState(false);
   const [edit, setEdit] = useState<Ingredient | "new" | null>(null);
@@ -51,7 +51,8 @@ export function IngredientsPage() {
     setParams({}, { replace: true });
   }, [openId, loading, list, setParams, canEdit]);
   const unconfirmed = list.filter((i) => i.allergensConfirmed !== true).length;
-  const missing = list.filter((i) => unitCostPerGram(i) === null);
+  // 仕入れ値の抜けはオーナー・管理者だけに出す（スタッフの写しには値段が無い）
+  const missing = seeMoney ? list.filter((i) => unitCostPerGram(i) === null) : [];
   const shown = (onlyMissing ? missing : list).filter((i) => !q.trim() || [i.name, i.labelName ?? "", ...(i.aliases ?? [])].some((n) => n.includes(q.trim())));
 
   return (
@@ -63,7 +64,7 @@ export function IngredientsPage() {
           仕入れ値が入っていない材料が{missing.length}件あります。{onlyMissing ? "（すべて表示に戻す）" : "押すとその材料だけ出します。"}
         </button>
       )}
-      {canEdit && (missing.length > 0 || unconfirmed > 0) && (
+      {seeMoney && (missing.length > 0 || unconfirmed > 0) && (
         <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
           {missing.length > 0 && <Link to="/tidy#price" className="text-clay-strong underline">参考価格・ネットの値段をまとめて入れる</Link>}
           {missing.length > 0 && <Link to="/ingredients/invoices" className="text-clay-strong underline">レシートから入れる</Link>}
@@ -91,12 +92,12 @@ export function IngredientsPage() {
                       {usedIn.get(i.id) ? `／レシピ${usedIn.get(i.id)}件` : ""}
                     </p>
                   </div>
-                  <div className="shrink-0 text-right text-sm">
+                  {seeMoney && <div className="shrink-0 text-right text-sm">
                     {i.purchasePrice === null ? <span className="text-warn-strong">仕入れ値なし</span> : <>
                       <p>{i.priceSource === "ref" && <RefBadge className="mr-1" />}{yen(i.purchasePrice)}<span className="text-xs text-muted">/{i.purchaseQty}{i.purchaseUnit}</span></p>
                       <p className="text-xs text-muted">{perG === null ? "gに換算できない" : `1kg ${yen(perG * 1000)}`}</p>
                     </>}
-                  </div>
+                  </div>}
                 </button>
               </li>
             );

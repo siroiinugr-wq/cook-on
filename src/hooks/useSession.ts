@@ -12,7 +12,18 @@ export interface Session {
   orgs: Record<string, Role>;
 }
 
-const DEMO: Session = { loading: false, user: { uid: "demo-user", email: "demo@example.com", needsVerify: false }, orgs: { demo: "owner" } };
+// デモで役割を試す：?demoRole=editor（スタッフ）・viewer（見るだけ）・owner（戻す）。この端末に覚える
+function demoRole(): Role {
+  try {
+    const q = new URLSearchParams(window.location.search).get("demoRole");
+    if (q) localStorage.setItem("cookon-demoRole", q);
+    const r = localStorage.getItem("cookon-demoRole");
+    return r === "admin" || r === "editor" || r === "viewer" ? r : "owner";
+  } catch {
+    return "owner";
+  }
+}
+const DEMO: Session = { loading: false, user: { uid: "demo-user", email: "demo@example.com", needsVerify: false }, orgs: { demo: isDemo ? demoRole() : "owner" } };
 
 export function useSession(): Session {
   const [s, setS] = useState<Session>(isDemo ? DEMO : { loading: true, user: null, orgs: {} });

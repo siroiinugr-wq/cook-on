@@ -30,11 +30,11 @@ export const today = () => new Date(Date.now() + 9 * 3600_000).toISOString().sli
 
 export function LabelPage() {
   const { id } = useParams();
-  const { orgId, org, canEdit } = useOrgCtx();
+  const { orgId, org, canEdit, recipesPath, seeMoney } = useOrgCtx();
   const { recipe, loading } = useRecipe(orgId, id);
   const ings = useIngredients(orgId);
   // お店で作った材料（タルト生地など）の中身を開くのに、ほかのレシピも読む
-  const all = useCol<Recipe>(`organizations/${orgId}/recipes`);
+  const all = useCol<Recipe>(recipesPath);
   const recipeById = useMemo(() => new Map(all.list.map((r) => [r.id, r as Recipe])), [all.list]);
   const [paperId, setPaperId] = useState(() => readPaper() ?? LABEL_PAPERS[0].id);
   const [made, setMade] = useState(today);
@@ -97,7 +97,7 @@ export function LabelPage() {
           <div className="space-y-1 rounded-xl bg-ng/10 p-3 text-sm text-ng">
             <p className="font-bold">アレルゲンをまだ確かめていない材料があります。確かめるまで印刷できません。</p>
             <p>{built.unconfirmed.join("、")}</p>
-            {canEdit && <Link to="/tidy#allergen" className="underline">データの整理で、アレルゲンをまとめて確かめる</Link>}
+            {seeMoney && <Link to="/tidy#allergen" className="underline">データの整理で、アレルゲンをまとめて確かめる</Link>}
           </div>
         )}
         {missing.length > 0 && (
@@ -156,7 +156,7 @@ export function LabelPage() {
                   : <span key={m.id}>{m.name}</span>)}
                 {nut.missing.filter((n) => !nut.missingIngs.some((m) => m.name === n)).map((n) => <span key={n}>{n}（材料に未登録）</span>)}
               </p>
-              {canEdit && <p><Link to="/tidy#link" className="underline">データの整理で、成分表（共有の材料）にまとめて結ぶ</Link></p>}
+              {seeMoney && <p><Link to="/tidy#link" className="underline">データの整理で、成分表（共有の材料）にまとめて結ぶ</Link></p>}
             </div>
           )}
           <div className="grid grid-cols-2 gap-2">

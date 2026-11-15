@@ -10,6 +10,9 @@ service cloud.firestore {
     function role(orgId)     { return orgs()[orgId]; }
     function canEdit(orgId)  { return isMember(orgId) && role(orgId) in ['owner', 'admin', 'editor']; }
     function isAdmin(orgId)  { return isMember(orgId) && role(orgId) in ['owner', 'admin']; }
+    // 経営の情報（仕入れ値・原価・売価・仕入れ・包装資材・クレジットの記録）を見られる人。スタッフ・見るだけは
+    // 値段を抜いた写し（staffRecipes・staffIngredients、shared/staffView.ts）を読む。shared/roles.ts の canSeeMoney と同じ
+    function seeMoney(orgId) { return isAdmin(orgId); }
     function unchanged(keys) { return !request.resource.data.diff(resource.data).affectedKeys().hasAny(keys); }
     function str(v, max)     { return v is string && v.size() <= max; }
     function numOrNull(v)    { return v == null || (v is number && v >= 0); }
@@ -34,6 +37,13 @@ service cloud.firestore {
         && d.get('priceSource', null) in [null, 'ref']
         && (d.get('madeFrom', null) == null || str(d.madeFrom, 60));
     }
+    // スタッフが材料を作る・直すとき：値段の項目（shared/staffView.ts の INGREDIENT_MONEY_KEYS）は入れられない・変えられない
+    function staffNewIngredient() {
+      let d = request.resource.data;
+      return d.purchasePrice == null && d.get('priceTax', 0) == 0 && d.get('priceSource', null) == null
+        && d.get('refWeb', null) == null && d.get('offers', null) == null && d.get('supplier', '') == '';
+    }
+    function staffKeepsMoney() { return unchanged(['purchasePrice', 'priceTax', 'priceSource', 'refWeb', 'offers', 'supplier']); }
 
     // 包装資材（袋・脱酸素剤など）。値段は税抜。priceTax は入れたときの形（材料と同じ 0・0.08・0.1）
     function validPackaging() {
@@ -60,7 +70,7 @@ service cloud.firestore {
       allow read: if isMember(orgId);
       // お金と所有者の項目は画面から変えられない（クレジットを書き換える不正を防ぐ）
       allow update: if isAdmin(orgId)
-        && unchanged(['plan', 'credits', 'unlimited', 'ownerUid', 'createdAt', 'stripeCustomerId', 'keiriLink'])
+        && unchanged(['plan', 'credits', 'unlimited', 'ownerUid', 'createdAt', 'stripeCustomerId', 'keiriLink', 'staffViewsAt'])
         && str(request.resource.data.name, 40);
 
       // ロゴ・テーマ色・表示名。ログイン画面で使うので誰でも読める（秘密は置かない）
@@ -75,35 +85,41 @@ service cloud.firestore {
 
       match /members/{uid}    { allow read: if isMember(orgId); allow write: if false; }
       // AI経理（別のアプリ）から自動で届いた仕入れ明細。書くのは Functions（link/keiri.ts）だけ、読み込んだら画面が消す
-      match /purchaseInbox/{id} { allow read: if isMember(orgId); allow delete: if canEdit(orgId); allow create, update: if false; }
+      match /purchaseInbox/{id} { allow read, delete: if seeMoney(orgId); allow create, update: if false; }
       match /invites/{token}  { allow read: if isAdmin(orgId);  allow write: if false; }
 
       match /ingredients/{id} {
-        allow read: if isMember(orgId);
-        allow create, update: if canEdit(orgId) && validIngredient();
+        // スタッフは読めない（値段の入っていない staffIngredients を読む）。書くのはスタッフもできるが値段の項目は触れない
+        allow read: if seeMoney(orgId);
+        allow create: if canEdit(orgId) && validIngredient() && (seeMoney(orgId) || staffNewIngredient());
+        allow update: if canEdit(orgId) && validIngredient() && (seeMoney(orgId) || staffKeepsMoney());
         // 消してもレシピには材料名が残る（原価は「単価なし」になる）
         allow delete: if canEdit(orgId);
-        match /priceHistory/{h} { allow read: if isMember(orgId); allow write: if false; }
+        match /priceHistory/{h} { allow read: if seeMoney(orgId); allow write: if false; }
       }
+      // スタッフ用の写し（値段を抜いたもの）。書くのは Functions のトリガ（staff/mirror.ts）だけ
+      match /staffIngredients/{id} { allow read: if isMember(orgId); allow write: if false; }
+      match /staffRecipes/{id}     { allow read: if isMember(orgId); allow write: if false; }
 
       // 仕入れの画面で「今後も読み込まない」にした品名（ゴミ袋・ケーブルなど）。id は品名の照合キー
       match /purchaseIgnore/{id} {
-        allow read: if isMember(orgId);
-        allow create, update: if canEdit(orgId) && request.resource.data.keys().hasOnly(['name', 'updatedAt', 'createdAt', 'createdBy'])
+        allow read: if seeMoney(orgId);
+        allow create, update: if seeMoney(orgId) && request.resource.data.keys().hasOnly(['name', 'updatedAt', 'createdAt', 'createdBy'])
           && str(request.resource.data.name, 80);
-        allow delete: if canEdit(orgId);
+        allow delete: if seeMoney(orgId);
       }
 
       // 包装資材とセット：材料と同じく画面から書ける。値段やセットを直すとトリガがレシピの原価を計算し直す
+      // 値段が入っているので、オーナー・管理者だけ
       match /packaging/{id} {
-        allow read: if isMember(orgId);
-        allow create, update: if canEdit(orgId) && validPackaging();
-        allow delete: if canEdit(orgId);
+        allow read: if seeMoney(orgId);
+        allow create, update: if seeMoney(orgId) && validPackaging();
+        allow delete: if seeMoney(orgId);
       }
       match /packagingSets/{id} {
-        allow read: if isMember(orgId);
-        allow create, update: if canEdit(orgId) && validPackagingSet();
-        allow delete: if canEdit(orgId);
+        allow read: if seeMoney(orgId);
+        allow create, update: if seeMoney(orgId) && validPackagingSet();
+        allow delete: if seeMoney(orgId);
       }
 
       // よく使う工程（1つ以上の工程に名前を付けて保存し、レシピの編集ですぐ呼び出す）
@@ -140,21 +156,22 @@ service cloud.firestore {
       }
 
       // レシピは saveRecipe（Functions）だけが書く。版の記録・検索用の列を必ず作り直すため
+      // スタッフは読めない（売価・原価を抜いた staffRecipes を読む）
       match /recipes/{id} {
-        allow read: if isMember(orgId);
+        allow read: if seeMoney(orgId);
         allow write: if false;
-        match /versions/{v} { allow read: if isMember(orgId); allow write: if false; }
+        match /versions/{v} { allow read: if seeMoney(orgId); allow write: if false; }
       }
 
       // 原価高騰アラート：既読にするだけ画面からできる
       match /alerts/{id} {
-        allow read: if isMember(orgId);
-        allow update: if canEdit(orgId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
+        allow read: if seeMoney(orgId);
+        allow update: if seeMoney(orgId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
         allow create, delete: if false;
       }
 
       match /imports/{id}      { allow read: if isMember(orgId); allow write: if false; }
-      match /creditLedger/{id} { allow read: if isMember(orgId); allow write: if false; }
+      match /creditLedger/{id} { allow read: if seeMoney(orgId); allow write: if false; }
       match /aliases/{key}     { allow read: if isMember(orgId); allow write: if false; }
 
       // 既製品への票（1店舗1票。ドキュメントID＝商品ID）。数えるのは Functions のトリガ

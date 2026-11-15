@@ -12,6 +12,8 @@
 import { HttpsError } from "firebase-functions/v2/https";
 import { getFirestore, FieldValue, type Transaction } from "firebase-admin/firestore";
 import { CREDIT_COST, type CreditAction } from "../shared/credits";
+import { canRunAction, MONEY_ACTIONS } from "../shared/roles";
+import type { Role } from "../shared/types";
 import { costYen, GEMINI_MODEL, PROMPT_VERSION } from "../ai/config";
 import type { Usage } from "../ai/gemini";
 
@@ -51,6 +53,14 @@ export async function runWithCredits<T>(c: Charge, work: () => Promise<WorkResul
   const cost = unit * c.units;
   /** 実際に引いた量（無制限の店舗なら0） */
   let charged = cost;
+
+  // AIを使ってよい人か（スタッフは管理者がメンバー一覧でオンにした人だけ。お金のAIはオーナー・管理者だけ）
+  const member = (await orgRef.collection("members").doc(c.uid).get()).data();
+  if (!canRunAction(c.action, member?.role as Role | undefined, member?.ai === true)) {
+    throw new HttpsError("permission-denied", MONEY_ACTIONS.includes(c.action)
+      ? "この操作はオーナー・管理者だけが使えます。"
+      : "AIを使う許可がまだありません。お店の管理者に、設定のメンバーで「AIを使う」をオンにしてもらってください。");
+  }
 
   // ── 仮押さえ ──
   const replay = await db.runTransaction(async (tx) => {

@@ -10,7 +10,8 @@ import { useDoc } from "../../hooks/useData";
 const SOURCE: Record<GlobalIngredient["source"], string> = { mext: "食品成分表", base: "COOK ON の基本の材料", ugc: "お店どうしで確かめた既製品", shop: "お店の提案を運営が確かめた材料" };
 const SHOWN = ["kcal", "protein", "fat", "carbohydrate", "salt"];
 
-export function GlobalInfo({ globalRef, onApply }: { globalRef: string; onApply?: (p: { price: number; qty: number; unit: Unit }) => void }) {
+/** showPrice：参考価格を出すか（スタッフには出さない） */
+export function GlobalInfo({ globalRef, onApply, showPrice = true }: { globalRef: string; onApply?: (p: { price: number; qty: number; unit: Unit }) => void; showPrice?: boolean }) {
   const { data: g } = useDoc<GlobalIngredient>(`globalIngredients/${globalRef}`);
   if (!g) return null;
   const n = g.nutrition ?? {};
@@ -19,7 +20,7 @@ export function GlobalInfo({ globalRef, onApply }: { globalRef: string; onApply?
   return (
     <div className="space-y-2 rounded-xl bg-sand p-3 text-sm">
       <p className="text-xs text-muted">共有の材料「{g.name}」（{SOURCE[g.source] ?? g.source}）と結びついています</p>
-      {rp && (
+      {rp && showPrice && (
         <div className="space-y-1">
           <p><b>参考価格</b> {yen(rp.price)}（税込）/{rp.qty}{rp.unit}　<span className="text-xs text-muted">税抜 {yen(refPriceExTax(rp))}</span></p>
           <p className="text-xs text-muted">{rp.item}・{rp.area}・{rp.asOf.replace("-", "年")}月。お店の仕入れ値とは違うので、目安として使ってください。</p>

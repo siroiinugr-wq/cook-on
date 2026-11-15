@@ -9,7 +9,8 @@ import { randomBytes } from "node:crypto";
 import { REGION } from "../ai/config";
 import { requireRole } from "./auth";
 import type { Role } from "../shared/types";
-import { INVITE_EXPIRE_DAYS, INVITE_ROLES, type InviteRole } from "../shared/roles";
+import { canSeeMoney, INVITE_EXPIRE_DAYS, INVITE_ROLES, type InviteRole } from "../shared/roles";
+import { ensureStaffViews } from "../staff/mirror";
 
 /** ドキュメントのパスに入れる値は英数字だけ許す（"../" などで別の場所を読ませない） */
 function ids(data: unknown): { orgId: string; token: string } {
@@ -107,5 +108,7 @@ export const acceptInvite = onCall({ region: REGION }, async (req) => {
   const user = await getAuth().getUser(uid);
   const orgs = { ...((user.customClaims?.orgs as Record<string, Role> | undefined) ?? {}), [orgId]: role };
   await getAuth().setCustomUserClaims(uid, { ...user.customClaims, orgs });
+  // スタッフ・見るだけは値段を抜いた写しを読むので、まだ無ければ作る
+  if (!canSeeMoney(role)) await ensureStaffViews(orgId);
   return { orgId, role };
 });

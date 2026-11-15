@@ -6,7 +6,9 @@ import type { PackCtx } from "../shared/packaging";
 import { deriveRecipe, sanitizeRecipe, type RecipeInput } from "../shared/recipe";
 import type { Ingredient, PackagingMaterial, PackagingSet } from "../shared/types";
 import { REGION } from "../ai/config";
-import { idOf, requireRole, ROLES } from "../core/auth";
+import { idOf, requireRole, roleOf, ROLES } from "../core/auth";
+import { canSeeMoney } from "../shared/roles";
+import { RECIPE_KEEP_ON_STAFF_SAVE } from "../shared/staffView";
 import { syncMadeFrom } from "./madeFrom";
 
 export async function loadIngredientMap(orgId: string): Promise<Map<string, Ingredient>> {
@@ -58,13 +60,24 @@ export async function writeRecipe(orgId: string, recipeId: string | null, input:
   return { recipeId: ref.id, version };
 }
 
+/** スタッフ（値段を見られない人）が保存したときは、売価・目標原価率・包装を今のレシピから引き継ぐ。
+ *  スタッフの画面は値段を抜いた写しを読んでいるので、そのまま保存すると売価が消えてしまうため */
+async function keepMoney(orgId: string, recipeId: string | null, input: RecipeInput, staff: boolean): Promise<RecipeInput> {
+  if (!staff) return input;
+  const cur = recipeId ? (await getFirestore().doc(`organizations/${orgId}/recipes/${recipeId}`).get()).data() : undefined;
+  const out: Record<string, unknown> = { ...input, sellingPrice: null, targetCostRate: null, packaging: [] };
+  if (cur) for (const k of RECIPE_KEEP_ON_STAFF_SAVE) if (cur[k] !== undefined) out[k] = cur[k];
+  return out as unknown as RecipeInput;
+}
+
 export const saveRecipe = onCall({ region: REGION }, async (req) => {
   const orgId = idOf(req.data?.orgId, "店舗ID");
   const uid = requireRole(req.auth, orgId, ROLES.EDIT);
   const recipeId = req.data?.recipeId ? idOf(req.data.recipeId, "レシピID") : null;
   const input = sanitizeRecipe(req.data?.recipe);
   if (typeof input === "string") throw new HttpsError("invalid-argument", input);
-  return writeRecipe(orgId, recipeId, input, uid, String(req.data?.note ?? ""));
+  const staff = !canSeeMoney(roleOf(req.auth, orgId));
+  return writeRecipe(orgId, recipeId, await keepMoney(orgId, recipeId, input, staff), uid, String(req.data?.note ?? ""));
 });
 
 /** 過去の版に戻す＝その版の中身を新しい版として保存する（戻したことも履歴に残る） */
@@ -78,7 +91,8 @@ export const restoreRecipeVersion = onCall({ region: REGION }, async (req) => {
   if (!snap.exists) throw new HttpsError("not-found", "その版は見つかりません。");
   const input = sanitizeRecipe(snap.data());
   if (typeof input === "string") throw new HttpsError("failed-precondition", input);
-  return writeRecipe(orgId, recipeId, input, uid, `第${version}版に戻した`);
+  const staff = !canSeeMoney(roleOf(req.auth, orgId));
+  return writeRecipe(orgId, recipeId, await keepMoney(orgId, recipeId, input, staff), uid, `第${version}版に戻した`);
 });
 
 /** 一覧から外す（消さない。履歴も残る）。戻すときは archived=false で同じ関数を呼ぶ */

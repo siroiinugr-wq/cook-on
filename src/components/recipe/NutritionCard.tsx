@@ -1,4 +1,5 @@
 // レシピの栄養成分（1個あたり・100gあたり）。材料が結んだ共有の材料（食品成分表・既製品）の成分から計算した目安
+import { useOrgCtx } from "../../contexts/OrgContext";
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import { MEXT_CREDIT } from "@shared/mext";
@@ -11,7 +12,8 @@ export function NutritionCard({ recipe, byId, canEdit }: { recipe: Recipe; byId:
   const { nutOf, ready } = useNutritionOf(useMemo(() => [recipe], [recipe]), byId);
   const n = useMemo(() => recipeNutrition(recipe.items, byId, nutOf, recipe.yield), [recipe, byId, nutOf]);
   if (!ready) return null;
-  const tidy = canEdit && <Link to="/tidy#link" className="underline">データの整理で共有の材料に結ぶ</Link>;
+  const { seeMoney } = useOrgCtx();
+  const tidy = canEdit && seeMoney && <Link to="/tidy#link" className="underline">データの整理で共有の材料に結ぶ</Link>;
   if (!n.perPiece) {
     return (
       <section className={`${ui.card} space-y-1 text-sm`}>

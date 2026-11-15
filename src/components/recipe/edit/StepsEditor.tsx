@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { applyTemplate, recipesWithStep, stepsFromTemplate } from "@shared/steps";
 import type { Recipe, RecipeStep, StepTemplate } from "@shared/types";
+import { useOrgCtx } from "../../../contexts/OrgContext";
 import { useCol } from "../../../hooks/useData";
 import { uploadPhoto } from "../../../lib/photos";
 import { call, saveDoc } from "../../../lib/store";
@@ -22,7 +23,8 @@ export function StepsEditor({ steps, set: update, photoDir, orgId, uid, recipeId
   const [sharing, setSharing] = useState<number | null>(null);
   const templates = useStepTemplates(orgId);
   const tplById = useMemo(() => new Map(templates.map((t) => [t.id, t])), [templates]);
-  const all = useCol<Recipe>(`organizations/${orgId}/recipes`, { where: [["archived", "==", false]] });
+  const { recipesPath } = useOrgCtx();
+  const all = useCol<Recipe>(recipesPath, { where: [["archived", "==", false]] });
   const others = useMemo(() => all.list.filter((r) => r.id !== recipeId), [all.list, recipeId]);
 
   // 空の工程が1つだけなら、呼び出した工程で置き換える

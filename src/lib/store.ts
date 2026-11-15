@@ -9,6 +9,7 @@ import { httpsCallable } from "firebase/functions";
 import { db, functions, isDemo } from "./firebase";
 import { demoDelete, demoGet, demoListenCol, demoListenDoc, demoSet, demoUpdate } from "./demo";
 import { demoCall } from "./demoFunctions";
+import { INGREDIENT_MONEY_KEYS } from "@shared/staffView";
 
 export type Unsub = () => void;
 export type WithId<T> = T & { id: string };
@@ -63,8 +64,22 @@ export function listenCol<T>(path: string, cb: (list: WithId<T>[]) => void, opts
 export async function saveDoc(path: string, data: Record<string, unknown>, o: { merge?: boolean; stamp?: boolean } = {}): Promise<void> {
   const merge = o.merge !== false;
   const stamp = o.stamp !== false;
+  if (staffMode && INGREDIENT_DOC.test(path)) data = staffSafe(data, !merge);
   if (isDemo || !db) return demoSet(path, data, merge, stamp);
   await setDoc(doc(db, path), stamp ? { ...data, updatedAt: serverTimestamp() } : data, { merge });
+}
+
+// ── スタッフ（値段を見られない人）の書き込み ──
+// スタッフは値段を抜いた写しを読んでいるので、材料を書くときは値段の項目を送らない（ルールでも拒否される）。
+// 新しく作るときだけ、ルールが求める purchasePrice: null を入れる。OrgProvider がいまの役割で切り替える
+let staffMode = false;
+export function setStaffMode(v: boolean) {
+  staffMode = v;
+}
+const INGREDIENT_DOC = /^organizations\/[^/]+\/ingredients\/[^/]+$/;
+function staffSafe(data: Record<string, unknown>, create: boolean): Record<string, unknown> {
+  const out = Object.fromEntries(Object.entries(data).filter(([k]) => !(INGREDIENT_MONEY_KEYS as readonly string[]).includes(k)));
+  return create ? { ...out, purchasePrice: null } : out;
 }
 
 export async function patchDoc(path: string, data: Record<string, unknown>): Promise<void> {

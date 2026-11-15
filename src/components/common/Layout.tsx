@@ -29,8 +29,10 @@ export function tabOf(path: string): Tab {
 }
 
 export function Layout({ brand, children }: { brand: Branding; children: ReactNode }) {
-  const { org } = useOrgCtx();
+  const { org, seeMoney, canAi } = useOrgCtx();
   const todo = useTodo();
+  // スタッフ・見るだけには「仕入れ」を出さない（4つの入口）
+  const nav = seeMoney ? NAV : NAV.filter((n) => n.tab !== "buy");
   const here = tabOf(useLocation().pathname);
   const badge: Partial<Record<Tab, number>> = { buy: todo.inbox, todo: todo.badge };
   return (
@@ -49,13 +51,13 @@ export function Layout({ brand, children }: { brand: Branding; children: ReactNo
             <p className="truncate text-[11px] text-faint">{brand.appName}</p>
             <p className="truncate font-bold leading-tight">{org.name || "　"}</p>
           </div>
-          <CreditBadge credits={org.credits} />
+          {(seeMoney || canAi) && <CreditBadge credits={org.credits} link={seeMoney} />}
         </div>
       </header>
       <main className="mx-auto max-w-3xl px-4 py-4">{children}</main>
       <nav className="no-print fixed inset-x-0 bottom-0 z-30 border-t border-line bg-paper/95 backdrop-blur">
-        <div className="mx-auto grid max-w-3xl grid-cols-5">
-          {NAV.map((n) => (
+        <div className={`mx-auto grid max-w-3xl ${nav.length === 5 ? "grid-cols-5" : "grid-cols-4"}`}>
+          {nav.map((n) => (
             <Link key={n.to} to={n.to} aria-current={here === n.tab ? "page" : undefined}
               className={`relative flex flex-col items-center gap-0.5 py-2.5 text-[11px] ${here === n.tab ? "font-bold text-clay-strong" : "text-muted"}`}>
               <Icon name={n.icon} className="h-6 w-6" />

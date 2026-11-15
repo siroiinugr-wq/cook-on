@@ -32,6 +32,11 @@ export function requireRole(auth: CallableRequest["auth"], orgId: string, roles:
   return auth.uid;
 }
 
+/** その店舗での役割（requireRole のあとで使う） */
+export function roleOf(auth: CallableRequest["auth"], orgId: string): Role | undefined {
+  return (auth?.token.orgs as Record<string, Role> | undefined)?.[orgId];
+}
+
 /** 費用がかかる操作・外に影響する操作は、メール確認が済んだ人だけ（Googleログインは最初から確認済み） */
 export function requireVerified(auth: CallableRequest["auth"]): void {
   if (auth?.token.email_verified !== true) {

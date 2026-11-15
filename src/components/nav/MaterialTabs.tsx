@@ -2,6 +2,7 @@
 // 3つの違いが分かるように、タブに例を添え、下に「いま見ているもの」の説明を1行出す
 import { NavLink, useLocation } from "react-router-dom";
 import { Icon, type IconName } from "../common/Icon";
+import { useOrgCtx } from "../../contexts/OrgContext";
 
 const TABS: { to: string; label: string; eg: string; icon: IconName; about: string }[] = [
   { to: "/ingredients", label: "材料", eg: "粉・砂糖・卵", icon: "scale", about: "レシピに使う材料。仕入れ値・アレルゲン・ラベルの名前を持ち、原価と食品表示に使います。" },
@@ -11,11 +12,14 @@ const TABS: { to: string; label: string; eg: string; icon: IconName; about: stri
 
 export function MaterialTabs() {
   const path = useLocation().pathname;
-  const here = TABS.find((t) => t.to === path) ?? TABS[0];
+  // 包装資材は値段の画面なので、スタッフには出さない
+  const { seeMoney } = useOrgCtx();
+  const tabs = seeMoney ? TABS : TABS.filter((t) => t.to !== "/packaging");
+  const here = tabs.find((t) => t.to === path) ?? tabs[0];
   return (
     <div className="no-print -mt-1 mb-3 space-y-1.5">
-      <nav className="grid grid-cols-3 gap-1 rounded-xl bg-sand p-1">
-        {TABS.map((t) => (
+      <nav className={`grid ${tabs.length === 3 ? "grid-cols-3" : "grid-cols-2"} gap-1 rounded-xl bg-sand p-1`}>
+        {tabs.map((t) => (
           <NavLink key={t.to} to={t.to} end
             className={({ isActive }) => `flex flex-col items-center rounded-lg px-1 py-1.5 ${isActive ? "bg-paper text-clay-strong shadow-sm" : "text-muted"}`}>
             {({ isActive }) => <>

@@ -29,7 +29,9 @@ const AI: { to: string; icon: IconName; title: string; sub: string; action: Cred
 ];
 
 export function TodoPage() {
-  const { org, canEdit } = useOrgCtx();
+  const { org, canEdit, canAi, seeMoney, canRun } = useOrgCtx();
+  // スタッフには、許可されたAIのうち値段に関わらないものだけ。データの整理（/tidy）はオーナー・管理者だけ
+  const ai = AI.filter((a) => canRun(a.action) && (seeMoney || !a.to.startsWith("/tidy")));
   const todo = useTodo();
   return (
     <div className="space-y-5 pb-6">
@@ -47,14 +49,15 @@ export function TodoPage() {
         ))}
       </section>
 
-      {canEdit && (
+      {canAi && ai.length > 0 && (
         <section className="space-y-2">
           <div className="flex items-baseline gap-2">
             <h2 className="flex-1 text-sm font-bold text-ink-soft">AIでできること</h2>
-            <Link to="/credits" className="text-xs text-clay-strong underline">残り {creditText(org.credits)} クレジット</Link>
+            {seeMoney ? <Link to="/credits" className="text-xs text-clay-strong underline">残り {creditText(org.credits)} クレジット</Link>
+              : <span className="text-xs text-muted">残り {creditText(org.credits)} クレジット</span>}
           </div>
           <div className="grid gap-2 sm:grid-cols-2">
-            {AI.map((a) => (
+            {ai.map((a) => (
               <Link key={a.title} to={a.to} className={`${ui.card} flex items-start gap-3 py-3`}>
                 <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-clay-soft text-clay-strong"><Icon name={a.icon} /></span>
                 <span className="min-w-0 flex-1">
@@ -72,9 +75,9 @@ export function TodoPage() {
         <section className="space-y-2">
           <h2 className="text-sm font-bold text-ink-soft">無料で整える</h2>
           <div className="divide-y divide-line overflow-hidden rounded-2xl border border-line bg-paper">
-            <Row to="/tidy" icon="sparkle" title="データの整理" sub="アレルゲン・仕入れ値・何個分・名前・表記ゆれを上から順に" />
+            {seeMoney && <Row to="/tidy" icon="sparkle" title="データの整理" sub="アレルゲン・仕入れ値・何個分・名前・表記ゆれを上から順に" />}
             <Row to="/recipes/new" icon="plus" title="新しいレシピを作る" sub="分類から似たレシピをコピーして始められます" />
-            <Row to="/packaging" icon="tag" title="包装資材とセット" sub="袋・脱酸素剤の値段を1個あたりの原価に" />
+            {seeMoney && <Row to="/packaging" icon="tag" title="包装資材とセット" sub="袋・脱酸素剤の値段を1個あたりの原価に" />}
           </div>
         </section>
       )}

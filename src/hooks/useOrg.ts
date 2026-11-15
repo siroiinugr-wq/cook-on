@@ -38,6 +38,8 @@ export interface Org {
   settings: OrgSettings;
   /** AI経理との自動連携（link/keiri.ts が書く。無ければ連携していない） */
   keiriLink: { createdAt: Date | null; lastAt: Date | null; count: number; sender: string } | null;
+  /** スタッフ用の写し（値段を抜いたレシピと材料）を作り終えたか（staff/mirror.ts が付ける。無ければ管理者の画面が1回作る） */
+  staffViewsReady: boolean;
 }
 
 export function useOrg(orgId: string) {
@@ -50,6 +52,7 @@ export function useOrg(orgId: string) {
     plan: data?.plan ?? "free",
     credits: unlimited ? Infinity : Number(data?.credits ?? 0),
     unlimited,
+    staffViewsReady: !!(data as { staffViewsAt?: unknown } | null)?.staffViewsAt,
     keiriLink: k ? { createdAt: toDate(k.createdAt), lastAt: toDate(k.lastAt), count: Number(k.count ?? 0), sender: String(k.sender ?? "") } : null,
     settings: {
       targetCostRate: s.targetCostRate || DEFAULT_TARGET_RATE,

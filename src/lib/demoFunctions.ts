@@ -1,5 +1,6 @@
 // デモモードの「にせの Cloud Functions」。本番の関数と同じ名前・同じ引数・同じ返り値の形にしてある。
 // レシピの保存と版、原価アラートは shared の同じ計算で本物どおりに動く。AIの部分だけ demoAi.ts の簡易版。
+import { RECIPE_KEEP_ON_STAFF_SAVE } from "@shared/staffView";
 import { CREDIT_COST, LABEL_NAME_BATCH, type CreditAction } from "@shared/credits";
 import { DEFAULT_TARGET_RATE } from "@shared/cost";
 import type { PackCtx } from "@shared/packaging";
@@ -31,11 +32,13 @@ export function demoPackaging(): PackCtx {
 
 /** 本番の writeRecipe と同じ：今の中身を versions に写してから版を上げる */
 export function demoWriteRecipe(recipeId: string | null, raw: unknown, note = "") {
-  const input = sanitizeRecipe(raw);
-  if (typeof input === "string") throw new Error(input);
+  const sane = sanitizeRecipe(raw);
+  if (typeof sane === "string") throw new Error(sane);
   const id = recipeId ?? rid();
   const path = `${O}/recipes/${id}`;
   const cur = demoGet(path);
+  // スタッフ（?demoRole=editor）が保存したら、売価・目標原価率・包装は今のレシピから引き継ぐ（本番の recipes/save.ts と同じ）
+  const input = demoStaff() ? { ...sane, ...Object.fromEntries(RECIPE_KEEP_ON_STAFF_SAVE.map((k) => [k, cur?.[k] ?? (k === "packaging" ? [] : null)])) } as typeof sane : sane;
   if (recipeId && !cur) throw new Error("レシピが見つかりません。");
   const prev = cur ? Number(cur.version ?? 1) : 0;
   if (cur) demoWrite(`${path}/versions/${prev}`, { ...cur, archivedAt: now() }, false);
@@ -69,9 +72,20 @@ export async function demoWithCredits<T>(action: CreditAction, units: number, wo
   }
 }
 
+function demoStaff(): boolean {
+  try {
+    return ["editor", "viewer"].includes(localStorage.getItem("cookon-demoRole") ?? "");
+  } catch {
+    return false;
+  }
+}
+
 export async function demoCall<T>(name: string, data: object): Promise<T> {
   const d = data as Data;
   switch (name) {
+    case "syncStaffViews":
+    case "updateMember":
+      return { ok: true } as T;
     case "saveRecipe":
       return demoWriteRecipe((d.recipeId as string) || null, d.recipe, String(d.note ?? "")) as T;
     case "restoreRecipeVersion": {
