@@ -10,10 +10,12 @@ import { WELCOME_CREDITS } from "../shared/credits";
 import { DEFAULT_TARGET_RATE } from "../shared/cost";
 import { DEFAULT_BRANDING, type Role } from "../shared/types";
 
-const EDIT: Role[] = ["owner", "admin", "editor"];
+const EDIT: Role[] = ["owner", "admin", "manager", "editor"];
 const ADMIN: Role[] = ["owner", "admin"];
-const ANY: Role[] = ["owner", "admin", "editor", "viewer"];
-export const ROLES = { EDIT, ADMIN, ANY };
+/** 経営の情報（値段・仕入れ・お金のAI）を使える人。shared/roles.ts の canSeeMoney と同じ */
+const MONEY: Role[] = ["owner", "admin", "manager"];
+const ANY: Role[] = ["owner", "admin", "manager", "editor", "viewer"];
+export const ROLES = { EDIT, ADMIN, MONEY, ANY };
 
 /** 1人が作れる店舗の数（お試しクレジット目当ての作りすぎを防ぐ） */
 const MAX_OWNED_ORGS = 5;
@@ -30,6 +32,11 @@ export function requireRole(auth: CallableRequest["auth"], orgId: string, roles:
   const role = (auth.token.orgs as Record<string, Role> | undefined)?.[orgId];
   if (!role || !roles.includes(role)) throw new HttpsError("permission-denied", "この操作の権限がありません。");
   return auth.uid;
+}
+
+/** その店舗での役割（requireRole のあとで使う） */
+export function roleOf(auth: CallableRequest["auth"], orgId: string): Role | undefined {
+  return (auth?.token.orgs as Record<string, Role> | undefined)?.[orgId];
 }
 
 /** 費用がかかる操作・外に影響する操作は、メール確認が済んだ人だけ（Googleログインは最初から確認済み） */

@@ -60,7 +60,7 @@ const TAXES = [0, 0.08, 0.1];
 
 export const readInvoices = onCall({ region: REGION, memory: "1GiB", timeoutSeconds: 540, secrets: [GEMINI_API_KEY] }, async (req) => {
   const orgId = idOf(req.data?.orgId, "店舗ID");
-  const uid = requireRole(req.auth, orgId, ROLES.EDIT);
+  const uid = requireRole(req.auth, orgId, ROLES.MONEY);
   requireVerified(req.auth);
   const requestId = requestIdOf(req.data?.requestId);
   const batchId = idOf(req.data?.batchId, "写真のまとまり");
@@ -130,7 +130,7 @@ const MATCH_MAX_LINES = 200;
  */
 export const matchPurchaseLines = onCall({ region: REGION, timeoutSeconds: 300, secrets: [GEMINI_API_KEY] }, async (req) => {
   const orgId = idOf(req.data?.orgId, "店舗ID");
-  const uid = requireRole(req.auth, orgId, ROLES.EDIT);
+  const uid = requireRole(req.auth, orgId, ROLES.MONEY);
   requireVerified(req.auth);
   const requestId = requestIdOf(req.data?.requestId);
   const names: string[] = (Array.isArray(req.data?.names) ? req.data.names : []).map((x: unknown) => String(x ?? "").trim().slice(0, 80));
@@ -210,7 +210,7 @@ const SEARCH_PARALLEL = 4;
  */
 export const searchPackSizes = onCall({ region: REGION, timeoutSeconds: 300, secrets: [GEMINI_API_KEY] }, async (req) => {
   const orgId = idOf(req.data?.orgId, "店舗ID");
-  const uid = requireRole(req.auth, orgId, ROLES.EDIT);
+  const uid = requireRole(req.auth, orgId, ROLES.MONEY);
   requireVerified(req.auth);
   const requestId = requestIdOf(req.data?.requestId);
   type In = { name: string; generic: string; price: number; tax: number; clue: string };

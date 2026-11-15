@@ -39,11 +39,11 @@ const input = `w-full ${inputSm}`;
 const clean = <T extends object>(o: T): T => JSON.parse(JSON.stringify(o)) as T;
 
 export function LabelsPage() {
-  const { orgId, org, canEdit } = useOrgCtx();
+  const { orgId, org, canEdit, recipesPath } = useOrgCtx();
   const confirm = useConfirm();
   const [params] = useSearchParams();
   const ings = useIngredients(orgId);
-  const all = useCol<Recipe>(`organizations/${orgId}/recipes`);
+  const all = useCol<Recipe>(recipesPath);
   const sets = useCol<Omit<LabelSet, "id">>(`organizations/${orgId}/labelSets`);
   const savedItems = useCol<Omit<LabelItem, "id">>(`organizations/${orgId}/labelItems`);
   const itemList = useMemo(() => (savedItems.list as LabelItem[]).slice().sort((a, b) => a.name.localeCompare(b.name, "ja")), [savedItems.list]);

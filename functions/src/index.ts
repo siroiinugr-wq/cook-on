@@ -5,6 +5,8 @@ initializeApp();
 export { syncMemberClaims, createOrganization } from "./core/auth";
 export { createInvite, revokeInvite, peekInvite, acceptInvite } from "./core/invite";
 export { setNickname, hideMemberEmails } from "./core/profile";
+export { updateMember, syncStaffViews } from "./core/members";
+export { onRecipeMirror, onIngredientMirror } from "./staff/mirror";
 export { suggestIngredients, aiMatchIngredients } from "./ai/normalize";
 export { parseImport, commitImport, archiveImport, removeImports } from "./ai/importRecipes";
 export { parseImportPhotos } from "./ai/importPhotos";

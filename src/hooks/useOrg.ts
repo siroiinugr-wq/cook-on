@@ -1,5 +1,6 @@
 // いま開いている店舗の情報（名前・クレジット残高・設定）
 import { DEFAULT_TARGET_RATE } from "@shared/cost";
+import type { RoleNames } from "@shared/roles";
 import { toDate } from "../lib/store";
 import { useDoc } from "./useData";
 
@@ -27,6 +28,8 @@ export interface OrgSettings {
   labelNutrition: boolean;
   /** 栄養成分を何あたりで書くか（既定は100gあたり。"piece"＝1個あたり） */
   labelNutritionBasis: "100g" | "piece";
+  /** 役割のお店ごとの呼び方（店長・製造など。無ければ標準の「編集＋原価」など。shared/roles.ts の roleLabel） */
+  roleNames: RoleNames;
 }
 
 export interface Org {
@@ -38,6 +41,8 @@ export interface Org {
   settings: OrgSettings;
   /** AI経理との自動連携（link/keiri.ts が書く。無ければ連携していない） */
   keiriLink: { createdAt: Date | null; lastAt: Date | null; count: number; sender: string } | null;
+  /** スタッフ用の写し（値段を抜いたレシピと材料）を作り終えたか（staff/mirror.ts が付ける。無ければ管理者の画面が1回作る） */
+  staffViewsReady: boolean;
 }
 
 export function useOrg(orgId: string) {
@@ -50,6 +55,7 @@ export function useOrg(orgId: string) {
     plan: data?.plan ?? "free",
     credits: unlimited ? Infinity : Number(data?.credits ?? 0),
     unlimited,
+    staffViewsReady: !!(data as { staffViewsAt?: unknown } | null)?.staffViewsAt,
     keiriLink: k ? { createdAt: toDate(k.createdAt), lastAt: toDate(k.lastAt), count: Number(k.count ?? 0), sender: String(k.sender ?? "") } : null,
     settings: {
       targetCostRate: s.targetCostRate || DEFAULT_TARGET_RATE,
@@ -65,6 +71,7 @@ export function useOrg(orgId: string) {
       labelDatePrint: s.labelDatePrint !== false,
       labelNutrition: s.labelNutrition !== false,
       labelNutritionBasis: s.labelNutritionBasis === "piece" ? "piece" : "100g",
+      roleNames: s.roleNames && typeof s.roleNames === "object" ? s.roleNames : {},
     },
   };
   return { org, loading };

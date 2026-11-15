@@ -12,7 +12,8 @@ interface Step {
   chips?: { id: string; name: string; to: string; extra?: { label: string; to: string } }[];
 }
 
-export function recipeNextSteps(recipe: Recipe, byId: Map<string, Ingredient>): Step[] {
+/** money＝値段の見える役割か。見えない役割には仕入れ値・包装・売価の項目を出さない（そもそも値段が届かない） */
+export function recipeNextSteps(recipe: Recipe, byId: Map<string, Ingredient>, money = true): Step[] {
   const me = `/recipes/${recipe.id}`;
   const edit = `${me}/edit`;
   const openIng = (id: string) => `/ingredients?open=${id}&from=${encodeURIComponent(me)}`;
@@ -29,7 +30,7 @@ export function recipeNextSteps(recipe: Recipe, byId: Map<string, Ingredient>): 
   if (unlinked.length) steps.push({ key: "link", text: `材料の一覧に結んでいない材料が${unlinked.length}件（${unlinked.slice(0, 3).map((x) => x.name).join("・")}${unlinked.length > 3 ? "…" : ""}）。編集で「材料を選ぶ」から登録できます`, to: edit });
 
   const noPrice = linked.filter((i) => i.purchasePrice === null && !i.madeFrom);
-  if (noPrice.length) {
+  if (money && noPrice.length) {
     steps.push({
       key: "price", text: `仕入れ値の無い材料が${noPrice.length}件。買う材料は値段を、お店で作る材料はレシピを入れると原価が出ます`,
       chips: noPrice.map((i) => ({ id: i.id, name: i.name, to: openIng(i.id), // 自家製らしい名前（カスタード・生地など）だけ「レシピを作る」も並べる。ほかは材料を開けば同じボタンがある
@@ -42,14 +43,14 @@ export function recipeNextSteps(recipe: Recipe, byId: Map<string, Ingredient>): 
     steps.push({ key: "allergen", text: `アレルゲンを確かめていない材料が${unconfirmed.length}件（確かめるまでラベルを印刷できません）`, chips: unconfirmed.map((i) => ({ id: i.id, name: i.name, to: openIng(i.id) })) });
   }
 
-  if (!recipe.packaging?.length && !homemade) steps.push({ key: "pack", text: "包装（袋・脱酸素剤など）が付いていません。付けると1個の原価に入ります", to: edit });
-  if (recipe.sellingPrice === null && !homemade) steps.push({ key: "sell", text: "売価が未定です。入れると原価率が出ます", to: edit });
+  if (money && !recipe.packaging?.length && !homemade) steps.push({ key: "pack", text: "包装（袋・脱酸素剤など）が付いていません。付けると1個の原価に入ります", to: edit });
+  if (money && recipe.sellingPrice === null && !homemade) steps.push({ key: "sell", text: "売価が未定です。入れると原価率が出ます", to: edit });
   if (!recipe.steps.length) steps.push({ key: "steps", text: "作り方がまだありません。作業モードで工程を見ながら作れるようになります", to: edit });
   return steps;
 }
 
-export function RecipeNext({ recipe, byId }: { recipe: Recipe; byId: Map<string, Ingredient> }) {
-  const steps = recipeNextSteps(recipe, byId);
+export function RecipeNext({ recipe, byId, money }: { recipe: Recipe; byId: Map<string, Ingredient>; money: boolean }) {
+  const steps = recipeNextSteps(recipe, byId, money);
   if (!steps.length) return null;
   return (
     <section className={`${ui.card} space-y-2`}>

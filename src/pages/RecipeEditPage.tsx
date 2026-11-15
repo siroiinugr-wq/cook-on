@@ -48,7 +48,7 @@ export function RecipeEditPage() {
 function RecipeEditor() {
   const { id } = useParams();
   const loc = useLocation();
-  const { orgId, uid, org, canEdit } = useOrgCtx();
+  const { orgId, uid, org, canEdit, recipesPath, seeMoney } = useOrgCtx();
   const { recipe, loading } = useRecipe(orgId, id);
   const ings = useIngredients(orgId);
   const pack = usePackaging(orgId);
@@ -58,7 +58,7 @@ function RecipeEditor() {
   const forIng = !id && sp.get("for") ? ings.byId.get(sp.get("for")!) ?? null : null;
   const [trial, setTrial] = useState(() => (sp.get("resume") === "1" && loadDraft<Draft, Row>(draftKey(id, sp.get("for")))?.trial) || false);
   // 今までに使った分類とタグ（押すだけで入れられるように）
-  const all = useCol<Recipe>(`organizations/${orgId}/recipes`);
+  const all = useCol<Recipe>(recipesPath);
   const usedCats = useMemo(() => countSort(all.list.map((r) => r.category)), [all.list]);
   const subsByCat = useMemo(() => {
     const m = new Map<string, string[]>();
@@ -220,11 +220,12 @@ function RecipeEditor() {
           </div>
           {field("1個の重さ g（ラベル用・任意）", <NumInput className={ui.input} value={d.yield.gramsPerPiece} onValue={(n) => setDraft((cur) => (cur ? { ...cur, yield: { ...cur.yield, gramsPerPiece: n || null } } : cur))} />)}
         </div>
-        <div className="grid grid-cols-2 gap-2">
+        {/* 売価・原価率・包装はオーナー・管理者・編集＋原価だけ（スタッフが保存しても、サーバーが今の値を引き継ぐ） */}
+        {seeMoney && <div className="grid grid-cols-2 gap-2">
           {field("売価（税抜・円）", <NumInput className={ui.input} decimal={false} value={d.sellingPrice} placeholder="未定" onValue={(n) => set({ sellingPrice: n || null })} />)}
           {field(`目標の原価率 %（空ならお店の${Math.round(org.settings.targetCostRate * 100)}%）`, <input className={ui.input} inputMode="decimal"
             value={d.targetCostRate === null ? "" : Math.round(d.targetCostRate * 1000) / 10} onChange={(e) => { const v = numOrNull(e.target.value); set({ targetCostRate: v ? v / 100 : null }); }} />)}
-        </div>
+        </div>}
       </section>
 
       <section className="space-y-2">
@@ -232,10 +233,10 @@ function RecipeEditor() {
         <ItemsEditor rows={rows} set={setRows} own={ings.list} orgId={orgId} uid={uid} credits={org.credits}
           onOpenIngredient={(iid) => (ings.byId.has(iid) ? setOpenIng(iid) : setPendingIng(iid))} onMakeRecipe={makeRecipeFor} />
       </section>
-      <section className="space-y-2">
+      {seeMoney && <section className="space-y-2">
         <h2 className="font-bold">包装（1個あたり）</h2>
         <PackagingEditor lines={d.packaging ?? []} set={(packaging) => set({ packaging })} materials={pack.materials} sets={pack.sets} ctx={pack.ctx} />
-      </section>
+      </section>}
       <section className="space-y-2">
         <h2 className="font-bold">作り方</h2>
         <StepsEditor steps={d.steps} set={setSteps} photoDir={photoDir} orgId={orgId} uid={uid} recipeId={id ?? null} />
@@ -254,10 +255,10 @@ function RecipeEditor() {
       )}
       <div className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-paper/95 px-4 py-3 backdrop-blur">
         <div className="mx-auto flex max-w-3xl items-center gap-3">
-          <div className="min-w-0 flex-1 text-sm">
+          {seeMoney ? <div className="min-w-0 flex-1 text-sm">
             <p>1個 <b>{yen(per)}</b>{missing > 0 && <span className="ml-1 text-xs text-warn-strong">（{missing}件 未計算）</span>}</p>
             <RateBadge rate={costRate(per, d.sellingPrice)} target={d.targetCostRate ?? org.settings.targetCostRate} />
-          </div>
+          </div> : <div className="flex-1" />}
           <button onClick={save} disabled={busy || !d.name.trim()} className={ui.primary}>{busy ? "保存しています…" : "保存する"}</button>
         </div>
         {err && <p className="mx-auto mt-1 max-w-3xl text-sm text-ng">{err}</p>}

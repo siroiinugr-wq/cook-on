@@ -27,6 +27,7 @@ import { per100 } from "@shared/invoice";
 import { numText } from "../../lib/num";
 import { fmtAt } from "../../lib/date";
 import { NumInput } from "../common/NumInput";
+import { useOrgCtx } from "../../contexts/OrgContext";
 
 const BUY_UNITS = UNITS.filter((u) => u !== "適量");
 const PIECE: Unit[] = ["個", "枚", "本"];
@@ -40,13 +41,15 @@ export function IngredientSheet({ orgId, uid, ing, usedIn, usedBy = [], recipes 
   /** 「この材料のレシピを作る」を押したとき（レシピの編集の中から開いたとき：書きかけをしまってから寄り道する）。無ければふつうのリンク */
   makeRecipe?: (ing: Ingredient) => void;
 }) {
+  // スタッフ（値段を見られない人）には仕入れ値・ネットの値段・仕入れ先・値段の記録を出さない。保存のときも値段の項目は送らない（lib/store.ts）
+  const { seeMoney } = useOrgCtx();
   const [d, setD] = useState<Omit<Ingredient, "id">>(ing ?? { name: "", purchasePrice: null, purchaseQty: 1, purchaseUnit: "kg", allergens: [], globalRef: null });
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const confirm = useConfirm();
   // 既製品として登録する（パッケージの裏を撮るとAIが原材料・アレルゲンを読む）。この材料はそのまま残る
   const [asProduct, setAsProduct] = useState(false);
-  const hist = useCol<Hist>(ing ? `organizations/${orgId}/ingredients/${ing.id}/priceHistory` : null, { orderBy: ["at", "desc"], limit: 10 });
+  const hist = useCol<Hist>(ing && seeMoney ? `organizations/${orgId}/ingredients/${ing.id}/priceHistory` : null, { orderBy: ["at", "desc"], limit: 10 });
   // 前の値は「いまの値」から作る（写真を上げている間に打った字が、上げ終わったときに消えないように）
   const set = (p: Partial<Ingredient>) => setD((cur) => ({ ...cur, ...p }));
   // 100gあたりの成分を手で入れる欄（袋の裏の表示を写す）。空なら結んだ共有の材料（成分表）の値を使う
@@ -130,9 +133,9 @@ export function IngredientSheet({ orgId, uid, ing, usedIn, usedBy = [], recipes 
           {d.photoPath && <button type="button" className="text-muted underline" onClick={() => set({ photoPath: null })}>写真を外す</button>}
         </div>
         {ingById && (
-          <MadeFrom ing={ing} d={d} recipes={recipes} ingById={ingById} made={made} perG={perG} makeRecipe={makeRecipe} onPick={(madeFrom) => set({ madeFrom })} />
+          <MadeFrom ing={ing} d={d} recipes={recipes} ingById={ingById} made={made} perG={perG} money={seeMoney} makeRecipe={makeRecipe} onPick={(madeFrom) => set({ madeFrom })} />
         )}
-        {!made && <div className="space-y-1">
+        {!made && seeMoney && <div className="space-y-1">
           <div className="flex items-center justify-between gap-2">
             <span className={ui.label}>仕入れ値</span>
             <div className="flex overflow-hidden rounded-lg border border-line text-xs">
@@ -158,9 +161,9 @@ export function IngredientSheet({ orgId, uid, ing, usedIn, usedBy = [], recipes 
           <p className="text-xs text-muted">{perG !== null ? `1gあたり ${yen(perG)}（税抜）／1kgあたり ${yen(perG * 1000)}` : "1gあたりの値段を出すには、仕入れ値と量を入れてください。"}</p>
         </div>}
         {!made && <>
-        {ing && <WebOfferList ing={{ ...ing, ...d, id: ing.id }} onUse={(o) => { const p = offerPatch(o); setPriceText(String(o.price)); set(p); }} />}
+        {ing && seeMoney && <WebOfferList ing={{ ...ing, ...d, id: ing.id }} onUse={(o) => { const p = offerPatch(o); setPriceText(String(o.price)); set(p); }} />}
         <NutritionInput text={nutText} set={setNutText} hasGlobal={!!d.globalRef} />
-        {d.globalRef && <GlobalInfo globalRef={d.globalRef} onApply={(p) => { setPriceText(String(p.price)); set({ purchasePrice: p.price, priceTax: 0, purchaseQty: p.qty, purchaseUnit: p.unit, priceSource: "ref" }); }} />}
+        {d.globalRef && <GlobalInfo globalRef={d.globalRef} showPrice={seeMoney} onApply={(p) => { setPriceText(String(p.price)); set({ purchasePrice: p.price, priceTax: 0, purchaseQty: p.qty, purchaseUnit: p.unit, priceSource: "ref" }); }} />}
         <div className="grid grid-cols-2 gap-2">
           <label className="space-y-1"><span className={ui.label}>1個・1枚・1本の重さ g{PIECE.includes(d.purchaseUnit) ? "（必要）" : ""}</span>
             <NumInput className={input} value={d.gramsPerPiece} onValue={(gramsPerPiece) => set({ gramsPerPiece })} /></label>
@@ -181,7 +184,7 @@ export function IngredientSheet({ orgId, uid, ing, usedIn, usedBy = [], recipes 
           <p className={ui.label}>別名（レシピでの呼び方。取り込みのとき、この名前もこの材料に結びつきます）</p>
           <Aliases list={d.aliases ?? []} set={(aliases) => set({ aliases })} />
         </div>
-        <Accordion title="ラベル・仕入れ先" summary={d.labelName ? `ラベル：${d.labelName}` : "ラベル（品質表示）に出す名前を変えるとき"} defaultOpen={!!ing && !d.labelName}>
+        <Accordion title={seeMoney ? "ラベル・仕入れ先" : "ラベル"} summary={d.labelName ? `ラベル：${d.labelName}` : "ラベル（品質表示）に出す名前を変えるとき"} defaultOpen={!!ing && !d.labelName}>
           <div className="space-y-2">
             <label className="block space-y-1"><span className={ui.label}>ラベルに出す名前（既製品は中身まで。例：チョコレート（砂糖、カカオマス、ココアバター））</span>
               <textarea className={`${input} h-16`} value={d.labelName ?? ""} maxLength={300} onChange={(e) => set({ labelName: e.target.value })} /></label>
@@ -191,7 +194,7 @@ export function IngredientSheet({ orgId, uid, ing, usedIn, usedBy = [], recipes 
               </button>
             )}
             <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={!!d.isAdditive} onChange={(e) => set({ isAdditive: e.target.checked })} />添加物（ラベルで「／」のあとに書く）</label>
-            <label className="block space-y-1"><span className={ui.label}>仕入れ先</span><input className={input} value={d.supplier ?? ""} maxLength={60} onChange={(e) => set({ supplier: e.target.value })} /></label>
+            {seeMoney && <label className="block space-y-1"><span className={ui.label}>仕入れ先</span><input className={input} value={d.supplier ?? ""} maxLength={60} onChange={(e) => set({ supplier: e.target.value })} /></label>}
           </div>
         </Accordion>
         {ing && hist.list.length > 0 && (
@@ -206,7 +209,7 @@ export function IngredientSheet({ orgId, uid, ing, usedIn, usedBy = [], recipes 
         )}
         {ing && usedIn > 0 && (
           <div className="space-y-1">
-            <p className="text-xs text-muted">{usedIn}件のレシピで使っています。値段を変えると、その原価も自動で計算し直します。</p>
+            <p className="text-xs text-muted">{usedIn}件のレシピで使っています。{seeMoney ? "値段を変えると、その原価も自動で計算し直します。" : ""}</p>
             {usedBy.length > 0 && (
               <div className="flex flex-wrap gap-1.5">
                 {usedBy.slice(0, 12).map((r) => <Link key={r.id} to={`/recipes/${r.id}`} className={`${ui.chip} text-clay-strong`}>{r.name}</Link>)}
@@ -224,9 +227,9 @@ export function IngredientSheet({ orgId, uid, ing, usedIn, usedBy = [], recipes 
 }
 
 /** 自家製の材料：作るレシピを選ぶ。名前が同じレシピを先に出し、この材料を使うレシピ（ぐるぐる回る）は出さない */
-function MadeFrom({ ing, d, recipes, ingById, made, perG, onPick, makeRecipe }: {
+function MadeFrom({ ing, d, recipes, ingById, made, perG, money, onPick, makeRecipe }: {
   ing: Ingredient | null; d: Omit<Ingredient, "id">; recipes: Recipe[]; ingById: Map<string, Ingredient>;
-  made: ReturnType<typeof madeFromPatch> | null; perG: number | null; onPick: (id: string | null) => void;
+  made: ReturnType<typeof madeFromPatch> | null; perG: number | null; money: boolean; onPick: (id: string | null) => void;
   makeRecipe?: (ing: Ingredient) => void;
 }) {
   const [open, setOpen] = useState(!!d.madeFrom);
@@ -239,7 +242,8 @@ function MadeFrom({ ing, d, recipes, ingById, made, perG, onPick, makeRecipe }: 
   const cur = d.madeFrom ? recipes.find((r) => r.id === d.madeFrom) : undefined;
 
   // 仕入れ値が無い材料は、お店で作っているものかもしれない。レシピを作れば値段（材料の合計÷重さ）がレシピから入る
-  const noPrice = d.purchasePrice === null;
+  // 値段の見えない役割（編集のみ・閲覧のみ）には仕入れ値が届かないので、「仕入れ値が無い」とは言わない
+  const noPrice = money && d.purchasePrice === null;
   const newRecipe = ing ? `/recipes/new?for=${ing.id}&from=${encodeURIComponent(`/ingredients?open=${ing.id}`)}` : "";
   if (!open && !d.madeFrom) {
     return (
@@ -274,11 +278,11 @@ function MadeFrom({ ing, d, recipes, ingById, made, perG, onPick, makeRecipe }: 
       </label>
       {cur && made && (
         <div className="space-y-1 text-sm">
-          <p>
+          {money && <p>
             材料の合計 <b>{made.purchaseQty.toLocaleString("ja-JP")}g</b> で <b>{made.purchasePrice === null ? "—" : yen(made.purchasePrice)}</b>
             {perG !== null && <span className="text-muted">（1gあたり {yen(perG)}）</span>}
-          </p>
-          {made.missing > 0 && <p className="text-xs text-warn-strong">レシピの材料のうち{made.missing}行は値段か重さが分からないので、まだ原価に入りません。レシピの材料を直すと入ります。</p>}
+          </p>}
+          {money && made.missing > 0 && <p className="text-xs text-warn-strong">レシピの材料のうち{made.missing}行は値段か重さが分からないので、まだ原価に入りません。レシピの材料を直すと入ります。</p>}
           <p className="text-xs">アレルゲン：{made.allergens.length ? made.allergens.map(allergenName).join("・") : "なし"}
             {!made.allergensConfirmed && <span className="ml-1 text-warn-strong">（中身にまだ確かめていない材料があります）</span>}</p>
           <MadeNutrition ing={ing} recipeId={cur.id} />

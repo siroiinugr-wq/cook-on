@@ -12,6 +12,7 @@ import { call, newRequestId } from "../../../lib/store";
 import { CostTag } from "../../common/CreditBadge";
 import { Icon } from "../../common/Icon";
 import { useCreditAction } from "../../common/useCreditAction";
+import { useOrgCtx } from "../../../contexts/OrgContext";
 import { ui } from "../../common/ui";
 import { IngredientPicker } from "./IngredientPicker";
 import { NumInput } from "../../common/NumInput";
@@ -38,6 +39,7 @@ export function ItemsEditor({ rows, set, own, orgId, uid, credits, onOpenIngredi
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
   const run = useCreditAction(credits);
+  const { canAi, seeMoney } = useOrgCtx();
   const byId = new Map(own.map((i) => [i.id, i]));
   const open = rows.filter((r) => !r.ingredientId && r.name.trim() && r.unit !== "適量");
 
@@ -115,17 +117,17 @@ export function ItemsEditor({ rows, set, own, orgId, uid, credits, onOpenIngredi
             </div>
             <div className="flex flex-wrap items-center gap-1.5 text-xs">
               <button onClick={() => setPicking(r)} className={`rounded-full px-2 py-0.5 ${ing ? "bg-ok-soft text-ok-strong" : "bg-warn-soft text-warn-strong"}`}>
-                {ing ? `✓ ${ing.name}${ing.purchasePrice === null && !ing.madeFrom ? "（仕入れ値なし）" : ""}` : "材料を選ぶ"}
+                {ing ? `✓ ${ing.name}${seeMoney && ing.purchasePrice === null && !ing.madeFrom ? "（仕入れ値なし）" : ""}` : "材料を選ぶ"}
               </button>
               {ing && onOpenIngredient && (
                 <button className="rounded-full border border-line px-2 py-0.5 text-ink-soft" onClick={() => onOpenIngredient(ing.id)}>
-                  {ing.purchasePrice === null && !ing.madeFrom ? "仕入れ値を入れる" : ing.allergensConfirmed !== true ? "アレルゲンを確かめる" : "材料を開く"}
+                  {seeMoney && ing.purchasePrice === null && !ing.madeFrom ? "仕入れ値を入れる" : ing.allergensConfirmed !== true ? "アレルゲンを確かめる" : "材料を開く"}
                 </button>
               )}
-              {ing && !ing.madeFrom && ing.purchasePrice === null && onMakeRecipe && HOMEMADE_HINT.test(ing.name) && (
+              {ing && !ing.madeFrom && (!seeMoney || ing.purchasePrice === null) && onMakeRecipe && HOMEMADE_HINT.test(ing.name) && (
                 <button className="rounded-full border border-clay/40 bg-clay-soft/60 px-2 py-0.5 text-clay-strong" onClick={() => onMakeRecipe(ing.id)}>自家製ならレシピを作る</button>
               )}
-              {ing?.madeFrom && <span className="rounded-full bg-sand px-2 py-0.5 text-muted">{ing.purchasePrice === null ? "自家製（中の材料の値段がそろうと値段が出ます）" : "自家製（レシピから値段）"}</span>}
+              {ing?.madeFrom && <span className="rounded-full bg-sand px-2 py-0.5 text-muted">{!seeMoney ? "自家製" : ing.purchasePrice === null ? "自家製（中の材料の値段がそろうと値段が出ます）" : "自家製（レシピから値段）"}</span>}
               {!ing && hints[r._k]?.map((h) => (
                 <button key={h.id} className="rounded-full border border-line px-2 py-0.5 text-ink-soft"
                   onClick={async () => patch(r._k, { ingredientId: await linkIngredient(orgId, uid, { kind: "global", id: h.id, name: h.name }, r.name, own) })}>
@@ -142,10 +144,10 @@ export function ItemsEditor({ rows, set, own, orgId, uid, credits, onOpenIngredi
       </button>
       {open.length > 0 && (
         <div className="space-y-2 rounded-xl bg-sand p-3 text-sm">
-          <p>まだ結びついていない材料が{open.length}件あります。結びつけると原価とアレルゲンが出ます。</p>
+          <p>まだ結びついていない材料が{open.length}件あります。結びつけると{seeMoney ? "原価と" : ""}アレルゲンが出ます。</p>
           <div className="flex flex-wrap gap-2">
             <button disabled={busy} onClick={findFree} className={`${ui.secondary} py-2 text-sm`}>まとめて探す（無料）</button>
-            <button disabled={busy} onClick={findAi} className={`${ui.secondary} py-2 text-sm`}>AIで探す<CostTag credits={aiMatchCredits(Math.min(open.length, AI_MATCH_BATCH))} /></button>
+            {canAi && <button disabled={busy} onClick={findAi} className={`${ui.secondary} py-2 text-sm`}>AIで探す<CostTag credits={aiMatchCredits(Math.min(open.length, AI_MATCH_BATCH))} /></button>}
           </div>
         </div>
       )}

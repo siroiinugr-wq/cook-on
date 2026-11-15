@@ -4,6 +4,7 @@ import { Link, useLocation } from "react-router-dom";
 import { calcCost, yen, type MissingReason } from "@shared/cost";
 import type { Ingredient, RecipeItem } from "@shared/types";
 import { formatQty } from "@shared/units";
+import { useOrgCtx } from "../../contexts/OrgContext";
 
 export const MISSING_TEXT: Record<MissingReason, string> = {
   noIngredient: "材料の一覧に無い",
@@ -13,6 +14,8 @@ export const MISSING_TEXT: Record<MissingReason, string> = {
 
 export function ItemsTable({ items, byId, factor }: { items: RecipeItem[]; byId: Map<string, Ingredient>; factor: number }) {
   const c = calcCost(items, byId, factor);
+  // スタッフには原価の列を出さない（材料の写しに値段が無いので、出しても「—」になる）
+  const { seeMoney } = useOrgCtx();
   // 材料を開いて保存・閉じたら、このレシピに戻る（from）
   const back = encodeURIComponent(useLocation().pathname);
   const open = (id: string) => `/ingredients?open=${id}&from=${back}`;
@@ -20,7 +23,7 @@ export function ItemsTable({ items, byId, factor }: { items: RecipeItem[]; byId:
     <div className="overflow-hidden rounded-2xl border border-line bg-paper">
       <table className="w-full text-sm">
         <thead className="bg-sand text-xs text-muted">
-          <tr><th className="px-3 py-2 text-left font-medium">材料</th><th className="px-2 py-2 text-right font-medium">分量</th><th className="px-3 py-2 text-right font-medium">原価</th></tr>
+          <tr><th className="px-3 py-2 text-left font-medium">材料</th><th className="px-2 py-2 text-right font-medium">分量</th>{seeMoney && <th className="px-3 py-2 text-right font-medium">原価</th>}</tr>
         </thead>
         <tbody>
           {items.map((it, i) => {
@@ -31,19 +34,20 @@ export function ItemsTable({ items, byId, factor }: { items: RecipeItem[]; byId:
                 <td className="px-3 py-2">
                   {it.ingredientId ? <Link to={open(it.ingredientId)} className="block underline decoration-line-strong underline-offset-2">{it.name}</Link> : <span className="block">{it.name}</span>}
                   {it.note && <span className="block text-xs text-muted">{it.note}</span>}
-                  {l.missing && <Link to={it.ingredientId ? open(it.ingredientId) : "/tidy#link"} className="block text-xs text-warn-strong underline">{MISSING_TEXT[l.missing]}</Link>}
+                  {l.missing && (seeMoney ? <Link to={it.ingredientId ? open(it.ingredientId) : "/tidy#link"} className="block text-xs text-warn-strong underline">{MISSING_TEXT[l.missing]}</Link>
+                    : l.missing !== "noPrice" && <span className="block text-xs text-warn-strong">{MISSING_TEXT[l.missing]}</span>)}
                 </td>
                 <td className="whitespace-nowrap px-2 py-2 text-right">
                   {it.unit === "適量" ? "適量" : `${formatQty(qty)}${it.unit}`}
                   {l.grams !== null && it.unit !== "g" && <span className="block text-xs text-muted">{formatQty(l.grams)}g</span>}
                 </td>
-                <td className="whitespace-nowrap px-3 py-2 text-right">{l.cost === null ? <span className="text-faint">—</span> : yen(l.cost)}{l.cost !== null && it.ingredientId && byId.get(it.ingredientId)?.priceSource === "ref" && <RefBadge className="block w-fit ml-auto" />}</td>
+                {seeMoney && <td className="whitespace-nowrap px-3 py-2 text-right">{l.cost === null ? <span className="text-faint">—</span> : yen(l.cost)}{l.cost !== null && it.ingredientId && byId.get(it.ingredientId)?.priceSource === "ref" && <RefBadge className="block w-fit ml-auto" />}</td>}
               </tr>
             );
           })}
         </tbody>
         <tfoot className="border-t-2 border-line-strong font-bold">
-          <tr><td className="px-3 py-2">合計</td><td className="px-2 py-2 text-right">{formatQty(c.totalGrams)}g</td><td className="px-3 py-2 text-right">{yen(c.total)}</td></tr>
+          <tr><td className="px-3 py-2">合計</td><td className="px-2 py-2 text-right">{formatQty(c.totalGrams)}g</td>{seeMoney && <td className="px-3 py-2 text-right">{yen(c.total)}</td>}</tr>
         </tfoot>
       </table>
     </div>

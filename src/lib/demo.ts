@@ -2,6 +2,7 @@
 // Firebase をつなぐ前でも、画面の流れ（AIのクレジット消費・取り込みのプレビューまで）を一通り試せるようにするため。
 import type { ColOptions } from "./store";
 import { seedDemo } from "./demoData";
+import { staffIngredient, staffRecipe } from "@shared/staffView";
 
 type Doc = Record<string, unknown>;
 const KEY = "cookon-demo-v4";
@@ -43,11 +44,31 @@ const idOf = (path: string) => path.split("/").pop() ?? "";
 const now = () => new Date().toISOString();
 
 export function demoGet(path: string): Doc | null {
+  const staff = staffSource(path);
+  if (staff) {
+    const src = demoGet(staff.path);
+    return src ? staff.strip(src) : null;
+  }
   const d = data.get(path);
   return d ? structuredClone(d) : null;
 }
 
+// スタッフ用の写し（本番は Functions のトリガが作る）。デモでは元のデータから値段を抜いてその場で作る
+const STAFF_SRC: Record<string, { src: string; strip: (d: Doc) => Doc }> = {
+  staffRecipes: { src: "recipes", strip: staffRecipe },
+  staffIngredients: { src: "ingredients", strip: staffIngredient },
+};
+function staffSource(path: string): { path: string; strip: (d: Doc) => Doc } | null {
+  const parts = path.split("/");
+  const i = parts.findIndex((p) => p in STAFF_SRC);
+  if (i < 0) return null;
+  const m = STAFF_SRC[parts[i]];
+  return { path: [...parts.slice(0, i), m.src, ...parts.slice(i + 1)].join("/"), strip: m.strip };
+}
+
 export function demoListDocs(colPath: string): { id: string; data: Doc }[] {
+  const staff = staffSource(colPath);
+  if (staff) return demoListDocs(staff.path).map((x) => ({ id: x.id, data: staff.strip(x.data) }));
   return [...data.entries()].filter(([p]) => parentOf(p) === colPath).map(([p, d]) => ({ id: idOf(p), data: structuredClone(d) }));
 }
 

@@ -31,6 +31,8 @@ import { TidyPage } from "./pages/TidyPage";
 import { AdminSuggestionsPage } from "./pages/AdminSuggestionsPage";
 import { InvoicePhotosPage } from "./pages/InvoicePhotosPage";
 import { TodoPage } from "./pages/TodoPage";
+import { useOrgCtx } from "./contexts/OrgContext";
+import type { ReactNode } from "react";
 
 export default function App() {
   const s = useSession();
@@ -67,6 +69,11 @@ export default function App() {
   );
 }
 
+/** 経営の情報の画面（仕入れ・包装資材・クレジットの記録・データの整理）。スタッフ・見るだけはレシピの一覧へ戻す */
+function MoneyOnly({ children }: { children: ReactNode }) {
+  return useOrgCtx().seeMoney ? <>{children}</> : <Navigate to="/" replace />;
+}
+
 function Main({ orgId, onCreated }: { orgId: string; onCreated: (id: string) => void }) {
   const brand = useBranding(orgId);
   return (
@@ -85,15 +92,15 @@ function Main({ orgId, onCreated }: { orgId: string; onCreated: (id: string) => 
             <Route path="/recipes/:id/edit" element={<RecipeEditPage />} />
             <Route path="/ingredients" element={<IngredientsPage />} />
             <Route path="/products" element={<ProductsPage />} />
-            <Route path="/packaging" element={<PackagingPage />} />
+            <Route path="/packaging" element={<MoneyOnly><PackagingPage /></MoneyOnly>} />
             <Route path="/import" element={<ImportPage />} />
             <Route path="/import/photos" element={<ImportPhotosPage />} />
             <Route path="/import/:importId" element={<ImportPreviewPage />} />
-            <Route path="/credits" element={<CreditsPage />} />
-            <Route path="/tidy" element={<TidyPage />} />
+            <Route path="/credits" element={<MoneyOnly><CreditsPage /></MoneyOnly>} />
+            <Route path="/tidy" element={<MoneyOnly><TidyPage /></MoneyOnly>} />
             <Route path="/todo" element={<TodoPage />} />
             <Route path="/admin/suggestions" element={<AdminSuggestionsPage />} />
-            <Route path="/ingredients/invoices" element={<InvoicePhotosPage />} />
+            <Route path="/ingredients/invoices" element={<MoneyOnly><InvoicePhotosPage /></MoneyOnly>} />
             <Route path="/settings" element={<SettingsPage brand={brand} />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

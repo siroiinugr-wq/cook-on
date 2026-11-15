@@ -34,7 +34,7 @@ function loadView(): RecipeView {
 }
 
 export function RecipesPage() {
-  const { orgId, org, canEdit } = useOrgCtx();
+  const { orgId, org, canEdit, recipesPath, seeMoney, canAi } = useOrgCtx();
   const [archived, setArchived] = useState(false);
   const [f, setFilter] = useState<Filter>(() => ({ ...EMPTY_FILTER, view: loadView() }));
   const setF = (n: Filter) => {
@@ -45,7 +45,7 @@ export function RecipesPage() {
       // 覚えられなくても使える
     }
   };
-  const { list, loading } = useCol<Recipe>(`organizations/${orgId}/recipes`, { where: [["archived", "==", archived]], orderBy: ["updatedAt", "desc"] });
+  const { list, loading } = useCol<Recipe>(recipesPath, { where: [["archived", "==", archived]], orderBy: ["updatedAt", "desc"] });
   const ings = useIngredients(orgId);
   const tags = useMemo(() => [...new Set(list.flatMap((r) => r.tags ?? []))].sort((a, b) => a.localeCompare(b, "ja")), [list]);
   const homemade = useMemo(() => homemadeIds(list, ings.list), [list, ings.list]);
@@ -63,14 +63,14 @@ export function RecipesPage() {
       <PageHead title="レシピ" right={canEdit && (
         <div className="flex gap-1.5">
           <Link to="/labels" className={`${ui.secondary} flex items-center gap-1 py-2`} aria-label="ラベルをまとめて印刷"><Icon name="printer" className="h-4 w-4" /><span className="hidden sm:inline">ラベル</span></Link>
-          <Link to="/import" className={`${ui.secondary} flex items-center gap-1 py-2`} aria-label="取り込む"><Icon name="upload" className="h-4 w-4" /><span className="hidden sm:inline">取り込む</span></Link>
+          {canAi && <Link to="/import" className={`${ui.secondary} flex items-center gap-1 py-2`} aria-label="取り込む"><Icon name="upload" className="h-4 w-4" /><span className="hidden sm:inline">取り込む</span></Link>}
           <Link to="/recipes/new" className={`${ui.primary} flex items-center gap-1 py-2`}><Icon name="plus" className="h-4 w-4" />新しく作る</Link>
         </div>
       )} />
-      <AlertList orgId={orgId} canEdit={canEdit} />
-      {canEdit && <TidyBanner list={list} />}
+      {seeMoney && <AlertList orgId={orgId} canEdit={canEdit} />}
+      {seeMoney && <TidyBanner list={list} />}
       <RecipeFilters f={f} set={setF} tags={tags} ingredients={ings.list} cats={cats} counts={counts} />
-      {canEdit && list.length >= 10 && uncategorized > 0 && (
+      {seeMoney && list.length >= 10 && uncategorized > 0 && (
         <Link to="/tidy#category" className="flex items-center gap-2 rounded-xl bg-clay-soft p-3 text-sm text-clay-strong">
           <Icon name="sparkle" className="h-5 w-5 shrink-0" />
           <span className="flex-1">分類の無いレシピが{uncategorized}件あります。AIが分類と自家製材料を見分けて案を出します</span>
@@ -84,7 +84,7 @@ export function RecipesPage() {
           {!archived && canEdit && (
             <div className="flex flex-col gap-2 sm:flex-row sm:justify-center">
               <Link to="/recipes/new" className={ui.primary}>ひな形から作る</Link>
-              <Link to="/import" className={ui.secondary}>今までのデータを取り込む</Link>
+              {canAi && <Link to="/import" className={ui.secondary}>今までのデータを取り込む</Link>}
             </div>
           )}
         </div>
@@ -92,7 +92,7 @@ export function RecipesPage() {
         <>
           <p className="text-xs text-muted">{shown.length}件{shown.length !== list.length ? `（全${list.length}件中）` : ""}</p>
           {flat ? (
-            <ul className="space-y-2">{shown.map((r) => <RecipeRow key={r.id} r={r} target={org.settings.targetCostRate} homemade={homemade.has(r.id)} />)}</ul>
+            <ul className="space-y-2">{shown.map((r) => <RecipeRow key={r.id} r={r} target={org.settings.targetCostRate} homemade={homemade.has(r.id)} money={seeMoney} />)}</ul>
           ) : groups.map((g) => (
             <details key={`${f.view}-${g.key}`} open={shown.length <= OPEN_ALL_MAX || groups.length === 1} className="group space-y-2">
               <summary className="flex cursor-pointer list-none items-center gap-2 rounded-xl px-1 py-1.5">
@@ -100,7 +100,7 @@ export function RecipesPage() {
                 <span className="font-bold">{g.title}</span>
                 <span className="text-xs text-muted">{g.items.length}件</span>
               </summary>
-              <ul className="space-y-2">{g.items.map((r) => <RecipeRow key={r.id} r={r} target={org.settings.targetCostRate} homemade={homemade.has(r.id)} />)}</ul>
+              <ul className="space-y-2">{g.items.map((r) => <RecipeRow key={r.id} r={r} target={org.settings.targetCostRate} homemade={homemade.has(r.id)} money={seeMoney} />)}</ul>
             </details>
           ))}
           {!shown.length && <p className="py-6 text-center text-sm text-muted">{EMPTY_TEXT[f.view] && !flat ? EMPTY_TEXT[f.view] : "条件に合うレシピがありません。"}</p>}
@@ -111,7 +111,7 @@ export function RecipesPage() {
   );
 }
 
-function RecipeRow({ r, target, homemade }: { r: Recipe; target: number; homemade: boolean }) {
+function RecipeRow({ r, target, homemade, money }: { r: Recipe; target: number; homemade: boolean; money: boolean }) {
   return (
     <li>
       <Link to={`/recipes/${r.id}`} className={`${ui.card} flex gap-3 py-3`}>
@@ -122,14 +122,14 @@ function RecipeRow({ r, target, homemade }: { r: Recipe; target: number; homemad
             <span className="min-w-0 flex-1 truncate font-bold">{r.name}</span>
             <span className="shrink-0 text-xs text-muted">{homemade ? "自家製材料" : [r.category, r.subcategory].filter(Boolean).join("・")}</span>
           </div>
-          <div className="flex flex-wrap items-center gap-1.5 text-xs">
+          {money && <div className="flex flex-wrap items-center gap-1.5 text-xs">
             {homemade ? <span className="text-ink-soft">1ロット {yen(r.costCache?.total)}</span> : <>
               <span className="text-ink-soft">1個 {yen(r.costCache?.perPiece)}</span>
               {r.sellingPrice ? <span className="text-muted">／ 売価 {yen(r.sellingPrice)}</span> : null}
               <RateBadge rate={r.costCache?.rate ?? null} target={r.targetCostRate ?? target} />
             </>}
             {!!r.costCache?.missing && <span className="rounded-full bg-warn-soft px-2 py-0.5 text-warn-strong">単価なし {r.costCache.missing}</span>}
-          </div>
+          </div>}
           {r.trial && r.trialNote ? <p className="truncate text-[11px] text-warn-strong">次の改善点：{r.trialNote}</p>
             : (r.allergens?.length ?? 0) > 0 && <p className="truncate text-[11px] text-muted">アレルゲン：{r.allergens.map(allergenName).join("・")}</p>}
         </div>
