@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { staffIngredient, staffRecipe } from "./staffView";
-import { canRunAction, canSeeMoney, canUseAi } from "./roles";
+import { canRunAction, canSeeMoney, canUseAi, roleLabel } from "./roles";
 
 describe("スタッフ用の写し", () => {
   it("材料から仕入れ値・ネットの値段・仕入れ先を抜き、名前・アレルゲン・量は残す", () => {
@@ -28,5 +28,14 @@ describe("役割", () => {
     expect(canRunAction("priceSearch", "editor", true)).toBe(false);
     expect(canRunAction("aiSuggest", "admin", undefined)).toBe(true);
     expect(canRunAction("priceSearch", "manager", undefined)).toBe(true);
+  });
+});
+
+describe("役割の呼び方", () => {
+  it("お店の呼び方があればそれ、無ければ標準。オーナーは変えない", () => {
+    expect(roleLabel("manager", { manager: "店長" })).toBe("店長");
+    expect(roleLabel("editor", { manager: "店長" })).toBe("編集のみ（原価なし）");
+    expect(roleLabel("editor", { editor: "  " })).toBe("編集のみ（原価なし）");
+    expect(roleLabel("owner", { manager: "店長" })).toBe("オーナー");
   });
 });

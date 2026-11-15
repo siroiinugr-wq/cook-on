@@ -70,7 +70,8 @@ export const peekInvite = onCall({ region: REGION }, async (req) => {
   const d = (await db.doc(`organizations/${orgId}/invites/${token}`).get()).data();
   checkUsable(d);
   const org = (await db.doc(`organizations/${orgId}`).get()).data() ?? {};
-  return { orgName: String(org.name ?? ""), role: String(d.role) };
+  const names = (org.settings?.roleNames ?? {}) as Record<string, unknown>;
+  return { orgName: String(org.name ?? ""), role: String(d.role), roleName: typeof names[d.role] === "string" ? String(names[d.role]).slice(0, 12) : "" };
 });
 
 /** 招待を受けて店舗に参加する。1人が複数の店舗に入れるので、他社に所属していても参加できる */

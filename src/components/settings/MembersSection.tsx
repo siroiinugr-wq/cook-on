@@ -1,10 +1,11 @@
 // 設定画面の「メンバー」欄：いまのメンバーと、招待リンクの作成・コピー・取り消し（管理者だけ）
 import { useEffect, useState } from "react";
 import { memberLabel } from "@shared/nickname";
-import { INVITE_EXPIRE_DAYS, INVITE_ROLES, ROLE_HELP, ROLE_LABEL, type InviteRole } from "@shared/roles";
+import { INVITE_EXPIRE_DAYS, INVITE_ROLES, ROLE_HELP, roleLabel, type InviteRole } from "@shared/roles";
+import { useOrgCtx } from "../../contexts/OrgContext";
+import { RoleNamesEditor } from "./RoleNamesEditor";
 import { createInvite, inviteUrl, revokeInvite, subscribeInvites, subscribeMembers, updateMember, type Member, type PendingInvite } from "../../lib/invite";
 import { errorText } from "../../lib/store";
-import type { Role } from "@shared/types";
 import { useConfirm } from "../common/ConfirmDialog";
 import { Icon } from "../common/Icon";
 
@@ -16,6 +17,9 @@ export function MembersSection({ orgId, canManage, me }: { orgId: string; canMan
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const confirm = useConfirm();
+  // 役割の名前はお店の呼び方で（標準は「編集＋原価」など。設定でお店ごとに変えられる）
+  const { org, isAdmin } = useOrgCtx();
+  const rl = (r: string) => roleLabel(r, org.settings.roleNames);
 
   useEffect(() => subscribeMembers(orgId, setMembers), [orgId]);
   useEffect(() => (canManage ? subscribeInvites(orgId, setInvites) : undefined), [orgId, canManage]);
@@ -45,7 +49,7 @@ export function MembersSection({ orgId, canManage, me }: { orgId: string; canMan
 
   // 役割と「AIを使う」の切り替え（オーナーと自分は変えられない。サーバーの updateMember でも同じ）
   const change = async (m: Member, p: { role?: string; ai?: boolean }) => {
-    if (p.role && !(await confirm({ title: `${memberLabel(m)}さんを「${ROLE_LABEL[p.role as Role]}」にしますか？`, body: ROLE_HELP[p.role as InviteRole] ?? "", ok: "変える" }))) return;
+    if (p.role && !(await confirm({ title: `${memberLabel(m)}さんを「${rl(p.role)}」にしますか？`, body: ROLE_HELP[p.role as InviteRole] ?? "", ok: "変える" }))) return;
     setMsg(null);
     try {
       await updateMember(orgId, m.uid, p);
@@ -78,9 +82,9 @@ export function MembersSection({ orgId, canManage, me }: { orgId: string; canMan
                   {editable ? (
                     <select value={m.role} onChange={(e) => change(m, { role: e.target.value })} aria-label="役割"
                       className="shrink-0 rounded-lg border border-line-strong bg-paper px-2 py-1 text-xs">
-                      {INVITE_ROLES.map((r) => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
+                      {INVITE_ROLES.map((r) => <option key={r} value={r}>{rl(r)}</option>)}
                     </select>
-                  ) : <span className="shrink-0 rounded-full bg-sand px-2 py-0.5 text-xs text-ink-soft">{ROLE_LABEL[m.role as Role] ?? m.role}</span>}
+                  ) : <span className="shrink-0 rounded-full bg-sand px-2 py-0.5 text-xs text-ink-soft">{rl(m.role)}</span>}
                 </div>
                 {m.role === "editor" && (editable ? (
                   <label className="flex items-center gap-2 text-xs text-ink-soft">
@@ -96,13 +100,13 @@ export function MembersSection({ orgId, canManage, me }: { orgId: string; canMan
 
       {canManage && (
         <div className="space-y-3 border-t border-line px-4 py-3">
-          <p className="text-xs text-muted">製造スタッフ・見るだけの人には、仕入れ値・原価・売価・原価率・仕入れ・包装資材・クレジットの記録は見えません。店長は見られますが、設定・メンバー・クレジットの購入はできません。製造スタッフがAIを使うには、参加したあとにここで「AIを使う」をオンにします。</p>
+          <p className="text-xs text-muted">{`「${rl("editor")}」「${rl("viewer")}」の人には、仕入れ値・原価・売価・原価率・仕入れ・包装資材・クレジットの記録は見えません。「${rl("manager")}」の人は見られますが、設定・メンバー・クレジットの購入はできません。「${rl("editor")}」の人がAIを使うには、参加したあとにここで「AIを使う」をオンにします。`}</p>
           <div className="text-sm font-medium">招待リンクを作る</div>
           <div className="grid gap-2 sm:grid-cols-2">
             {INVITE_ROLES.map((r) => (
               <button key={r} onClick={() => setRole(r)}
                 className={`rounded-xl border p-2 text-left ${role === r ? "border-clay bg-clay-soft" : "border-line bg-paper"}`}>
-                <div className="text-sm font-medium">{ROLE_LABEL[r]}</div>
+                <div className="text-sm font-medium">{rl(r)}</div>
                 <div className="text-xs text-muted">{ROLE_HELP[r]}</div>
               </button>
             ))}
@@ -121,7 +125,7 @@ export function MembersSection({ orgId, canManage, me }: { orgId: string; canMan
               <ul className="mt-1 divide-y divide-line">
                 {invites.map((i) => (
                   <li key={i.token} className="flex items-center gap-2 py-2 text-sm">
-                    <span className="flex-1 truncate">{ROLE_LABEL[i.role as Role] ?? i.role}{i.label ? `・${i.label}` : ""}
+                    <span className="flex-1 truncate">{rl(i.role)}{i.label ? `・${i.label}` : ""}
                       <span className="ml-1 text-xs text-faint">{new Date(i.expiresAt).toLocaleDateString("ja-JP")}まで</span></span>
                     <button onClick={() => copy(i.token)} className="text-clay-strong underline">コピー</button>
                     <button onClick={() => revoke(i)} className="text-muted underline">取り消す</button>
@@ -132,6 +136,8 @@ export function MembersSection({ orgId, canManage, me }: { orgId: string; canMan
           )}
         </div>
       )}
+      {/* 役割の呼び方（デモでも試せるよう、招待とは別に管理者へ出す） */}
+      {isAdmin && <div className="border-t border-line px-4 py-3"><RoleNamesEditor orgId={orgId} /></div>}
     </section>
   );
 }

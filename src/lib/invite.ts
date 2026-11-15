@@ -48,7 +48,7 @@ const call = async <T = unknown>(name: string, data: object): Promise<T> => {
   return (await httpsCallable(functions, name)(data)).data as T;
 };
 
-export const peekInvite = (orgId: string, token: string) => call<{ orgName: string; role: string }>("peekInvite", { orgId, token });
+export const peekInvite = (orgId: string, token: string) => call<{ orgName: string; role: string; roleName?: string }>("peekInvite", { orgId, token });
 export const acceptInvite = (orgId: string, token: string) => call<{ orgId: string; role: string }>("acceptInvite", { orgId, token });
 export const createInvite = (orgId: string, role: string, label: string) =>
   call<{ token: string; expiresAt: number }>("createInvite", { orgId, role, label });

@@ -58,7 +58,7 @@ export async function runWithCredits<T>(c: Charge, work: () => Promise<WorkResul
   const member = (await orgRef.collection("members").doc(c.uid).get()).data();
   if (!canRunAction(c.action, member?.role as Role | undefined, member?.ai === true)) {
     throw new HttpsError("permission-denied", MONEY_ACTIONS.includes(c.action)
-      ? "この操作はオーナー・管理者・店長だけが使えます。"
+      ? "この操作は原価を扱える役割の人だけが使えます。"
       : "AIを使う許可がまだありません。お店の管理者に、設定のメンバーで「AIを使う」をオンにしてもらってください。");
   }
 

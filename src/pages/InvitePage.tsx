@@ -17,7 +17,7 @@ import { VerifyEmailPage } from "./VerifyEmailPage";
 export function InvitePage({ session, onJoined }: { session: Session; onJoined: (orgId: string) => void }) {
   const { orgId = "", token = "" } = useParams();
   const nav = useNavigate();
-  const [info, setInfo] = useState<{ orgName: string; role: string } | null>(null);
+  const [info, setInfo] = useState<{ orgName: string; role: string; roleName?: string } | null>(null);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const [toLogin, setToLogin] = useState(false);
@@ -83,7 +83,7 @@ export function InvitePage({ session, onJoined }: { session: Session; onJoined: 
           <>
             <h1 className="font-serif text-xl">{info.orgName} に招待されています</h1>
             <p className="text-sm text-ink-soft">
-              「{ROLE_LABEL[info.role as Role] ?? info.role}」として参加します。<br />
+              「{info.roleName || (ROLE_LABEL[info.role as Role] ?? info.role)}」として参加します。<br />
               <span className="text-muted">{ROLE_HELP[info.role as InviteRole] ?? ""}</span>
             </p>
             {user ? (

@@ -1,5 +1,6 @@
 // いま開いている店舗の情報（名前・クレジット残高・設定）
 import { DEFAULT_TARGET_RATE } from "@shared/cost";
+import type { RoleNames } from "@shared/roles";
 import { toDate } from "../lib/store";
 import { useDoc } from "./useData";
 
@@ -27,6 +28,8 @@ export interface OrgSettings {
   labelNutrition: boolean;
   /** 栄養成分を何あたりで書くか（既定は100gあたり。"piece"＝1個あたり） */
   labelNutritionBasis: "100g" | "piece";
+  /** 役割のお店ごとの呼び方（店長・製造など。無ければ標準の「編集＋原価」など。shared/roles.ts の roleLabel） */
+  roleNames: RoleNames;
 }
 
 export interface Org {
@@ -68,6 +71,7 @@ export function useOrg(orgId: string) {
       labelDatePrint: s.labelDatePrint !== false,
       labelNutrition: s.labelNutrition !== false,
       labelNutritionBasis: s.labelNutritionBasis === "piece" ? "piece" : "100g",
+      roleNames: s.roleNames && typeof s.roleNames === "object" ? s.roleNames : {},
     },
   };
   return { org, loading };
