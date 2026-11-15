@@ -43,7 +43,7 @@ export const onGlobalRefPrice = onDocumentWritten({ document: "globalIngredients
 
 export const fillPricesFromWeb = onCall({ region: REGION, timeoutSeconds: 300, secrets: [GEMINI_API_KEY] }, async (req) => {
   const orgId = idOf(req.data?.orgId, "店舗ID");
-  const uid = requireRole(req.auth, orgId, ROLES.ADMIN);
+  const uid = requireRole(req.auth, orgId, ROLES.MONEY);
   requireVerified(req.auth);
   const requestId = requestIdOf(req.data?.requestId);
   const db = getFirestore();

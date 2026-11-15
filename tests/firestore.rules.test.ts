@@ -113,6 +113,15 @@ describe("スタッフ権限（経営の情報は見えない）", () => {
     await assertFails(updateDoc(doc(staff(), "organizations/orgA/ingredients/i1"), { supplier: "x" }));
     await assertFails(setDoc(doc(staff(), "organizations/orgA/ingredients/i1"), { name: "薄力粉", purchasePrice: null, purchaseQty: 1, purchaseUnit: "kg", allergens: [] }));
   });
+  it("店長は元のレシピ・材料・包装資材を読めて、値段を直せる。店舗名・ブランドは変えられない", async () => {
+    const db = as("u7", { orgA: "manager" });
+    await assertSucceeds(getDoc(doc(db, "organizations/orgA/recipes/r1")));
+    await assertSucceeds(getDoc(doc(db, "organizations/orgA/alerts/a1")));
+    await assertSucceeds(updateDoc(doc(db, "organizations/orgA/ingredients/i1"), { purchasePrice: 320 }));
+    await assertSucceeds(setDoc(doc(db, "organizations/orgA/packaging/p9"), { name: "袋", purchasePrice: 10, purchaseQty: 1, unit: "枚" }));
+    await assertFails(updateDoc(doc(db, "organizations/orgA"), { name: "x" }));
+    await assertFails(setDoc(doc(db, "organizations/orgA/public/branding"), { appName: "x", logoUrl: null, primaryColor: "#000000" }));
+  });
   it("管理者でも写しを作り終えた印は画面から付けられない", async () => {
     await assertFails(updateDoc(doc(as("u1", { orgA: "owner" }), "organizations/orgA"), { staffViewsAt: 1 }));
   });

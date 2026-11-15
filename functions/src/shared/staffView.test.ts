@@ -14,8 +14,8 @@ describe("スタッフ用の写し", () => {
 });
 
 describe("役割", () => {
-  it("経営の情報はオーナー・管理者だけ", () => {
-    expect(["owner", "admin", "editor", "viewer"].map((r) => canSeeMoney(r as never))).toEqual([true, true, false, false]);
+  it("経営の情報はオーナー・管理者・店長だけ", () => {
+    expect(["owner", "admin", "manager", "editor", "viewer"].map((r) => canSeeMoney(r as never))).toEqual([true, true, true, false, false]);
   });
   it("AIは管理者がいつも、スタッフは許可された人だけ、見るだけは使えない", () => {
     expect(canUseAi("admin", undefined)).toBe(true);
@@ -27,5 +27,6 @@ describe("役割", () => {
     expect(canRunAction("importPhoto", "editor", true)).toBe(true);
     expect(canRunAction("priceSearch", "editor", true)).toBe(false);
     expect(canRunAction("aiSuggest", "admin", undefined)).toBe(true);
+    expect(canRunAction("priceSearch", "manager", undefined)).toBe(true);
   });
 });

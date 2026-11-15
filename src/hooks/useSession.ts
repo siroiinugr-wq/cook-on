@@ -18,7 +18,7 @@ function demoRole(): Role {
     const q = new URLSearchParams(window.location.search).get("demoRole");
     if (q) localStorage.setItem("cookon-demoRole", q);
     const r = localStorage.getItem("cookon-demoRole");
-    return r === "admin" || r === "editor" || r === "viewer" ? r : "owner";
+    return r === "admin" || r === "manager" || r === "editor" || r === "viewer" ? r : "owner";
   } catch {
     return "owner";
   }

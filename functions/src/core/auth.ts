@@ -10,10 +10,12 @@ import { WELCOME_CREDITS } from "../shared/credits";
 import { DEFAULT_TARGET_RATE } from "../shared/cost";
 import { DEFAULT_BRANDING, type Role } from "../shared/types";
 
-const EDIT: Role[] = ["owner", "admin", "editor"];
+const EDIT: Role[] = ["owner", "admin", "manager", "editor"];
 const ADMIN: Role[] = ["owner", "admin"];
-const ANY: Role[] = ["owner", "admin", "editor", "viewer"];
-export const ROLES = { EDIT, ADMIN, ANY };
+/** 経営の情報（値段・仕入れ・お金のAI）を使える人。shared/roles.ts の canSeeMoney と同じ */
+const MONEY: Role[] = ["owner", "admin", "manager"];
+const ANY: Role[] = ["owner", "admin", "manager", "editor", "viewer"];
+export const ROLES = { EDIT, ADMIN, MONEY, ANY };
 
 /** 1人が作れる店舗の数（お試しクレジット目当ての作りすぎを防ぐ） */
 const MAX_OWNED_ORGS = 5;

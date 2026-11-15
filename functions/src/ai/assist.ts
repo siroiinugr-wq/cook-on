@@ -43,7 +43,7 @@ export const guessProduct = onCall({ region: REGION, secrets: [GEMINI_API_KEY] }
 
 export const aiSuggest = onCall({ region: REGION, secrets: [GEMINI_API_KEY] }, async (req) => {
   const orgId = idOf(req.data?.orgId, "店舗ID");
-  const uid = requireRole(req.auth, orgId, ROLES.ADMIN);
+  const uid = requireRole(req.auth, orgId, ROLES.MONEY);
   requireVerified(req.auth);
   const recipeId = idOf(req.data?.recipeId, "レシピID");
   const mode = req.data?.mode === "newRecipe" ? "newRecipe" : "costDown";

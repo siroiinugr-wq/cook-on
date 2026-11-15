@@ -2,7 +2,7 @@ rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
     function member(orgId) { return request.auth != null && request.auth.token.orgs is map && orgId in request.auth.token.orgs; }
-    function editor(orgId) { return member(orgId) && request.auth.token.orgs[orgId] in ['owner', 'admin', 'editor']; }
+    function editor(orgId) { return member(orgId) && request.auth.token.orgs[orgId] in ['owner', 'admin', 'manager', 'editor']; }
     function admin(orgId)  { return member(orgId) && request.auth.token.orgs[orgId] in ['owner', 'admin']; }
 
     // レシピの写真・イラストと工程の写真

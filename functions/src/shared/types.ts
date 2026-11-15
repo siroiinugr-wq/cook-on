@@ -7,7 +7,8 @@ import type { LabelInfo } from "./label";
 import type { RefPrice } from "./refPrice";
 import type { Unit } from "./units";
 
-export type Role = "owner" | "admin" | "editor" | "viewer";
+/** owner オーナー・admin 管理者・manager 店長（原価も見る。設定・メンバー・購入はしない）・editor 製造スタッフ（値段は見ない）・viewer 見るだけ。shared/roles.ts */
+export type Role = "owner" | "admin" | "manager" | "editor" | "viewer";
 
 /** 店舗の材料マスター organizations/{orgId}/ingredients/{id} */
 export interface Ingredient {

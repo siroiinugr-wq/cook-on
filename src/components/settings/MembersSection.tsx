@@ -96,9 +96,9 @@ export function MembersSection({ orgId, canManage, me }: { orgId: string; canMan
 
       {canManage && (
         <div className="space-y-3 border-t border-line px-4 py-3">
-          <p className="text-xs text-muted">スタッフ・見るだけの人には、仕入れ値・原価・売価・原価率・仕入れ・包装資材・クレジットの記録は見えません。スタッフがAIを使うには、参加したあとにここで「AIを使う」をオンにします。</p>
+          <p className="text-xs text-muted">製造スタッフ・見るだけの人には、仕入れ値・原価・売価・原価率・仕入れ・包装資材・クレジットの記録は見えません。店長は見られますが、設定・メンバー・クレジットの購入はできません。製造スタッフがAIを使うには、参加したあとにここで「AIを使う」をオンにします。</p>
           <div className="text-sm font-medium">招待リンクを作る</div>
-          <div className="grid gap-2 sm:grid-cols-3">
+          <div className="grid gap-2 sm:grid-cols-2">
             {INVITE_ROLES.map((r) => (
               <button key={r} onClick={() => setRole(r)}
                 className={`rounded-xl border p-2 text-left ${role === r ? "border-clay bg-clay-soft" : "border-line bg-paper"}`}>

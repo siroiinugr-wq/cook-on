@@ -8,11 +8,11 @@ service cloud.firestore {
     function orgs()          { return request.auth.token.get('orgs', {}); }
     function isMember(orgId) { return signedIn() && orgs() is map && orgId in orgs(); }
     function role(orgId)     { return orgs()[orgId]; }
-    function canEdit(orgId)  { return isMember(orgId) && role(orgId) in ['owner', 'admin', 'editor']; }
+    function canEdit(orgId)  { return isMember(orgId) && role(orgId) in ['owner', 'admin', 'manager', 'editor']; }
     function isAdmin(orgId)  { return isMember(orgId) && role(orgId) in ['owner', 'admin']; }
-    // 経営の情報（仕入れ値・原価・売価・仕入れ・包装資材・クレジットの記録）を見られる人。スタッフ・見るだけは
+    // 経営の情報（仕入れ値・原価・売価・仕入れ・包装資材・クレジットの記録）を見られる人（オーナー・管理者・店長）。製造スタッフ・見るだけは
     // 値段を抜いた写し（staffRecipes・staffIngredients、shared/staffView.ts）を読む。shared/roles.ts の canSeeMoney と同じ
-    function seeMoney(orgId) { return isAdmin(orgId); }
+    function seeMoney(orgId) { return isMember(orgId) && role(orgId) in ['owner', 'admin', 'manager']; }
     function unchanged(keys) { return !request.resource.data.diff(resource.data).affectedKeys().hasAny(keys); }
     function str(v, max)     { return v is string && v.size() <= max; }
     function numOrNull(v)    { return v == null || (v is number && v >= 0); }
