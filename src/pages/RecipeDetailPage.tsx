@@ -24,6 +24,7 @@ import { VersionHistory } from "../components/recipe/VersionHistory";
 import { NutritionCard } from "../components/recipe/NutritionCard";
 import { UseAsIngredient } from "../components/recipe/UseAsIngredient";
 import { TrialCard } from "../components/recipe/TrialCard";
+import { RecipeNext } from "../components/recipe/RecipeNext";
 
 export function RecipeDetailPage() {
   const { id } = useParams();
@@ -66,6 +67,7 @@ export function RecipeDetailPage() {
         <span className="text-muted">第{recipe.version}版</span>
       </div>
       {recipe.trial && <TrialCard orgId={orgId} recipe={recipe} canEdit={canEdit} />}
+      {canEdit && !archived && !ings.loading && <RecipeNext recipe={recipe} byId={ings.byId} />}
 
       {noPieces && (
         <p className="rounded-xl bg-warn-soft p-3 text-sm text-warn-strong">

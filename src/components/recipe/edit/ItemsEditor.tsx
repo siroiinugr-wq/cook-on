@@ -4,6 +4,7 @@ import { useState } from "react";
 import { aiMatchCredits, AI_MATCH_BATCH } from "@shared/credits";
 import type { ItemMatch } from "@shared/importTypes";
 import { toMatchKey } from "@shared/matchKey";
+import { HOMEMADE_HINT } from "@shared/madeFrom";
 import type { Ingredient, RecipeItem } from "@shared/types";
 import { UNITS, type Unit } from "@shared/units";
 import { linkIngredient } from "../../../lib/ingredientLink";
@@ -25,9 +26,13 @@ interface Props {
   orgId: string;
   uid: string;
   credits: number;
+  /** 材料をこの画面の上で開く（仕入れ値・アレルゲン・自家製のレシピ。書きかけのレシピはそのまま） */
+  onOpenIngredient?: (ingredientId: string) => void;
+  /** 材料の自家製レシピを作りに行く（書きかけはしまってから寄り道し、保存したら戻る） */
+  onMakeRecipe?: (ingredientId: string) => void;
 }
 
-export function ItemsEditor({ rows, set, own, orgId, uid, credits }: Props) {
+export function ItemsEditor({ rows, set, own, orgId, uid, credits, onOpenIngredient, onMakeRecipe }: Props) {
   const [picking, setPicking] = useState<Row | null>(null);
   const [hints, setHints] = useState<Record<string, { id: string; name: string }[]>>({});
   const [busy, setBusy] = useState(false);
@@ -110,8 +115,17 @@ export function ItemsEditor({ rows, set, own, orgId, uid, credits }: Props) {
             </div>
             <div className="flex flex-wrap items-center gap-1.5 text-xs">
               <button onClick={() => setPicking(r)} className={`rounded-full px-2 py-0.5 ${ing ? "bg-ok-soft text-ok-strong" : "bg-warn-soft text-warn-strong"}`}>
-                {ing ? `✓ ${ing.name}${ing.purchasePrice === null ? "（仕入れ値なし）" : ""}` : "材料を選ぶ"}
+                {ing ? `✓ ${ing.name}${ing.purchasePrice === null && !ing.madeFrom ? "（仕入れ値なし）" : ""}` : "材料を選ぶ"}
               </button>
+              {ing && onOpenIngredient && (
+                <button className="rounded-full border border-line px-2 py-0.5 text-ink-soft" onClick={() => onOpenIngredient(ing.id)}>
+                  {ing.purchasePrice === null && !ing.madeFrom ? "仕入れ値を入れる" : ing.allergensConfirmed !== true ? "アレルゲンを確かめる" : "材料を開く"}
+                </button>
+              )}
+              {ing && !ing.madeFrom && ing.purchasePrice === null && onMakeRecipe && HOMEMADE_HINT.test(ing.name) && (
+                <button className="rounded-full border border-clay/40 bg-clay-soft/60 px-2 py-0.5 text-clay-strong" onClick={() => onMakeRecipe(ing.id)}>自家製ならレシピを作る</button>
+              )}
+              {ing?.madeFrom && <span className="rounded-full bg-sand px-2 py-0.5 text-muted">{ing.purchasePrice === null ? "自家製（中の材料の値段がそろうと値段が出ます）" : "自家製（レシピから値段）"}</span>}
               {!ing && hints[r._k]?.map((h) => (
                 <button key={h.id} className="rounded-full border border-line px-2 py-0.5 text-ink-soft"
                   onClick={async () => patch(r._k, { ingredientId: await linkIngredient(orgId, uid, { kind: "global", id: h.id, name: h.name }, r.name, own) })}>
@@ -138,7 +152,11 @@ export function ItemsEditor({ rows, set, own, orgId, uid, credits }: Props) {
       {msg && <p className="text-sm text-ink-soft">{msg}</p>}
       {picking && (
         <IngredientPicker orgId={orgId} uid={uid} name={picking.name} own={own} onClose={() => setPicking(null)}
-          onPick={(id, name) => patch(picking._k, { ingredientId: id, name: picking.name.trim() ? picking.name : name })} />
+          onPick={(id, name, created) => {
+            patch(picking._k, { ingredientId: id, name: picking.name.trim() ? picking.name : name });
+            // その場で登録した材料は、続けて仕入れ値・アレルゲン（自家製ならレシピ）を入れる
+            if (created) onOpenIngredient?.(id);
+          }} />
       )}
     </div>
   );

@@ -33,10 +33,12 @@ const PIECE: Unit[] = ["個", "枚", "本"];
 const LIQUID: Unit[] = ["ml", "l", "大さじ", "小さじ", "カップ"];
 type Hist = { from: { price: number | null; qty: number; unit: string }; to: { price: number | null; qty: number; unit: string }; at: unknown };
 
-export function IngredientSheet({ orgId, uid, ing, usedIn, usedBy = [], recipes = [], ingById, onClose }: {
+export function IngredientSheet({ orgId, uid, ing, usedIn, usedBy = [], recipes = [], ingById, onClose, makeRecipe }: {
   orgId: string; uid: string; ing: Ingredient | null; usedIn: number; usedBy?: { id: string; name: string }[];
   /** 自家製の材料の結び先を選ぶためのレシピと材料（無ければ自家製の欄を出さない） */
   recipes?: Recipe[]; ingById?: Map<string, Ingredient>; onClose: () => void;
+  /** 「この材料のレシピを作る」を押したとき（レシピの編集の中から開いたとき：書きかけをしまってから寄り道する）。無ければふつうのリンク */
+  makeRecipe?: (ing: Ingredient) => void;
 }) {
   const [d, setD] = useState<Omit<Ingredient, "id">>(ing ?? { name: "", purchasePrice: null, purchaseQty: 1, purchaseUnit: "kg", allergens: [], globalRef: null });
   const [busy, setBusy] = useState(false);
@@ -128,7 +130,7 @@ export function IngredientSheet({ orgId, uid, ing, usedIn, usedBy = [], recipes 
           {d.photoPath && <button type="button" className="text-muted underline" onClick={() => set({ photoPath: null })}>写真を外す</button>}
         </div>
         {ingById && (
-          <MadeFrom ing={ing} d={d} recipes={recipes} ingById={ingById} made={made} perG={perG} onPick={(madeFrom) => set({ madeFrom })} />
+          <MadeFrom ing={ing} d={d} recipes={recipes} ingById={ingById} made={made} perG={perG} makeRecipe={makeRecipe} onPick={(madeFrom) => set({ madeFrom })} />
         )}
         {!made && <div className="space-y-1">
           <div className="flex items-center justify-between gap-2">
@@ -222,9 +224,10 @@ export function IngredientSheet({ orgId, uid, ing, usedIn, usedBy = [], recipes 
 }
 
 /** 自家製の材料：作るレシピを選ぶ。名前が同じレシピを先に出し、この材料を使うレシピ（ぐるぐる回る）は出さない */
-function MadeFrom({ ing, d, recipes, ingById, made, perG, onPick }: {
+function MadeFrom({ ing, d, recipes, ingById, made, perG, onPick, makeRecipe }: {
   ing: Ingredient | null; d: Omit<Ingredient, "id">; recipes: Recipe[]; ingById: Map<string, Ingredient>;
   made: ReturnType<typeof madeFromPatch> | null; perG: number | null; onPick: (id: string | null) => void;
+  makeRecipe?: (ing: Ingredient) => void;
 }) {
   const [open, setOpen] = useState(!!d.madeFrom);
   const madeOf = new Map([...ingById.values()].flatMap((i) => (i.madeFrom ? [[i.id, i.madeFrom] as const] : [])));
@@ -247,11 +250,15 @@ function MadeFrom({ ing, d, recipes, ingById, made, perG, onPick }: {
         ) : ok.length > 0 && (
           <button type="button" className="block text-left text-clay-strong underline" onClick={() => setOpen(true)}>お店で作る材料（タルト生地・クリームなど）なら、作るレシピを選ぶ</button>
         )}
-        {newRecipe && (
+        {newRecipe && (makeRecipe && ing ? (
+          <button type="button" onClick={() => makeRecipe(ing)} className={`flex w-full items-center justify-center gap-1 ${noPrice ? ui.primary : ui.secondary} py-2 text-sm`}>
+            この材料のレシピを作る（自家製の材料にする）
+          </button>
+        ) : (
           <Link to={newRecipe} className={`flex w-full items-center justify-center gap-1 ${noPrice ? ui.primary : ui.secondary} py-2 text-sm`}>
             この材料のレシピを作る（自家製の材料にする）
           </Link>
-        )}
+        ))}
         {newRecipe && noPrice && <p className="text-xs text-muted">レシピに材料と分量を入れて保存すると、この材料の値段（材料の合計÷重さ）・アレルゲン・成分がレシピから入り、使っているレシピの原価にも反映されます。</p>}
       </div>
     );

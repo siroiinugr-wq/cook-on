@@ -4,6 +4,7 @@ import type { ItemMatch } from "@shared/importTypes";
 import { buildIndex, rankCandidates } from "@shared/matchKey";
 import type { Ingredient } from "@shared/types";
 import { MEXT_CREDIT } from "@shared/mext";
+import { suggestAllergens } from "@shared/allergenGuess";
 import { createIngredient, linkIngredient } from "../../../lib/ingredientLink";
 import { call } from "../../../lib/store";
 import { Sheet } from "../../common/Sheet";
@@ -14,7 +15,8 @@ interface Props {
   uid: string;
   name: string;
   own: Ingredient[];
-  onPick: (ingredientId: string, name: string) => void;
+  /** created＝この場で新しく登録した材料（レシピの編集では、続けて仕入れ値などを入れる画面を開く） */
+  onPick: (ingredientId: string, name: string, created?: boolean) => void;
   onClose: () => void;
 }
 
@@ -41,11 +43,11 @@ export function IngredientPicker({ orgId, uid, name, own, onPick, onClose }: Pro
     }
   }
 
-  async function pick(run: () => Promise<string>, label: string) {
+  async function pick(run: () => Promise<string>, label: string, created = false) {
     setBusy(true);
     setErr("");
     try {
-      onPick(await run(), label);
+      onPick(await run(), label, created);
       onClose();
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
@@ -74,12 +76,12 @@ export function IngredientPicker({ orgId, uid, name, own, onPick, onClose }: Pro
           ))}
         </section>
         {q.trim() && (
-          <button disabled={busy} className={`w-full ${ui.primary}`} onClick={() => pick(() => createIngredient(orgId, uid, { name: q.trim() }), q.trim())}>
+          <button disabled={busy} className={`w-full ${ui.primary}`} onClick={() => pick(() => createIngredient(orgId, uid, { name: q.trim(), allergens: suggestAllergens([], q.trim()) }), q.trim(), true)}>
             「{q.trim()}」を新しい材料として登録
           </button>
         )}
         {err && <p className="text-sm text-ng">{err}</p>}
-        <p className="text-xs text-muted">仕入れ値は「材料」の画面で入れると、原価に入ります。</p>
+        <p className="text-xs text-muted">新しく登録すると、続けて仕入れ値・アレルゲンを入れる画面が開きます（お店で作る材料なら、そこからレシピも作れます）。</p>
         <p className="text-[11px] text-faint">共有の材料には食品成分表の食品も入っています。{MEXT_CREDIT}</p>
       </div>
     </Sheet>

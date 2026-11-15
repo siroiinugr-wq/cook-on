@@ -1,7 +1,7 @@
 // レシピを作る・直す。新しく作るときはひな形を選んでから（白紙のフォームを最初に見せない）
 // 保存は saveRecipe（Functions）だけ。前の版は自動で履歴に残る
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { calcCost, costRate, yen } from "@shared/cost";
 import { calcPackaging } from "@shared/packaging";
 import { RECIPE_TEMPLATES, type RecipeInput } from "@shared/recipe";
@@ -25,6 +25,8 @@ import { PackagingEditor } from "../components/recipe/edit/PackagingEditor";
 import { StepsEditor } from "../components/recipe/edit/StepsEditor";
 import { numText } from "../lib/num";
 import { NumInput } from "../components/common/NumInput";
+import { IngredientSheet } from "../components/ingredient/IngredientSheet";
+import { clearDraft, draftKey, loadDraft, resumeUrl, stashDraft } from "../lib/recipeDraft";
 
 type Draft = Omit<RecipeInput, "items">;
 
@@ -37,7 +39,15 @@ function toRows(input: RecipeInput, own: Ingredient[]): Row[] {
 }
 
 export function RecipeEditPage() {
+  // 寄り道（自家製の材料のレシピ）から戻ると、同じ画面のまま URL だけ変わる。画面を作り直して、書きかけを正しく読み込む
   const { id } = useParams();
+  const { search } = useLocation();
+  return <RecipeEditor key={`${id ?? "new"}|${search}`} />;
+}
+
+function RecipeEditor() {
+  const { id } = useParams();
+  const loc = useLocation();
   const { orgId, uid, org, canEdit } = useOrgCtx();
   const { recipe, loading } = useRecipe(orgId, id);
   const ings = useIngredients(orgId);
@@ -46,7 +56,7 @@ export function RecipeEditPage() {
   // 材料の編集の「この材料のレシピを作る」から来たとき：for＝その材料。保存したら材料をこのレシピに結ぶ（自家製の材料）
   const [sp] = useSearchParams();
   const forIng = !id && sp.get("for") ? ings.byId.get(sp.get("for")!) ?? null : null;
-  const [trial, setTrial] = useState(false);
+  const [trial, setTrial] = useState(() => (sp.get("resume") === "1" && loadDraft<Draft, Row>(draftKey(id, sp.get("for")))?.trial) || false);
   // 今までに使った分類とタグ（押すだけで入れられるように）
   const all = useCol<Recipe>(`organizations/${orgId}/recipes`);
   const usedCats = useMemo(() => countSort(all.list.map((r) => r.category)), [all.list]);
@@ -56,10 +66,20 @@ export function RecipeEditPage() {
     return m;
   }, [all.list]);
   const usedTags = useMemo(() => countSort(all.list.flatMap((r) => r.tags ?? [])), [all.list]);
-  const [draft, setDraft] = useState<Draft | null>(null);
-  const [rows, setRows] = useState<Row[]>([]);
-  const [tagText, setTagText] = useState("");
-  const [note, setNote] = useState("");
+  // 書きかけ：寄り道から戻ったとき（resume=1）はしまった内容から始める。それ以外は「続ける」を出すだけ
+  const dKey = draftKey(id, sp.get("for"));
+  const [stashed, setStashed] = useState(() => loadDraft<Draft, Row>(dKey));
+  const resume = sp.get("resume") === "1" ? stashed : null;
+  const [draft, setDraft] = useState<Draft | null>(resume?.draft ?? null);
+  const [rows, setRows] = useState<Row[]>(resume?.rows ?? []);
+  const [tagText, setTagText] = useState(resume?.tagText ?? "");
+  const [note, setNote] = useState(resume?.note ?? "");
+  // この画面の上で開いている材料（仕入れ値・アレルゲン・自家製のレシピ）。その場で登録した材料は読み込めたら開く
+  const [openIng, setOpenIng] = useState<string | null>(null);
+  const [pendingIng, setPendingIng] = useState<string | null>(null);
+  useEffect(() => {
+    if (pendingIng && ings.byId.has(pendingIng)) { setOpenIng(pendingIng); setPendingIng(null); }
+  }, [pendingIng, ings.byId]);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const photoDir = useMemo(() => `orgs/${orgId}/recipes/${id ?? newId(`organizations/${orgId}/recipes`)}`, [orgId, id]);
@@ -82,6 +102,34 @@ export function RecipeEditPage() {
     }
   }, [forIng, draft]);
 
+  /** 書きかけをしまってから別の画面へ（保存したら resume=1 でここへ戻る） */
+  function leave(to: string) {
+    if (draft) stashDraft<Draft, Row>(dKey, { draft, rows, tagText, note, trial });
+    nav(to);
+  }
+  const here = resumeUrl(loc.pathname + loc.search.replace(/[?&]resume=1/, "").replace(/^&/, "?"));
+  const makeRecipeFor = (ingId: string) => {
+    setOpenIng(null);
+    leave(`/recipes/new?for=${ingId}&from=${encodeURIComponent(here)}`);
+  };
+  function restore() {
+    if (!stashed) return;
+    setDraft(stashed.draft);
+    setRows(stashed.rows);
+    setTagText(stashed.tagText);
+    setNote(stashed.note);
+    setTrial(stashed.trial);
+    clearDraft(dKey);
+    setStashed(null);
+  }
+  const stashBanner = stashed && !resume && (
+    <div className="flex flex-wrap items-center gap-2 rounded-xl bg-warn-soft p-3 text-sm text-warn-strong">
+      <span className="flex-1">保存していない書きかけがあります。</span>
+      <button className="font-bold underline" onClick={restore}>続ける</button>
+      <button className="underline" onClick={() => { clearDraft(dKey); setStashed(null); }}>捨てる</button>
+    </div>
+  );
+
   if (!canEdit) return <p className="py-10 text-center text-muted">レシピを編集する権限がありません。</p>;
   if (id && (loading || !draft)) return <p className="py-10 text-center text-muted">{loading || ings.loading ? "読み込み中…" : "レシピが見つかりません。"}</p>;
 
@@ -90,6 +138,7 @@ export function RecipeEditPage() {
     return (
       <div className="space-y-4">
         <PageHead title="新しいレシピ" back="/" />
+        {stashBanner}
         <NewRecipeStart recipes={all.list.filter((r) => !(r as { archived?: boolean }).archived)} onStart={start} />
       </div>
     );
@@ -119,7 +168,11 @@ export function RecipeEditPage() {
         const { missing: _m, ...p } = madeFromPatch(items, ings.byId);
         await saveDoc(`organizations/${orgId}/ingredients/${forIng.id}`, { madeFrom: r.recipeId, ...p });
       }
-      nav(`/recipes/${r.recipeId}`, { replace: true });
+      clearDraft(dKey);
+      // 書きかけのレシピから寄り道して来たときは、そのレシピへ戻る（材料の値段が入った状態で続けられる）
+      const from = sp.get("from");
+      if (forIng && from && from.startsWith("/recipes/")) nav(from, { replace: true });
+      else nav(`/recipes/${r.recipeId}`, { replace: true });
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
       setBusy(false);
@@ -133,6 +186,10 @@ export function RecipeEditPage() {
   return (
     <div className="space-y-5 pb-24">
       <PageHead title={id ? "レシピを編集" : forIng ? "自家製の材料のレシピ" : "新しいレシピ"} back={id ? `/recipes/${id}` : sp.get("from") || "/"} />
+      {stashBanner}
+      {forIng && sp.get("from")?.includes("resume=1") && (
+        <p className="text-xs text-muted">保存すると、書きかけのレシピに戻ります（打った内容はそのまま残っています）。</p>
+      )}
       {forIng && (
         <p className="rounded-xl bg-clay-soft p-3 text-sm text-clay-strong">
           保存すると、材料「<Link to={`/ingredients?open=${forIng.id}`} className="underline">{forIng.name}</Link>」をこのレシピから作る材料にします。
@@ -172,7 +229,8 @@ export function RecipeEditPage() {
 
       <section className="space-y-2">
         <h2 className="font-bold">材料（1ロット分）</h2>
-        <ItemsEditor rows={rows} set={setRows} own={ings.list} orgId={orgId} uid={uid} credits={org.credits} />
+        <ItemsEditor rows={rows} set={setRows} own={ings.list} orgId={orgId} uid={uid} credits={org.credits}
+          onOpenIngredient={(iid) => (ings.byId.has(iid) ? setOpenIng(iid) : setPendingIng(iid))} onMakeRecipe={makeRecipeFor} />
       </section>
       <section className="space-y-2">
         <h2 className="font-bold">包装（1個あたり）</h2>
@@ -189,6 +247,11 @@ export function RecipeEditPage() {
       )}
       {id && field("何を変えたか（履歴に残ります・任意）", <input className={ui.input} value={note} maxLength={100} placeholder="例：砂糖を10g減らした" onChange={(e) => setNote(e.target.value)} />)}
 
+      {openIng && ings.byId.get(openIng) && (
+        <IngredientSheet orgId={orgId} uid={uid} ing={ings.byId.get(openIng)!} recipes={all.list} ingById={ings.byId}
+          usedIn={all.list.filter((r) => (r.ingredientIds ?? []).includes(openIng)).length}
+          onClose={() => setOpenIng(null)} makeRecipe={(i) => makeRecipeFor(i.id)} />
+      )}
       <div className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-paper/95 px-4 py-3 backdrop-blur">
         <div className="mx-auto flex max-w-3xl items-center gap-3">
           <div className="min-w-0 flex-1 text-sm">
